@@ -1,0 +1,258 @@
+{
+  "doc_id": "en_indictment_financial_fraud_007",
+  "fraud_type": "financial_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Slavica Heintze",
+      "display": "SLAVICA HEINTZE",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Sig.ra Barbara Spanevello",
+      "display": "SIG.RA BARBARA SPANEVELLO",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Franck Étienne",
+      "display": "FRANCK ÉTIENNE",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Annelore Trüb",
+      "display": "Annelore Trüb",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Rolf Rudolph-Löffler",
+      "display": "Rolf Rudolph-Löffler",
+      "type": "collateral"
+    },
+    {
+      "id": "p5",
+      "name": "Albin Fritsch",
+      "display": "Albin Fritsch",
+      "type": "collateral"
+    },
+    {
+      "id": "p6",
+      "name": "Marina Golino-Cortese",
+      "display": "Marina Golino-Cortese",
+      "type": "collateral"
+    },
+    {
+      "id": "p7",
+      "name": "Giulia Catenazzi",
+      "display": "Giulia Catenazzi",
+      "type": "collateral"
+    },
+    {
+      "id": "p8",
+      "name": "Sig. Lando Tommaseo",
+      "display": "Sig. Lando Tommaseo",
+      "type": "collateral"
+    },
+    {
+      "id": "p9",
+      "name": "Corinne Da Silva-Robert",
+      "display": "Corinne Da Silva-Robert",
+      "type": "collateral"
+    },
+    {
+      "id": "p10",
+      "name": "Philippe Schmitt",
+      "display": "Philippe Schmitt",
+      "type": "collateral"
+    },
+    {
+      "id": "p11",
+      "name": "Nicole Romańczyk",
+      "display": "Nicole Romańczyk",
+      "type": "collateral"
+    },
+    {
+      "id": "p12",
+      "name": "pan Juliusz Bałazy",
+      "display": "pan Juliusz Bałazy",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "MILLET DE OLIVEIRA ET FILS SOLUTIONS LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "HUBERT LIMITED",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "MAILLET SAS GROUP LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o3",
+      "name": "RÖRRICHT LIMITED",
+      "type": "charged"
+    },
+    {
+      "id": "o4",
+      "name": "HENK SCHINKE KG INTERNATIONAL LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o5",
+      "name": "METZ STIFTUNG & CO KGAA LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o6",
+      "name": "AUBERT SA GROUP LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o7",
+      "name": "HENRY SOLUTIONS LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o8",
+      "name": "SANTORIO PERINI E CHERUBINI GROUP SOLUTIONS LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o9",
+      "name": "STAUDE GMBH INTERNATIONAL LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Slavica Heintze controlled MILLET DE OLIVEIRA ET FILS SOLUTIONS LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Sig.ra Barbara Spanevello controlled HUBERT LIMITED"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Franck Étienne controlled MAILLET SAS GROUP LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Annelore Trüb"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Rolf Rudolph-Löffler"
+    },
+    {
+      "from": "p0",
+      "to": "p5",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Albin Fritsch"
+    },
+    {
+      "from": "p0",
+      "to": "p6",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Marina Golino-Cortese"
+    },
+    {
+      "from": "p0",
+      "to": "p7",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Giulia Catenazzi"
+    },
+    {
+      "from": "p0",
+      "to": "p8",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Sig. Lando Tommaseo"
+    },
+    {
+      "from": "p0",
+      "to": "p9",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Corinne Da Silva-Robert"
+    },
+    {
+      "from": "p0",
+      "to": "p10",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Philippe Schmitt"
+    },
+    {
+      "from": "p0",
+      "to": "p11",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed Nicole Romańczyk"
+    },
+    {
+      "from": "p0",
+      "to": "p12",
+      "type": "instructed",
+      "label": "Slavica Heintze instructed pan Juliusz Bałazy"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Slavica Heintze conspired with Sig.ra Barbara Spanevello"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Sig.ra Barbara Spanevello conspired with Franck Étienne"
+    },
+    {
+      "from": "o0",
+      "to": "o5",
+      "type": "received_funds_from",
+      "label": "METZ STIFTUNG & CO KGAA LTD received funds from MILLET DE OLIVEIRA ET FILS SOLUTIONS LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o6",
+      "type": "received_funds_from",
+      "label": "AUBERT SA GROUP LTD received funds from HUBERT LIMITED"
+    },
+    {
+      "from": "o2",
+      "to": "o7",
+      "type": "received_funds_from",
+      "label": "HENRY SOLUTIONS LTD received funds from MAILLET SAS GROUP LTD"
+    },
+    {
+      "from": "o3",
+      "to": "o8",
+      "type": "received_funds_from",
+      "label": "SANTORIO PERINI E CHERUBINI GROUP SOLUTIONS LTD received funds from RÖRRICHT LIMITED"
+    },
+    {
+      "from": "o4",
+      "to": "o9",
+      "type": "received_funds_from",
+      "label": "STAUDE GMBH INTERNATIONAL LTD received funds from HENK SCHINKE KG INTERNATIONAL LTD"
+    }
+  ]
+}

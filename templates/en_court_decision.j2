@@ -1,0 +1,44 @@
+IN THE {{ court | upper }}
+
+{{ labels.file }}: {{ case_number }}
+{{ labels.date }}: {{ filing_date }}
+
+THE KING
+
+- v -
+
+{% for p in persons %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+
+
+{{ sections.title }}
+
+{{ sections.section_persons }}
+
+{% for p in persons %}
+{{ loop.index }}. {{ p.name }}, {{ labels.born }} {{ p.dob }} {{ labels.in }} {{ p.birthplace }}, {{ p.nationality }} national, {{ p.role }}, {{ labels.address }} {{ p.address }}.
+
+{% endfor %}
+{{ sections.section_companies }}
+
+{% for o in orgs %}
+{{ o.name }}
+{{ o.street }}
+{{ o.city_postcode }}
+{{ labels.vat }}: {{ o.vat }}
+
+{% endfor %}
+{{ sections.section_background }}
+
+{{ llm_sections[0] }}
+
+{{ sections.section_findings }}
+
+{{ llm_sections[1] }}
+
+{{ sections.section_conclusions }}
+
+{{ llm_sections[2] }}
+
+{{ sections.section_sentence }}
+
+{{ llm_sections[3] }}

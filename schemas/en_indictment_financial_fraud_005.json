@@ -1,0 +1,258 @@
+{
+  "doc_id": "en_indictment_financial_fraud_005",
+  "fraud_type": "financial_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Luis Trüb-Hethur",
+      "display": "LUIS TRÜB-HETHUR",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Melania Benigni-Puccini",
+      "display": "MELANIA BENIGNI-PUCCINI",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Isabelle Morin-Barre",
+      "display": "ISABELLE MORIN-BARRE",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Jelena Kuhl",
+      "display": "Jelena Kuhl",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Univ. Halil Henck",
+      "display": "Univ. Halil Henck",
+      "type": "collateral"
+    },
+    {
+      "id": "p5",
+      "name": "Anneliese Löwer",
+      "display": "Anneliese Löwer",
+      "type": "collateral"
+    },
+    {
+      "id": "p6",
+      "name": "Vittoria Mancini",
+      "display": "Vittoria Mancini",
+      "type": "collateral"
+    },
+    {
+      "id": "p7",
+      "name": "Baccio Torricelli",
+      "display": "Baccio Torricelli",
+      "type": "collateral"
+    },
+    {
+      "id": "p8",
+      "name": "Ludovica Broggini-Agazzi",
+      "display": "Ludovica Broggini-Agazzi",
+      "type": "collateral"
+    },
+    {
+      "id": "p9",
+      "name": "Pierre Leleu",
+      "display": "Pierre Leleu",
+      "type": "collateral"
+    },
+    {
+      "id": "p10",
+      "name": "Tristan Gay",
+      "display": "Tristan Gay",
+      "type": "collateral"
+    },
+    {
+      "id": "p11",
+      "name": "Ada Denkiewicz",
+      "display": "Ada Denkiewicz",
+      "type": "collateral"
+    },
+    {
+      "id": "p12",
+      "name": "Sandra Nojman",
+      "display": "Sandra Nojman",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "DANIEL INTERNATIONAL LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "BEER HOLDINGS LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "PEROZZO SPA LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o3",
+      "name": "MALLET BARON SAS SOLUTIONS LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o4",
+      "name": "GOLDSTEIN ZABARELLA E BRUGNARO SRL LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o5",
+      "name": "HETHUR SOLUTIONS LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o6",
+      "name": "BERGER AG & CO KGAA SOLUTIONS LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o7",
+      "name": "FOUQUET GROUP LTD",
+      "type": "associated"
+    },
+    {
+      "id": "o8",
+      "name": "HÖLZENBECHER PATBERG AG LIMITED",
+      "type": "associated"
+    },
+    {
+      "id": "o9",
+      "name": "RUSTICUCCI MICCA E ZANZI SPA SOLUTIONS LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Luis Trüb-Hethur controlled DANIEL INTERNATIONAL LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Melania Benigni-Puccini controlled BEER HOLDINGS LTD"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Isabelle Morin-Barre controlled PEROZZO SPA LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Jelena Kuhl"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Univ. Halil Henck"
+    },
+    {
+      "from": "p0",
+      "to": "p5",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Anneliese Löwer"
+    },
+    {
+      "from": "p0",
+      "to": "p6",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Vittoria Mancini"
+    },
+    {
+      "from": "p0",
+      "to": "p7",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Baccio Torricelli"
+    },
+    {
+      "from": "p0",
+      "to": "p8",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Ludovica Broggini-Agazzi"
+    },
+    {
+      "from": "p0",
+      "to": "p9",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Pierre Leleu"
+    },
+    {
+      "from": "p0",
+      "to": "p10",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Tristan Gay"
+    },
+    {
+      "from": "p0",
+      "to": "p11",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Ada Denkiewicz"
+    },
+    {
+      "from": "p0",
+      "to": "p12",
+      "type": "instructed",
+      "label": "Luis Trüb-Hethur instructed Sandra Nojman"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Luis Trüb-Hethur conspired with Melania Benigni-Puccini"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Melania Benigni-Puccini conspired with Isabelle Morin-Barre"
+    },
+    {
+      "from": "o0",
+      "to": "o5",
+      "type": "received_funds_from",
+      "label": "HETHUR SOLUTIONS LTD received funds from DANIEL INTERNATIONAL LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o6",
+      "type": "received_funds_from",
+      "label": "BERGER AG & CO KGAA SOLUTIONS LTD received funds from BEER HOLDINGS LTD"
+    },
+    {
+      "from": "o2",
+      "to": "o7",
+      "type": "received_funds_from",
+      "label": "FOUQUET GROUP LTD received funds from PEROZZO SPA LTD"
+    },
+    {
+      "from": "o3",
+      "to": "o8",
+      "type": "received_funds_from",
+      "label": "HÖLZENBECHER PATBERG AG LIMITED received funds from MALLET BARON SAS SOLUTIONS LTD"
+    },
+    {
+      "from": "o4",
+      "to": "o9",
+      "type": "received_funds_from",
+      "label": "RUSTICUCCI MICCA E ZANZI SPA SOLUTIONS LTD received funds from GOLDSTEIN ZABARELLA E BRUGNARO SRL LTD"
+    }
+  ]
+}

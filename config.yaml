@@ -1,0 +1,298 @@
+# =============================================================================
+# Synthetic Legal NER Generator
+# Rule: only configure DECISIONS. Constants and generated values live in code.
+# =============================================================================
+
+# ── System ────────────────────────────────────────────────────────────────────
+
+ollama:
+  base_url: http://localhost:11434
+  model: qwen3:8b
+  timeout: 180
+
+output_dir: output
+schema_dir: schemas
+
+# ── Run profile — edit this between runs ──────────────────────────────────────
+#
+# doc_type:   indictment | court_decision
+# fraud_type: financial_fraud | procurement_fraud | eu_subsidy_fraud |
+#             customs_evasion | money_laundering | tax_evasion |
+#             bribery | insider_trading
+#
+# section_words controls the LLM-written prose directly.
+# If omitted, the generator falls back to pages + built-in section weights.
+#
+# surface_forms per person:
+#   1 = full name only
+#   2 = full name + initials
+#   3 = full name + title+surname + initials
+#   4 = full name + title+surname + short name + initials
+#
+# nationalities: ISO 2-letter country codes (see mappings below)
+# titles: one per defendant/collateral in order
+
+profile:
+  doc_type:   indictment
+  fraud_type: financial_fraud
+
+  section_words:
+    history: 720
+    charges: 480
+    facts: 2400
+    evidence: 480
+    assessment: 720
+
+  entity_targets:
+    per_page:
+      AMOUNT:   2
+      DATE:     3
+      VAT:      1
+      CASE_REF: 1
+      INITIALS: 2
+      TITLE:    1
+
+# ── Case source of truth ──────────────────────────────────────────────────────
+#
+# Keep fields as `auto` to preserve the current generator behavior.
+# Replace them with explicit values only when you want the config file to hold
+# the fully resolved case.
+#
+# `cast` = generation specs
+# `defendants` / `collateral` / `charged_orgs` / `associated_orgs` = explicit records
+# `schema` = embedded case schema (same shape as case_schema.json)
+# `prose` = explicit section prose; leave entries as `auto` to generate them
+# `counts` = explicit indictment counts
+
+case:
+  metadata:
+    court: auto
+    case_number: auto
+    cross_ref: auto
+    filing_date: auto
+    offence_period:
+      start: auto
+      end: auto
+
+  cast:
+    # 3 main defendants — per-person control because surface_forms differs
+    defendants:
+      - nationality: DE
+        title: Dr
+        surface_forms: 2        # full name + initials
+      - nationality: IT
+        title: Mr
+        surface_forms: 2        # full name + initials
+      - nationality: FR
+        title: Ms
+        surface_forms: 1        # full name only
+
+    # 10 witnesses spread across 4 EU countries
+    collateral:
+      - nationality: DE
+        surface_forms: 1
+      - nationality: DE
+        surface_forms: 1
+      - nationality: DE
+        surface_forms: 1
+      - nationality: IT
+        surface_forms: 1
+      - nationality: IT
+        surface_forms: 1
+      - nationality: IT
+        surface_forms: 1
+      - nationality: FR
+        surface_forms: 1
+      - nationality: FR
+        surface_forms: 1
+      - nationality: PL
+        surface_forms: 1
+      - nationality: PL
+        surface_forms: 1
+
+    charged_orgs:    5          # formally listed in Section II
+    associated_orgs: 5          # mentioned in prose only — total 10 companies
+
+  defendants: auto
+  collateral: auto
+  charged_orgs: auto
+  associated_orgs: auto
+  schema: auto
+  prose:
+    history: auto
+    charges: auto
+    facts: auto
+    evidence: auto
+    assessment: auto
+  counts: auto
+
+# ── Country mappings ──────────────────────────────────────────────────────────
+
+nationality_locales:
+  GB: en_GB
+  DE: de_DE
+  FR: fr_FR
+  IT: it_IT
+  NL: nl_NL
+  CZ: cs_CZ
+  PL: pl_PL
+  ES: es_ES
+  PT: pt_PT
+  BE: fr_BE
+  AT: de_AT
+  SE: sv_SE
+  DK: da_DK
+  FI: fi_FI
+  HU: hu_HU
+  RO: ro_RO
+  BG: bg_BG
+  GR: el_GR
+  HR: hr_HR
+  SK: sk_SK
+  SI: sl_SI
+
+vat_prefixes:
+  GB: GB
+  DE: DE
+  FR: FR
+  IT: IT
+  NL: NL
+  CZ: CZ
+  PL: PL
+  ES: ES
+  PT: PT
+  BE: BE
+  AT: AT
+  SE: SE
+  DK: DK
+  FI: FI
+  HU: HU
+  RO: RO
+  BG: BG
+  GR: EL
+  HR: HR
+  SK: SK
+  SI: SI
+
+# ── Fraud statutes (English law) ──────────────────────────────────────────────
+# {defendants} {companies} {start_date} {end_date} substituted at runtime
+
+fraud_statutes:
+  financial_fraud:
+    - offence: "FRAUD BY FALSE REPRESENTATION"
+      statute: "section 1 of the Fraud Act 2006"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dishonestly made false
+        representations, namely by submitting fabricated financial documentation
+        and inflated invoices through {companies}, intending thereby to make a
+        gain for themselves and to cause loss to others.
+    - offence: "CONSPIRACY TO DEFRAUD"
+      statute: "common law"
+      particulars: >
+        {defendants} between {start_date} and {end_date} conspired together and
+        with others to defraud by dishonestly causing {companies} to enter into
+        transactions on the basis of false and misleading information.
+
+  procurement_fraud:
+    - offence: "FRAUD BY FALSE REPRESENTATION"
+      statute: "section 1 of the Fraud Act 2006"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dishonestly made false
+        representations to a public contracting authority, namely by presenting
+        fabricated delivery records and manipulated approval documents through
+        {companies}, intending thereby to obtain public funds to which they were
+        not entitled.
+    - offence: "FRAUDULENT TRADING"
+      statute: "section 9 of the Fraud Act 2006"
+      particulars: >
+        {defendants} between {start_date} and {end_date} were knowingly party to
+        the carrying on of the business of {companies} with intent to defraud
+        creditors and for other fraudulent purposes.
+
+  eu_subsidy_fraud:
+    - offence: "FRAUD BY FALSE REPRESENTATION"
+      statute: "section 1 of the Fraud Act 2006"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dishonestly made false
+        representations to a public authority administering European Union
+        recovery funds, namely by submitting false reimbursement claims and
+        fabricated supporting documents through {companies}, intending thereby
+        to obtain subsidy payments to which they were not entitled.
+    - offence: "FALSE ACCOUNTING"
+      statute: "section 17 of the Theft Act 1968"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dishonestly falsified
+        accounts and records belonging to {companies} with a view to gain for
+        themselves and with intent to cause loss to another.
+
+  customs_evasion:
+    - offence: "FRAUDULENT EVASION OF DUTY"
+      statute: "section 170 of the Customs and Excise Management Act 1979"
+      particulars: >
+        {defendants} between {start_date} and {end_date} were knowingly concerned
+        in the fraudulent evasion of customs duty chargeable on goods imported
+        through {companies} by deliberately understating the customs value of
+        consignments in declarations submitted to His Majesty's Revenue and Customs.
+    - offence: "FALSE ACCOUNTING"
+      statute: "section 17 of the Theft Act 1968"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dishonestly falsified
+        import documentation and valuation records belonging to {companies}
+        with intent to evade duty and to cause loss to the revenue.
+
+  money_laundering:
+    - offence: "CONCEALING CRIMINAL PROPERTY"
+      statute: "section 327 of the Proceeds of Crime Act 2002"
+      particulars: >
+        {defendants} between {start_date} and {end_date} concealed, disguised,
+        converted and transferred criminal property, namely the proceeds of fraud,
+        by routing funds through {companies} and a series of nominee accounts,
+        knowing or suspecting that the property constituted or represented a
+        person's benefit from criminal conduct.
+    - offence: "ACQUIRING CRIMINAL PROPERTY"
+      statute: "section 329 of the Proceeds of Crime Act 2002"
+      particulars: >
+        {defendants} between {start_date} and {end_date} acquired, used and
+        possessed criminal property, namely funds derived from fraud, transferred
+        through {companies}, knowing or suspecting the same to be criminal property.
+
+  tax_evasion:
+    - offence: "CHEATING THE PUBLIC REVENUE"
+      statute: "common law"
+      particulars: >
+        {defendants} between {start_date} and {end_date} cheated His Majesty's
+        Revenue and Customs by dishonestly concealing income and profits generated
+        through {companies}, thereby evading payment of income tax, corporation
+        tax and value added tax lawfully due.
+    - offence: "FRAUDULENT EVASION OF VALUE ADDED TAX"
+      statute: "section 72 of the Value Added Tax Act 1994"
+      particulars: >
+        {defendants} between {start_date} and {end_date} were knowingly concerned
+        in the fraudulent evasion of value added tax in connection with supplies
+        made through {companies} by submitting false VAT returns and suppressing
+        taxable turnover.
+
+  bribery:
+    - offence: "BRIBING ANOTHER PERSON"
+      statute: "section 1 of the Bribery Act 2010"
+      particulars: >
+        {defendants} between {start_date} and {end_date} offered, promised and
+        gave financial advantages to public officials and private individuals,
+        intending to induce those persons to perform relevant functions improperly
+        for the benefit of {companies}.
+    - offence: "FAILURE OF A COMMERCIAL ORGANISATION TO PREVENT BRIBERY"
+      statute: "section 7 of the Bribery Act 2010"
+      particulars: >
+        {companies} between {start_date} and {end_date} failed to prevent persons
+        associated with them from bribing another person, intending to obtain
+        or retain business and to obtain or retain an advantage in the conduct
+        of business.
+
+  insider_trading:
+    - offence: "INSIDER DEALING"
+      statute: "section 52 of the Criminal Justice Act 1993"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dealt in price-affected
+        securities on a regulated market while in possession of inside information
+        relating to {companies}, which they had obtained through their positions
+        as insiders, and which was not generally available at the time of dealing.

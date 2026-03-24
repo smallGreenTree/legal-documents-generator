@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "synthetic-ner"
+version = "0.1.0"
+description = "Synthetic legal document NER dataset generator"
+authors = []
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+faker = ">=24.0.0"
+jinja2 = ">=3.1.0"
+pyyaml = ">=6.0"
+requests = ">=2.31.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

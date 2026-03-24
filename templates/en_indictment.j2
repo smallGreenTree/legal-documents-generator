@@ -1,0 +1,55 @@
+{{ prosecution }}
+To the {{ court }}
+
+{{ sections.title }}
+
+{{ labels.file }}: {{ case_number }}
+{{ labels.crossref }}: {{ cross_ref }}
+{{ labels.date }}: {{ filing_date }}
+
+{{ sections.section_persons }}
+
+{% for p in persons %}
+{{ loop.index }}. {{ p.name }}, {{ labels.born }} {{ p.dob }} {{ labels.in }} {{ p.birthplace }}, {{ p.nationality }} national, {{ p.role }}, {{ labels.address }} {{ p.address }}.
+
+{% endfor %}
+{{ sections.section_companies }}
+
+{% for o in orgs %}
+{{ o.name }}
+{{ o.street }}
+{{ o.city_postcode }}
+{{ labels.vat }}: {{ o.vat }}
+
+{% endfor %}
+{% for count in counts %}
+COUNT {{ loop.index }}
+
+STATEMENT OF OFFENCE
+
+{{ count.offence }} contrary to {{ count.statute }}.
+
+PARTICULARS OF OFFENCE
+
+{{ count.particulars }}
+
+{% endfor %}
+{{ sections.section_history }}
+
+{{ llm_sections[0] }}
+
+{{ sections.section_charges }}
+
+{{ llm_sections[1] }}
+
+{{ sections.section_facts }}
+
+{{ llm_sections[2] }}
+
+{{ sections.section_evidence }}
+
+{{ llm_sections[3] }}
+
+{{ sections.section_assessment }}
+
+{{ llm_sections[4] }}
