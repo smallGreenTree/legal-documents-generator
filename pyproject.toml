@@ -12,6 +12,19 @@ jinja2 = ">=3.1.0"
 pyyaml = ">=6.0"
 requests = ">=2.31.0"
 
+[tool.poetry.group.dev.dependencies]
+ruff = ">=0.11.0"
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["C90", "E", "F", "I"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

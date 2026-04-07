@@ -22,7 +22,16 @@ The generator works in three layers:
 4. The model writes section prose, one section at a time.
 5. A Jinja template renders the final document and inserts the generated prose into fixed slots.
 
-In code, the main flow lives in `generator.py`.
+The CLI entrypoint stays in `generator.py`, while the implementation now lives under `src/synthetic_ner/`.
+
+Current package split:
+
+- `src/synthetic_ner/constants.py` for static literals and document defaults
+- `src/synthetic_ner/utils.py` for shared helpers and file utilities
+- `src/synthetic_ner/case.py` for cast, metadata, and count resolution
+- `src/synthetic_ner/schema.py` for case-schema and document-id handling
+- `src/synthetic_ner/engine.py` for the core generation flow
+- `src/synthetic_ner/cli.py` for argument parsing
 
 ## What The Case Schema Does
 
@@ -130,7 +139,7 @@ poetry run python generator.py
 Generate from an existing schema:
 
 ```bash
-poetry run python generator.py --from-schema output/en_indictment_financial_fraud_002/case_schema.json
+poetry run python generator.py --from-schema schemas/en_indictment_financial_fraud_002.json
 ```
 
 Generate multiple documents:
@@ -143,4 +152,10 @@ Visualize entity coverage:
 
 ```bash
 poetry run python visualize.py
+```
+
+Check code quality:
+
+```bash
+poetry run ruff check .
 ```

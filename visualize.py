@@ -16,7 +16,6 @@ import html
 import json
 import math
 import re
-import sys
 from pathlib import Path
 
 OUTPUT_DIR = Path("output")
@@ -305,6 +304,9 @@ def graph_html(schema_path: Path, schema: dict) -> str:
         **{node["id"]: node for node in schema.get("persons", [])},
         **{node["id"]: node for node in schema.get("orgs", [])},
     }
+    people_count = len(schema.get("persons", []))
+    org_count = len(schema.get("orgs", []))
+    edge_count = len(schema.get("edges", []))
 
     arrow_defs = "".join(
         f'''
@@ -347,7 +349,14 @@ def graph_html(schema_path: Path, schema: dict) -> str:
             f'''
             <g class="node">
               <title>{raw_name} ({type_label})</title>
-              <circle cx="{x}" cy="{y:.1f}" r="28" fill="{color}" stroke="#0f172a" stroke-width="1.5" />
+              <circle
+                cx="{x}"
+                cy="{y:.1f}"
+                r="28"
+                fill="{color}"
+                stroke="#0f172a"
+                stroke-width="1.5"
+              />
               <text x="{x}" y="{y + 52:.1f}" class="node-label">{name}</text>
               <text x="{x}" y="{y + 70:.1f}" class="node-type">{type_label}</text>
             </g>
@@ -355,7 +364,11 @@ def graph_html(schema_path: Path, schema: dict) -> str:
         )
 
     legend_items = "".join(
-        f'<span class="legend-item"><span class="swatch" style="background:{color}"></span>{label}</span>'
+        (
+            '<span class="legend-item">'
+            f'<span class="swatch" style="background:{color}"></span>{label}'
+            "</span>"
+        )
         for label, color in (
             ("defendant", NODE_COLORS["defendant"]),
             ("collateral", NODE_COLORS["collateral"]),
@@ -478,7 +491,11 @@ def graph_html(schema_path: Path, schema: dict) -> str:
   <div class="panel">
     <div class="header">
       <h1>{html.escape(schema.get("doc_id", schema_path.stem))}</h1>
-      <p>{html.escape(schema.get("fraud_type", "unknown").replace("_", " "))} case graph with {len(schema.get("persons", []))} people, {len(schema.get("orgs", []))} organisations, and {len(schema.get("edges", []))} edges.</p>
+      <p>
+        {html.escape(schema.get("fraud_type", "unknown").replace("_", " "))}
+        case graph with {people_count} people, {org_count} organisations, and
+        {edge_count} edges.
+      </p>
     </div>
     <div class="legend">{legend_items}</div>
     <div class="graph-wrap">
@@ -522,54 +539,77 @@ def process(doc_dir: Path) -> Path:
     return out
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    grp = parser.add_mutually_exclusive_group()
-    grp.add_argument("--all", action="store_true")
-    grp.add_argument("--doc", metavar="DOC_ID")
-    grp.add_argument("--graph", nargs="?", const="__latest__", metavar="DOC_ID")
-    args = parser.parse_args()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--all", action="store_true")
+    group.add_argument("--doc", metavar="DOC_ID")
+    group.add_argument("--graph", nargs="?", const="__latest__", metavar="DOC_ID")
+    return parser
 
-    if args.graph is not None:
-        if args.graph == "__latest__":
-            schema_path = most_recent_schema()
-            if schema_path is None:
-                print("No schema files found in schemas/.")
-                sys.exit(1)
-        else:
-            schema_path = SCHEMA_DIR / f"{args.graph}.json"
-            if not schema_path.is_file():
-                print(f"Schema file not found: {schema_path}")
-                sys.exit(1)
-        out = process_graph(schema_path)
-        print(f"\nOpen with:\n  open {out}")
+
+def resolve_graph_schema_path(graph_arg: str) -> Path:
+    if graph_arg == "__latest__":
+        schema_path = most_recent_schema()
+        if schema_path is None:
+            raise SystemExit("No schema files found in schemas/.")
+        return schema_path
+
+    schema_path = SCHEMA_DIR / f"{graph_arg}.json"
+    if not schema_path.is_file():
+        raise SystemExit(f"Schema file not found: {schema_path}")
+    return schema_path
+
+
+def open_hint(output_path: Path) -> None:
+    print(f"\nOpen with:\n  open {output_path}")
+
+
+def handle_graph_mode(graph_arg: str) -> None:
+    output_path = process_graph(resolve_graph_schema_path(graph_arg))
+    open_hint(output_path)
+
+
+def iter_output_dirs() -> list[Path]:
+    if not OUTPUT_DIR.exists():
+        raise SystemExit("No output/ folder found. Run generator first.")
+    return sorted(directory for directory in OUTPUT_DIR.iterdir() if directory.is_dir())
+
+
+def resolve_doc_dir(doc_id: str | None) -> Path:
+    if doc_id:
+        doc_dir = OUTPUT_DIR / doc_id
+        if not doc_dir.is_dir():
+            raise SystemExit(f"Document folder not found: {doc_dir}")
+        return doc_dir
+
+    doc_dir = most_recent_doc()
+    if doc_dir is None:
+        raise SystemExit("No documents found in output/.")
+    return doc_dir
+
+
+def handle_document_mode(args: argparse.Namespace) -> None:
+    if args.all:
+        directories = iter_output_dirs()
+        if not directories:
+            raise SystemExit("No documents found in output/.")
+        for directory in directories:
+            process(directory)
         return
 
-    if not OUTPUT_DIR.exists():
-        print("No output/ folder found. Run generator first.")
-        sys.exit(1)
+    output_path = process(resolve_doc_dir(args.doc))
+    open_hint(output_path)
 
-    if args.all:
-        dirs = sorted(d for d in OUTPUT_DIR.iterdir() if d.is_dir())
-        if not dirs:
-            print("No documents found in output/.")
-            sys.exit(1)
-        for d in dirs:
-            process(d)
-    elif args.doc:
-        doc_dir = OUTPUT_DIR / args.doc
-        if not doc_dir.is_dir():
-            print(f"Document folder not found: {doc_dir}")
-            sys.exit(1)
-        out = process(doc_dir)
-        print(f"\nOpen with:\n  open {out}")
-    else:
-        doc_dir = most_recent_doc()
-        if doc_dir is None:
-            print("No documents found in output/.")
-            sys.exit(1)
-        out = process(doc_dir)
-        print(f"\nOpen with:\n  open {out}")
+
+def main():
+    args = build_parser().parse_args()
+
+    if args.graph is not None:
+        handle_graph_mode(args.graph)
+        return
+
+    handle_document_mode(args)
 
 
 if __name__ == "__main__":
