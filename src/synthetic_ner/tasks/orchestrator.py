@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from collections.abc import Callable
+from functools import wraps
 from pathlib import Path
 from typing import TypedDict
 
@@ -220,15 +222,105 @@ class DocumentWorkflow:
         return builder.compile()
 
     def _register_nodes(self, builder: StateGraph) -> None:
-        builder.add_node("document_planner", self.document_planner_node)
-        builder.add_node("prepare_section", self.prepare_section_node)
-        builder.add_node("plan_section", self.plan_section_node)
-        builder.add_node("write_section", self.write_section_node)
-        builder.add_node("critique_section", self.critique_section_node)
-        builder.add_node("validate_section", self.validate_section_node)
-        builder.add_node("revise_section", self.revise_section_node)
-        builder.add_node("store_section", self.store_section_node)
-        builder.add_node("render_document", self.render_document_node)
+        builder.add_node(
+            "document_planner",
+            self._trace_node(
+                "document_planner",
+                self.document_planner_node,
+                next_node="prepare_section",
+            ),
+        )
+        builder.add_node(
+            "prepare_section",
+            self._trace_node(
+                "prepare_section",
+                self.prepare_section_node,
+                next_node_resolver=route_after_prepare,
+            ),
+        )
+        builder.add_node(
+            "plan_section",
+            self._trace_node(
+                "plan_section",
+                self.plan_section_node,
+                next_node="write_section",
+            ),
+        )
+        builder.add_node(
+            "write_section",
+            self._trace_node(
+                "write_section",
+                self.write_section_node,
+                next_node="critique_section",
+            ),
+        )
+        builder.add_node(
+            "critique_section",
+            self._trace_node(
+                "critique_section",
+                self.critique_section_node,
+                next_node="validate_section",
+            ),
+        )
+        builder.add_node(
+            "validate_section",
+            self._trace_node(
+                "validate_section",
+                self.validate_section_node,
+                next_node_resolver=self.route_after_validation,
+            ),
+        )
+        builder.add_node(
+            "revise_section",
+            self._trace_node(
+                "revise_section",
+                self.revise_section_node,
+                next_node="critique_section",
+            ),
+        )
+        builder.add_node(
+            "store_section",
+            self._trace_node(
+                "store_section",
+                self.store_section_node,
+                next_node="prepare_section",
+            ),
+        )
+        builder.add_node(
+            "render_document",
+            self._trace_node(
+                "render_document",
+                self.render_document_node,
+                next_node="END",
+            ),
+        )
+
+    def _trace_node(
+        self,
+        node_name: str,
+        handler: Callable[[WorkflowState], WorkflowState],
+        *,
+        next_node: str | None = None,
+        next_node_resolver: Callable[[WorkflowState], str | None] | None = None,
+    ) -> Callable[[WorkflowState], WorkflowState]:
+        resolver = next_node_resolver
+        if resolver is None and next_node is not None:
+            def resolve_fixed_next_node(_state: WorkflowState) -> str | None:
+                return next_node
+
+            resolver = resolve_fixed_next_node
+
+        @wraps(handler)
+        def wrapped(state: WorkflowState) -> WorkflowState:
+            return self.trace_store.run_langgraph_node(
+                doc_id=self.doc_id,
+                node_name=node_name,
+                state=state,
+                runner=lambda: handler(state),
+                next_node_resolver=resolver,
+            )
+
+        return wrapped
 
     def _register_edges(self, builder: StateGraph) -> None:
         builder.add_edge(START, "document_planner")
@@ -470,6 +562,7 @@ def write_generation_report(
     trace_store: TraceStore,
 ) -> Path:
     trace_info = trace_store.get_trace_info()
+    node_summary = trace_store.get_langgraph_node_summary()
     report_path = context.output_dir / doc_id / "generation_report.md"
     lines = [
         f"# Generation Report: {doc_id}",
@@ -499,5 +592,28 @@ def write_generation_report(
                 "",
             ]
         )
+    if node_summary:
+        lines.extend(
+            [
+                "## LangGraph Node Analytics",
+                "",
+                "Each node below also appears as its own child span in Langfuse.",
+                "",
+                "| Node | Executions | Avg ms | Max ms | Errors | Next Nodes |",
+                "| --- | ---: | ---: | ---: | ---: | --- |",
+            ]
+        )
+        for row in node_summary:
+            next_nodes = ", ".join(row["next_nodes"]) if row["next_nodes"] else "-"
+            lines.append(
+                "| "
+                f"{row['node_name']} | "
+                f"{row['executions']} | "
+                f"{row['avg_latency_ms']} | "
+                f"{row['max_latency_ms']} | "
+                f"{row['errors']} | "
+                f"{next_nodes} |"
+            )
+        lines.append("")
     report_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return report_path

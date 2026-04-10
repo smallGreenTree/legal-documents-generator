@@ -78,3 +78,18 @@ Each run writes:
 - `output/<doc_id>/generation_report.md`
 - `schemas/<doc_id>.json`
 - `memory/case_<doc_id>/CASE_MEMORY.md`
+
+## Langfuse Node Analytics
+
+When Langfuse is enabled, each LangGraph node is emitted as its own child span
+under the document trace.
+
+Those node spans include compact state summaries plus metadata such as:
+
+- `node_name`
+- `current_section`
+- `section_index`
+- `revision_count`
+- `issues_count`
+- `next_node`
+- `latency_ms`

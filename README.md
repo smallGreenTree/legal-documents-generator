@@ -45,6 +45,7 @@ That workflow adds:
 - persistent case memory under `memory/case_{doc_id}/CASE_MEMORY.md`
 - planner, writer, critic, and validator task modules
 - a generation report saved alongside the final document
+- node-level Langfuse spans for every LangGraph node, including section, revision, next-node, and latency metadata
 
 The active workflow mode is controlled by `workflow.mode` in `config.yaml`,
 and can be overridden on the CLI with `--workflow-mode classic|langgraph`.
