@@ -4,8 +4,11 @@ import csv
 from pathlib import Path
 
 import yaml
-
-from .constants import GROUNDTRUTH_HEADER, TITLE_PREFIXES
+from src.synthetic_ner.constants import (
+    GROUNDTRUTH_HEADER,
+    INLINE_TEMPLATE_ENV,
+    TITLE_PREFIXES,
+)
 
 
 def load_config(path: Path | str) -> dict:
@@ -53,3 +56,7 @@ def make_initials(name: str) -> str:
     if not parts:
         return ""
     return ".".join(part[0].upper() for part in parts) + "."
+
+
+def render_inline_template(template: str, **context) -> str:
+    return INLINE_TEMPLATE_ENV.from_string(template).render(**context)

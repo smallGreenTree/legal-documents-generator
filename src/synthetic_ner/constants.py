@@ -1,24 +1,5 @@
-"""Static literals and generation defaults."""
-
-WORDS_PER_PAGE = 500
-CHUNK_SIZE = 700
-MAX_CONTEXT_CHARS = 600
-
-SECTION_WEIGHTS = {
-    "indictment": {
-        "history": 0.15,
-        "charges": 0.10,
-        "facts": 0.50,
-        "evidence": 0.10,
-        "assessment": 0.15,
-    },
-    "court_decision": {
-        "background": 0.20,
-        "findings": 0.50,
-        "conclusions": 0.15,
-        "sentence": 0.15,
-    },
-}
+"""Static literals."""
+from jinja2 import Environment
 
 SECTION_DESCRIPTIONS = {
     "history": (
@@ -154,3 +135,14 @@ EN_SECTIONS = {
 GROUNDTRUTH_HEADER = ["doc_id", "entity_text", "label", "should_propose", "notes"]
 
 TITLE_PREFIXES = ["Mr.", "Mrs.", "Ms.", "Miss", "Dr.", "Prof.", "Sir", "Lord"]
+
+INCOMPLETE_SECTION_MARKERS = {
+    "[missing section]",
+    "[section not generated]",
+}
+
+INLINE_TEMPLATE_ENV = Environment(
+    trim_blocks=True,
+    lstrip_blocks=True,
+    keep_trailing_newline=True,
+)

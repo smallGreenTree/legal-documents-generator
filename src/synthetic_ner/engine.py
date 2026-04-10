@@ -3,29 +3,25 @@
 import math
 import re
 from argparse import Namespace
-from dataclasses import dataclass
 from pathlib import Path
 
 import requests
 from jinja2 import Environment, FileSystemLoader
-
-from .case import (
+from src.synthetic_ner.case import (
     resolve_case_entities,
     resolve_case_metadata,
     resolve_counts,
     resolve_prose_overrides,
 )
-from .constants import (
-    CHUNK_SIZE,
+from src.synthetic_ner.config import build_generation_config, resolve_section_order
+from src.synthetic_ner.constants import (
     EN_LABELS,
     EN_SECTIONS,
-    MAX_CONTEXT_CHARS,
+    INCOMPLETE_SECTION_MARKERS,
     PROSECUTION,
     SECTION_DESCRIPTIONS,
-    SECTION_WEIGHTS,
-    WORDS_PER_PAGE,
 )
-from .schema import (
+from src.synthetic_ner.schema import (
     counter_from_doc_id,
     load_case_schema,
     make_case_schema,
@@ -35,39 +31,14 @@ from .schema import (
     schema_to_context,
     write_case_schema,
 )
-from .utils import is_auto, load_config, resolve_project_path, write_groundtruth
-
-
-@dataclass
-class RuntimeContext:
-    cfg: dict
-    profile: dict
-    case_cfg: dict
-    ollama_cfg: dict
-    nat_locales: dict
-    vat_prefixes: dict
-    doc_type: str
-    fraud_type: str
-    output_dir: Path
-    schema_dir: Path
-    template_env: Environment
-    sections: dict
-    labels: dict
-    section_word_targets: dict[str, int]
-    documents: int
-    prose_overrides: dict[str, str]
-    schema_source_path: Path | None
-    no_llm: bool
-
-
-@dataclass
-class DocumentInputs:
-    defendants: list[dict]
-    collateral: list[dict]
-    charged_orgs: list[dict]
-    associated_orgs: list[dict]
-    metadata: dict
-    counts_list: list[dict]
+from src.synthetic_ner.types.document_inputs import DocumentInputs
+from src.synthetic_ner.types.runtime_context import RuntimeContext
+from src.synthetic_ner.utils import (
+    is_auto,
+    load_config,
+    resolve_project_path,
+    write_groundtruth,
+)
 
 
 def call_ollama(ollama_cfg: dict, prompt: str) -> str | None:
@@ -101,6 +72,8 @@ def generate_section(
     case_number: str,
     word_target: int,
     entity_mentions: int,
+    chunk_words: int,
+    context_tail_chars: int,
     schema_context: str = "",
 ) -> str:
     all_persons = defendants + collateral
@@ -119,7 +92,7 @@ def generate_section(
 
     while words_so_far < word_target:
         remaining = word_target - words_so_far
-        chunk_target = min(CHUNK_SIZE, remaining)
+        chunk_target = min(chunk_words, remaining)
         is_first_chunk = words_so_far == 0
 
         context_fragment = ""
@@ -127,7 +100,7 @@ def generate_section(
             last_chunk = chunks[-1]
             context_fragment = (
                 "\nContinue directly from where the previous passage ended. "
-                f"Last sentences: ...{last_chunk[-MAX_CONTEXT_CHARS:]}"
+                f"Last sentences: ...{last_chunk[-context_tail_chars:]}"
             )
 
         mention_instruction = (
@@ -183,8 +156,12 @@ def generate_section(
     return "\n\n".join(chunks) if chunks else "[section not generated]"
 
 
-def build_section_word_targets(profile: dict, doc_type: str) -> dict[str, int]:
-    section_order = list(SECTION_WEIGHTS[doc_type].keys())
+def build_section_word_targets(
+    profile: dict,
+    generation_cfg,
+    doc_type: str,
+) -> dict[str, int]:
+    section_order = resolve_section_order(generation_cfg, doc_type)
     configured = profile.get("section_words")
 
     if configured is not None:
@@ -217,9 +194,9 @@ def build_section_word_targets(profile: dict, doc_type: str) -> dict[str, int]:
             "Profile must define either valid section_words or a positive integer pages value"
         )
 
-    total_words = pages * WORDS_PER_PAGE
+    total_words = pages * generation_cfg.words_per_page
     prose_words = max(300, total_words - 200)
-    weights = SECTION_WEIGHTS[doc_type]
+    weights = generation_cfg.section_weights[doc_type]
     return {
         name: max(100, math.floor(prose_words * weights[name]))
         for name in section_order
@@ -280,23 +257,47 @@ def build_template_environment(project_root: Path) -> Environment:
 
 def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext:
     cfg = load_config(project_root / "config.yaml")
-    profile = cfg["profile"]
+    try:
+        generation_cfg = build_generation_config(cfg)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    profile = dict(cfg["profile"])
     case_cfg = cfg.get("case") or {}
     if not isinstance(case_cfg, dict):
         raise SystemExit("Top-level case section must be a mapping")
+    if args.pages is not None:
+        if args.pages <= 0:
+            raise SystemExit("--pages must be a positive integer")
+        profile["pages"] = args.pages
+        profile.pop("section_words", None)
 
     doc_type = args.doc_type if args.doc_type is not None else profile["doc_type"]
     fraud_type = args.fraud_type if args.fraud_type is not None else profile["fraud_type"]
 
+    workflow_cfg = cfg.get("workflow") or {}
+    if not isinstance(workflow_cfg, dict):
+        raise SystemExit("Top-level workflow section must be a mapping")
     output_dir = resolve_project_path(project_root, cfg["output_dir"])
     schema_dir = resolve_project_path(project_root, cfg.get("schema_dir", "schemas"))
+    memory_dir = resolve_project_path(project_root, cfg.get("memory_dir", "memory"))
+    trace_dir = resolve_project_path(project_root, cfg.get("trace_dir", "traces"))
     output_dir.mkdir(exist_ok=True)
     schema_dir.mkdir(exist_ok=True)
+    memory_dir.mkdir(exist_ok=True)
+    trace_dir.mkdir(exist_ok=True)
 
     try:
-        section_word_targets = build_section_word_targets(profile, doc_type)
+        section_word_targets = build_section_word_targets(
+            profile,
+            generation_cfg,
+            doc_type,
+        )
         documents = resolve_documents_to_generate(profile, args.documents)
-        prose_overrides = resolve_prose_overrides(case_cfg, doc_type)
+        prose_overrides = resolve_prose_overrides(
+            case_cfg,
+            generation_cfg,
+            doc_type,
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -308,15 +309,20 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
 
     return RuntimeContext(
         cfg=cfg,
+        generation_cfg=generation_cfg,
         profile=profile,
         case_cfg=case_cfg,
+        langfuse_cfg=cfg.get("langfuse") or {},
         ollama_cfg=cfg["ollama"],
+        workflow_cfg=workflow_cfg,
         nat_locales=cfg["nationality_locales"],
         vat_prefixes=cfg["vat_prefixes"],
         doc_type=doc_type,
         fraud_type=fraud_type,
         output_dir=output_dir,
         schema_dir=schema_dir,
+        memory_dir=memory_dir,
+        trace_dir=trace_dir,
         template_env=build_template_environment(project_root),
         sections=EN_SECTIONS[doc_type],
         labels=EN_LABELS,
@@ -324,7 +330,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         documents=documents,
         prose_overrides=prose_overrides,
         schema_source_path=schema_source_path,
-        no_llm=args.no_llm,
     )
 
 
@@ -443,18 +448,16 @@ def build_llm_sections(
                 f"  section '{section_name}': using config prose "
                 f"({len(text.split())}w)"
             )
-        elif context.no_llm:
-            text = "[placeholder prose]"
-            print(f"  section '{section_name}': placeholder prose")
         else:
             entity_mentions = max(
                 1,
-                math.ceil(entity_density * section_words / WORDS_PER_PAGE),
+                math.ceil(entity_density * section_words / context.generation_cfg.words_per_page),
             )
             print(
                 f"  section '{section_name}': ~{section_words}w, "
                 f"{entity_mentions} mention(s)/entity"
             )
+            writer_cfg = context.workflow_cfg.get("writer", {})
             text = generate_section(
                 ollama_cfg=context.ollama_cfg,
                 section_name=section_name,
@@ -467,11 +470,48 @@ def build_llm_sections(
                 case_number=case_number,
                 word_target=section_words,
                 entity_mentions=entity_mentions,
+                chunk_words=writer_cfg.get("chunk_words", 700),
+                context_tail_chars=writer_cfg.get("context_tail_chars", 600),
                 schema_context=schema_context,
             )
         llm_sections.append(text)
 
     return llm_sections
+
+
+def collect_section_output_problems(
+    section_targets: dict[str, int],
+    section_texts: list[str],
+) -> list[str]:
+    problems = []
+    section_names = list(section_targets.keys())
+
+    if len(section_texts) != len(section_names):
+        problems.append(
+            f"expected {len(section_names)} sections, got {len(section_texts)}"
+        )
+
+    for index, section_name in enumerate(section_names):
+        if index >= len(section_texts):
+            problems.append(f"section '{section_name}' is missing")
+            continue
+
+        text = section_texts[index].strip()
+        if not text:
+            problems.append(f"section '{section_name}' is empty")
+            continue
+        if text in INCOMPLETE_SECTION_MARKERS:
+            problems.append(f"section '{section_name}' is incomplete: {text}")
+            continue
+
+        minimum_words = max(60, section_targets[section_name] // 4)
+        if len(text.split()) < minimum_words:
+            problems.append(
+                f"section '{section_name}' is too short for its target "
+                f"({len(text.split())}w < {minimum_words}w minimum)"
+            )
+
+    return problems
 
 
 def render_document_text(
@@ -540,7 +580,7 @@ def save_document_artifacts(
     write_groundtruth(gt_path, gt_rows)
 
     actual_words = len(rendered_text.split())
-    actual_pages = round(actual_words / WORDS_PER_PAGE, 1)
+    actual_pages = round(actual_words / context.generation_cfg.words_per_page, 1)
     print(f"  Schema : {schema_path}")
     print(f"  Saved  : {txt_path}  ({actual_words}w ≈ {actual_pages} pages)")
     print(f"  GT rows: {len(gt_rows)}  →  {gt_path}")
@@ -563,6 +603,15 @@ def run_generation(args: Namespace, project_root: Path) -> None:
             document,
             schema_to_context(schema),
         )
+        problems = collect_section_output_problems(
+            context.section_word_targets,
+            llm_sections,
+        )
+        if problems:
+            raise SystemExit(
+                "Generation aborted because one or more sections are incomplete: "
+                + "; ".join(problems)
+            )
         rendered_text = render_document_text(context, document, llm_sections)
         save_document_artifacts(context, document, doc_id, schema, rendered_text)
 

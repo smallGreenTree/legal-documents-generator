@@ -5,15 +5,14 @@ import re
 from datetime import date, timedelta
 
 from faker import Faker
-
-from .constants import (
+from src.synthetic_ner.config import resolve_section_order
+from src.synthetic_ner.constants import (
     COMPANY_SUFFIXES,
     COURTS,
     NATIONALITY_ADJECTIVES,
     PERSON_ROLES,
-    SECTION_WEIGHTS,
 )
-from .utils import is_auto, make_initials, split_address, strip_titles
+from src.synthetic_ner.utils import is_auto, make_initials, split_address, strip_titles
 
 
 def make_vat(prefix: str) -> str:
@@ -62,6 +61,52 @@ def make_offence_period() -> tuple[str, str]:
     return start_date.strftime(fmt), end_date.strftime(fmt)
 
 
+def clean_person_part(value: str) -> str:
+    cleaned = strip_titles(str(value or ""))
+    cleaned = re.sub(r"[^A-Za-zÀ-ÖØ-öø-ÿ' -]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -'")
+    return cleaned
+
+
+def build_clean_person_name(fake: Faker) -> str:
+    first_name = clean_person_part(fake.first_name())
+    last_name = clean_person_part(fake.last_name())
+    if first_name and last_name:
+        return f"{first_name} {last_name}"
+
+    fallback = clean_person_part(fake.name())
+    parts = fallback.split()
+    if len(parts) >= 2:
+        return f"{parts[0]} {parts[-1]}"
+    if fallback:
+        return fallback
+    return f"{clean_person_part(fake.first_name())} {clean_person_part(fake.last_name())}".strip()
+
+
+def clean_company_token(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-zÀ-ÖØ-öø-ÿ0-9& -]", " ", str(value or ""))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -&")
+    return cleaned.upper()
+
+
+def build_company_base_name(fake: Faker) -> str:
+    tokens = []
+    target_parts = 2 if random.random() < 0.45 else 1
+
+    for _ in range(6):
+        token = clean_company_token(fake.last_name())
+        if token and token not in tokens:
+            tokens.append(token)
+        if len(tokens) >= target_parts:
+            break
+
+    if not tokens:
+        fallback = clean_company_token(fake.company())
+        tokens = [part for part in fallback.split() if part][:target_parts]
+
+    return " ".join(tokens) if tokens else "ARDEN"
+
+
 def make_person(
     nat: str,
     title: str,
@@ -72,10 +117,12 @@ def make_person(
     locale = nat_locales.get(nat, "en_GB")
     fake = Faker(locale)
 
-    raw_name = strip_titles(fake.name())
+    raw_name = build_clean_person_name(fake)
     parts = raw_name.split()
     if len(parts) < 2:
-        parts = [raw_name, fake.last_name()]
+        fallback_last_name = clean_person_part(fake.last_name()) or raw_name
+        parts = [raw_name, fallback_last_name]
+        raw_name = " ".join(parts)
 
     first_name = parts[0]
     last_name = parts[-1]
@@ -120,7 +167,7 @@ def make_org(nat: str, nat_locales: dict, vat_prefixes: dict) -> dict:
     locale = nat_locales.get(nat, "en_GB")
     fake = Faker(locale)
     suffix = random.choice(COMPANY_SUFFIXES)
-    base_name = re.sub(r"[,\.\-']", "", fake.company()).upper()
+    base_name = build_company_base_name(fake)
     street = fake.street_address()
     city_postcode = f"{fake.city()} {fake.postcode()}"
     vat_prefix = vat_prefixes.get(nat, nat)
@@ -472,14 +519,18 @@ def resolve_counts(
     )
 
 
-def resolve_prose_overrides(case_cfg: dict, doc_type: str) -> dict[str, str]:
+def resolve_prose_overrides(
+    case_cfg: dict,
+    generation_cfg,
+    doc_type: str,
+) -> dict[str, str]:
     prose_cfg = case_cfg.get("prose")
     if is_auto(prose_cfg):
         return {}
     if not isinstance(prose_cfg, dict):
         raise ValueError("case.prose must be a mapping")
 
-    section_order = list(SECTION_WEIGHTS[doc_type].keys())
+    section_order = resolve_section_order(generation_cfg, doc_type)
     extra = [name for name in prose_cfg if name not in section_order]
     if extra:
         raise ValueError(
