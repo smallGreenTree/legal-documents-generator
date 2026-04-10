@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from langfuse import get_client
+from src.synthetic_ner.types.app_config import LangfuseConfig
 
 
 @dataclass(slots=True)
@@ -30,13 +31,13 @@ class DocumentTraceSession:
 
 
 class TraceStore:
-    def __init__(self, base_dir: Path, cfg: dict) -> None:
+    def __init__(self, base_dir: Path, cfg: LangfuseConfig) -> None:
         self.base_dir = base_dir
-        self.cfg = cfg if isinstance(cfg, dict) else {}
-        self.enabled = bool(self.cfg.get("enabled", True))
-        self.base_url = self.cfg.get("base_url")
-        self.public_key_env = self.cfg.get("public_key_env", "LANGFUSE_PUBLIC_KEY")
-        self.secret_key_env = self.cfg.get("secret_key_env", "LANGFUSE_SECRET_KEY")
+        self.cfg = cfg
+        self.enabled = cfg.enabled
+        self.base_url = cfg.base_url
+        self.public_key_env = cfg.public_key_env
+        self.secret_key_env = cfg.secret_key_env
 
         public_key = os.getenv(self.public_key_env)
         secret_key = os.getenv(self.secret_key_env)

@@ -3,17 +3,12 @@
 import argparse
 from pathlib import Path
 
-from src.synthetic_ner.config import build_generation_config, resolve_doc_types
-from src.synthetic_ner.utils import load_config
+from src.synthetic_ner.config import load_app_config, resolve_doc_types
 
 
 def build_parser(project_root: Path) -> argparse.ArgumentParser:
-    doc_type_choices = None
-    try:
-        cfg = load_config(project_root / "config.yaml")
-        doc_type_choices = sorted(resolve_doc_types(build_generation_config(cfg)))
-    except ValueError:
-        doc_type_choices = None
+    app_config = load_app_config(project_root / "config.yaml")
+    doc_type_choices = sorted(resolve_doc_types(app_config.generation))
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -59,11 +54,8 @@ def resolve_workflow_mode(project_root: Path, args: argparse.Namespace) -> str:
     if args.workflow_mode is not None:
         return args.workflow_mode
 
-    cfg = load_config(project_root / "config.yaml")
-    workflow_cfg = cfg.get("workflow") or {}
-    if not isinstance(workflow_cfg, dict):
-        return "classic"
-    return workflow_cfg.get("mode", "classic")
+    app_config = load_app_config(project_root / "config.yaml")
+    return app_config.workflow.mode
 
 
 def main(project_root: Path | None = None) -> None:

@@ -4,20 +4,30 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment
-from src.synthetic_ner.config import GenerationConfig
+from src.synthetic_ner.types.app_config import (
+    AppConfig,
+    CaseConfig,
+    GenerationConfig,
+    LangfuseConfig,
+    OllamaConfig,
+    PathsConfig,
+    ProfileConfig,
+    WorkflowConfig,
+)
 
 
 @dataclass
 class RuntimeContext:
-    cfg: dict
+    app_config: AppConfig
+    paths: PathsConfig
     generation_cfg: GenerationConfig
-    profile: dict
-    case_cfg: dict
-    langfuse_cfg: dict
-    ollama_cfg: dict
-    workflow_cfg: dict
-    nat_locales: dict
-    vat_prefixes: dict
+    profile: ProfileConfig
+    case_cfg: CaseConfig
+    langfuse_cfg: LangfuseConfig
+    ollama_cfg: OllamaConfig
+    workflow_cfg: WorkflowConfig
+    nat_locales: dict[str, str]
+    vat_prefixes: dict[str, str]
     doc_type: str
     fraud_type: str
     output_dir: Path

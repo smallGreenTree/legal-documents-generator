@@ -5,15 +5,16 @@
 
 # ── System ────────────────────────────────────────────────────────────────────
 
+paths:
+  output_dir: output
+  schema_dir: schemas
+  memory_dir: memory
+  trace_dir: traces
+
 ollama:
   base_url: http://localhost:11434
   model: qwen3:8b
   timeout: 180
-
-output_dir: output
-schema_dir: schemas
-memory_dir: memory
-trace_dir: traces
 
 langfuse:
   enabled: true
@@ -159,6 +160,7 @@ profile:
   doc_type:   indictment
   fraud_type: financial_fraud
   documents: 1
+  pages: null
   section_words:
     history: 720
     charges: 500
@@ -204,24 +206,34 @@ case:
     # 10 witnesses spread across 4 EU countries
     collateral:
       - nationality: DE
+        title: ""
         surface_forms: 1
       - nationality: DE
+        title: ""
         surface_forms: 1
       - nationality: DE
+        title: ""
         surface_forms: 1
       - nationality: IT
+        title: ""
         surface_forms: 1
       - nationality: IT
+        title: ""
         surface_forms: 1
       - nationality: IT
+        title: ""
         surface_forms: 1
       - nationality: FR
+        title: ""
         surface_forms: 1
       - nationality: FR
+        title: ""
         surface_forms: 1
       - nationality: PL
+        title: ""
         surface_forms: 1
       - nationality: PL
+        title: ""
         surface_forms: 1
 
     charged_orgs:    5          # formally listed in Section II

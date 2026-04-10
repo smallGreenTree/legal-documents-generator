@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
+from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_inline_template
 
 
@@ -13,7 +14,7 @@ class SectionWriter:
         self,
         *,
         client,
-        prompts: dict,
+        prompts: WorkflowPromptsConfig,
         chunk_words: int,
         context_tail_chars: int,
         writer_temperature: float,
@@ -47,7 +48,7 @@ class SectionWriter:
             chunk_target = min(self.chunk_words, remaining)
             previous_tail = chunks[-1][-self.context_tail_chars:] if chunks else "n/a"
             user_prompt = render_inline_template(
-                self.prompts["writer_user"],
+                self.prompts.writer_user,
                 memory_text=memory_text,
                 document_plan=document_plan,
                 section_plan=section_plan,
@@ -65,7 +66,7 @@ class SectionWriter:
                 doc_id=doc_id,
                 task_id=task_id,
                 stage="writer",
-                system_prompt=self.prompts["writer_system"],
+                system_prompt=self.prompts.writer_system,
                 user_prompt=user_prompt,
                 parent_task_id=parent_task_id,
                 temperature=self.writer_temperature,

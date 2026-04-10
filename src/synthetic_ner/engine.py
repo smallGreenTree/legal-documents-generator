@@ -3,6 +3,7 @@
 import math
 import re
 from argparse import Namespace
+from dataclasses import replace
 from pathlib import Path
 
 import requests
@@ -13,7 +14,7 @@ from src.synthetic_ner.case import (
     resolve_counts,
     resolve_prose_overrides,
 )
-from src.synthetic_ner.config import build_generation_config, resolve_section_order
+from src.synthetic_ner.config import load_app_config, resolve_section_order
 from src.synthetic_ner.constants import (
     EN_LABELS,
     EN_SECTIONS,
@@ -31,27 +32,35 @@ from src.synthetic_ner.schema import (
     schema_to_context,
     write_case_schema,
 )
+from src.synthetic_ner.types.app_config import (
+    OllamaConfig,
+    ProfileConfig,
+    WriterConfig,
+)
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 from src.synthetic_ner.utils import (
     is_auto,
-    load_config,
     resolve_project_path,
     write_groundtruth,
 )
 
 
-def call_ollama(ollama_cfg: dict, prompt: str) -> str | None:
+def call_ollama(
+    ollama_cfg: OllamaConfig,
+    prompt: str,
+    temperature: float,
+) -> str | None:
     try:
         response = requests.post(
-            f"{ollama_cfg['base_url']}/api/generate",
+            f"{ollama_cfg.base_url}/api/generate",
             json={
-                "model": ollama_cfg["model"],
+                "model": ollama_cfg.model,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0.7},
+                "options": {"temperature": temperature},
             },
-            timeout=ollama_cfg.get("timeout", 180),
+            timeout=ollama_cfg.timeout,
         )
         response.raise_for_status()
         return response.json()["response"].strip()
@@ -61,7 +70,8 @@ def call_ollama(ollama_cfg: dict, prompt: str) -> str | None:
 
 
 def generate_section(
-    ollama_cfg: dict,
+    ollama_cfg: OllamaConfig,
+    writer_cfg: WriterConfig,
     section_name: str,
     doc_type: str,
     fraud_type: str,
@@ -72,8 +82,6 @@ def generate_section(
     case_number: str,
     word_target: int,
     entity_mentions: int,
-    chunk_words: int,
-    context_tail_chars: int,
     schema_context: str = "",
 ) -> str:
     all_persons = defendants + collateral
@@ -92,7 +100,7 @@ def generate_section(
 
     while words_so_far < word_target:
         remaining = word_target - words_so_far
-        chunk_target = min(chunk_words, remaining)
+        chunk_target = min(writer_cfg.chunk_words, remaining)
         is_first_chunk = words_so_far == 0
 
         context_fragment = ""
@@ -100,7 +108,7 @@ def generate_section(
             last_chunk = chunks[-1]
             context_fragment = (
                 "\nContinue directly from where the previous passage ended. "
-                f"Last sentences: ...{last_chunk[-context_tail_chars:]}"
+                f"Last sentences: ...{last_chunk[-writer_cfg.context_tail_chars:]}"
             )
 
         mention_instruction = (
@@ -142,7 +150,7 @@ def generate_section(
             end=" ",
             flush=True,
         )
-        raw = call_ollama(ollama_cfg, prompt)
+        raw = call_ollama(ollama_cfg, prompt, writer_cfg.temperature)
         if raw is None:
             print("failed.")
             break
@@ -157,12 +165,12 @@ def generate_section(
 
 
 def build_section_word_targets(
-    profile: dict,
+    profile: ProfileConfig,
     generation_cfg,
     doc_type: str,
 ) -> dict[str, int]:
     section_order = resolve_section_order(generation_cfg, doc_type)
-    configured = profile.get("section_words")
+    configured = profile.section_words
 
     if configured is not None:
         missing = [name for name in section_order if name not in configured]
@@ -188,8 +196,8 @@ def build_section_word_targets(
 
         return {name: configured[name] for name in section_order}
 
-    pages = profile.get("pages")
-    if not isinstance(pages, int) or pages <= 0:
+    pages = profile.pages
+    if pages is None:
         raise ValueError(
             "Profile must define either valid section_words or a positive integer pages value"
         )
@@ -203,16 +211,8 @@ def build_section_word_targets(
     }
 
 
-def resolve_documents_to_generate(profile: dict, cli_documents: int | None) -> int:
-    if cli_documents is not None:
-        if cli_documents <= 0:
-            raise ValueError("--documents must be a positive integer")
-        return cli_documents
-
-    configured = profile.get("documents", profile.get("count"))
-    if not isinstance(configured, int) or configured <= 0:
-        raise ValueError("Profile must define a positive integer documents value")
-    return configured
+def resolve_documents_to_generate(profile: ProfileConfig) -> int:
+    return profile.documents
 
 
 def build_groundtruth_rows(
@@ -256,31 +256,34 @@ def build_template_environment(project_root: Path) -> Environment:
 
 
 def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext:
-    cfg = load_config(project_root / "config.yaml")
     try:
-        generation_cfg = build_generation_config(cfg)
+        app_config = load_app_config(project_root / "config.yaml")
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    profile = dict(cfg["profile"])
-    case_cfg = cfg.get("case") or {}
-    if not isinstance(case_cfg, dict):
-        raise SystemExit("Top-level case section must be a mapping")
+
+    profile = app_config.profile
+    if args.documents is not None:
+        if args.documents <= 0:
+            raise SystemExit("--documents must be a positive integer")
+        profile = replace(profile, documents=args.documents)
+
     if args.pages is not None:
         if args.pages <= 0:
             raise SystemExit("--pages must be a positive integer")
-        profile["pages"] = args.pages
-        profile.pop("section_words", None)
+        profile = replace(profile, pages=args.pages, section_words=None)
 
-    doc_type = args.doc_type if args.doc_type is not None else profile["doc_type"]
-    fraud_type = args.fraud_type if args.fraud_type is not None else profile["fraud_type"]
+    if args.doc_type is not None:
+        profile = replace(profile, doc_type=args.doc_type)
+    if args.fraud_type is not None:
+        profile = replace(profile, fraud_type=args.fraud_type)
 
-    workflow_cfg = cfg.get("workflow") or {}
-    if not isinstance(workflow_cfg, dict):
-        raise SystemExit("Top-level workflow section must be a mapping")
-    output_dir = resolve_project_path(project_root, cfg["output_dir"])
-    schema_dir = resolve_project_path(project_root, cfg.get("schema_dir", "schemas"))
-    memory_dir = resolve_project_path(project_root, cfg.get("memory_dir", "memory"))
-    trace_dir = resolve_project_path(project_root, cfg.get("trace_dir", "traces"))
+    doc_type = profile.doc_type
+    fraud_type = profile.fraud_type
+
+    output_dir = resolve_project_path(project_root, app_config.paths.output_dir)
+    schema_dir = resolve_project_path(project_root, app_config.paths.schema_dir)
+    memory_dir = resolve_project_path(project_root, app_config.paths.memory_dir)
+    trace_dir = resolve_project_path(project_root, app_config.paths.trace_dir)
     output_dir.mkdir(exist_ok=True)
     schema_dir.mkdir(exist_ok=True)
     memory_dir.mkdir(exist_ok=True)
@@ -289,13 +292,13 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     try:
         section_word_targets = build_section_word_targets(
             profile,
-            generation_cfg,
+            app_config.generation,
             doc_type,
         )
-        documents = resolve_documents_to_generate(profile, args.documents)
+        documents = resolve_documents_to_generate(profile)
         prose_overrides = resolve_prose_overrides(
-            case_cfg,
-            generation_cfg,
+            app_config.case,
+            app_config.generation,
             doc_type,
         )
     except ValueError as exc:
@@ -308,15 +311,16 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     )
 
     return RuntimeContext(
-        cfg=cfg,
-        generation_cfg=generation_cfg,
+        app_config=app_config,
+        paths=app_config.paths,
+        generation_cfg=app_config.generation,
         profile=profile,
-        case_cfg=case_cfg,
-        langfuse_cfg=cfg.get("langfuse") or {},
-        ollama_cfg=cfg["ollama"],
-        workflow_cfg=workflow_cfg,
-        nat_locales=cfg["nationality_locales"],
-        vat_prefixes=cfg["vat_prefixes"],
+        case_cfg=app_config.case,
+        langfuse_cfg=app_config.langfuse,
+        ollama_cfg=app_config.ollama,
+        workflow_cfg=app_config.workflow,
+        nat_locales=app_config.nationality_locales,
+        vat_prefixes=app_config.vat_prefixes,
         doc_type=doc_type,
         fraud_type=fraud_type,
         output_dir=output_dir,
@@ -335,22 +339,21 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
 
 def build_size_label(context: RuntimeContext) -> str:
     total_prose_words = sum(context.section_word_targets.values())
-    if context.profile.get("section_words") is not None:
+    if context.profile.section_words is not None:
         return f"{total_prose_words}w prose"
-    return f"{context.profile['pages']}p target (~{total_prose_words}w prose)"
+    return f"{context.profile.pages}p target (~{total_prose_words}w prose)"
 
 
 def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
     try:
         defendants, collateral, charged_orgs, associated_orgs = resolve_case_entities(
-            context.profile,
             context.case_cfg,
             context.nat_locales,
             context.vat_prefixes,
         )
         metadata = resolve_case_metadata(context.case_cfg, context.doc_type)
         counts_list = resolve_counts(
-            context.cfg,
+            context.app_config.fraud_statutes,
             context.case_cfg,
             context.doc_type,
             context.fraud_type,
@@ -406,7 +409,7 @@ def resolve_schema_for_document(
     counter = next_counter(context.output_dir, context.doc_type, context.fraud_type)
     doc_id = make_doc_id(context.doc_type, context.fraud_type, counter)
     try:
-        if is_auto(context.case_cfg.get("schema")):
+        if is_auto(context.case_cfg.schema):
             schema = make_case_schema(
                 doc_id,
                 context.fraud_type,
@@ -418,7 +421,7 @@ def resolve_schema_for_document(
             print(f"  Schema  : {len(schema['edges'])} edges (auto)")
         else:
             schema = normalize_schema(
-                context.case_cfg["schema"],
+                context.case_cfg.schema,
                 doc_id,
                 context.fraud_type,
                 document.defendants,
@@ -451,15 +454,17 @@ def build_llm_sections(
         else:
             entity_mentions = max(
                 1,
-                math.ceil(entity_density * section_words / context.generation_cfg.words_per_page),
+                math.ceil(
+                    entity_density * section_words / context.generation_cfg.words_per_page
+                ),
             )
             print(
                 f"  section '{section_name}': ~{section_words}w, "
                 f"{entity_mentions} mention(s)/entity"
             )
-            writer_cfg = context.workflow_cfg.get("writer", {})
             text = generate_section(
                 ollama_cfg=context.ollama_cfg,
+                writer_cfg=context.workflow_cfg.writer,
                 section_name=section_name,
                 doc_type=context.doc_type,
                 fraud_type=context.fraud_type,
@@ -470,8 +475,6 @@ def build_llm_sections(
                 case_number=case_number,
                 word_target=section_words,
                 entity_mentions=entity_mentions,
-                chunk_words=writer_cfg.get("chunk_words", 700),
-                context_tail_chars=writer_cfg.get("context_tail_chars", 600),
                 schema_context=schema_context,
             )
         llm_sections.append(text)

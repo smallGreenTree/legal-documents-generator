@@ -12,6 +12,12 @@ from src.synthetic_ner.constants import (
     NATIONALITY_ADJECTIVES,
     PERSON_ROLES,
 )
+from src.synthetic_ner.types.app_config import (
+    CaseConfig,
+    CountConfig,
+    GenerationConfig,
+    PersonSpecConfig,
+)
 from src.synthetic_ner.utils import is_auto, make_initials, split_address, strip_titles
 
 
@@ -111,10 +117,10 @@ def make_person(
     nat: str,
     title: str,
     surface_forms: int,
-    nat_locales: dict,
+    nat_locales: dict[str, str],
     is_defendant: bool = True,
 ) -> dict:
-    locale = nat_locales.get(nat, "en_GB")
+    locale = _resolve_locale(nat, nat_locales)
     fake = Faker(locale)
 
     raw_name = build_clean_person_name(fake)
@@ -163,14 +169,18 @@ def make_person(
     }
 
 
-def make_org(nat: str, nat_locales: dict, vat_prefixes: dict) -> dict:
-    locale = nat_locales.get(nat, "en_GB")
+def make_org(
+    nat: str,
+    nat_locales: dict[str, str],
+    vat_prefixes: dict[str, str],
+) -> dict:
+    locale = _resolve_locale(nat, nat_locales)
     fake = Faker(locale)
     suffix = random.choice(COMPANY_SUFFIXES)
     base_name = build_company_base_name(fake)
     street = fake.street_address()
     city_postcode = f"{fake.city()} {fake.postcode()}"
-    vat_prefix = vat_prefixes.get(nat, nat)
+    vat_prefix = _resolve_vat_prefix(nat, vat_prefixes)
     return {
         "name": f"{base_name} {suffix}",
         "street": street,
@@ -179,6 +189,24 @@ def make_org(nat: str, nat_locales: dict, vat_prefixes: dict) -> dict:
         "vat": make_vat(vat_prefix),
         "nationality": nat,
     }
+
+
+def _resolve_locale(nationality: str, nat_locales: dict[str, str]) -> str:
+    try:
+        return nat_locales[nationality]
+    except KeyError as exc:
+        raise ValueError(
+            f"Missing nationality_locales entry for '{nationality}'"
+        ) from exc
+
+
+def _resolve_vat_prefix(nationality: str, vat_prefixes: dict[str, str]) -> str:
+    try:
+        return vat_prefixes[nationality]
+    except KeyError as exc:
+        raise ValueError(
+            f"Missing vat_prefixes entry for '{nationality}'"
+        ) from exc
 
 
 def normalize_person_record(person: dict, is_defendant: bool, context: str) -> dict:
@@ -286,12 +314,16 @@ def normalize_org_record(org: dict, context: str) -> dict:
     }
 
 
-def build_people_from_specs(specs: list, nat_locales: dict, is_defendant: bool) -> list[dict]:
+def build_people_from_specs(
+    specs: list[PersonSpecConfig],
+    nat_locales: dict[str, str],
+    is_defendant: bool,
+) -> list[dict]:
     return [
         make_person(
-            nat=spec["nationality"],
-            title=spec.get("title", ""),
-            surface_forms=spec.get("surface_forms", 1),
+            nat=spec.nationality,
+            title=spec.title,
+            surface_forms=spec.surface_forms,
             nat_locales=nat_locales,
             is_defendant=is_defendant,
         )
@@ -301,9 +333,9 @@ def build_people_from_specs(specs: list, nat_locales: dict, is_defendant: bool) 
 
 def build_orgs_from_count(
     count: int,
-    def_nats: list,
-    nat_locales: dict,
-    vat_prefixes: dict,
+    def_nats: list[str],
+    nat_locales: dict[str, str],
+    vat_prefixes: dict[str, str],
 ) -> list[dict]:
     return [
         make_org(
@@ -316,16 +348,13 @@ def build_orgs_from_count(
 
 
 def resolve_case_entities(
-    profile: dict,
-    case_cfg: dict,
-    nat_locales: dict,
-    vat_prefixes: dict,
+    case_cfg: CaseConfig,
+    nat_locales: dict[str, str],
+    vat_prefixes: dict[str, str],
 ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
-    cast_cfg = case_cfg.get("cast")
-    if not isinstance(cast_cfg, dict):
-        cast_cfg = profile.get("cast", {})
+    cast_cfg = case_cfg.cast
 
-    explicit_defendants = case_cfg.get("defendants")
+    explicit_defendants = case_cfg.defendants
     if isinstance(explicit_defendants, list):
         defendants = [
             normalize_person_record(person, True, f"case.defendants[{index}]")
@@ -333,12 +362,12 @@ def resolve_case_entities(
         ]
     else:
         defendants = build_people_from_specs(
-            cast_cfg.get("defendants", []),
+            cast_cfg.defendants,
             nat_locales,
             True,
         )
 
-    explicit_collateral = case_cfg.get("collateral")
+    explicit_collateral = case_cfg.collateral
     if isinstance(explicit_collateral, list):
         collateral = [
             normalize_person_record(person, False, f"case.collateral[{index}]")
@@ -346,18 +375,20 @@ def resolve_case_entities(
         ]
     else:
         collateral = build_people_from_specs(
-            cast_cfg.get("collateral", []),
+            cast_cfg.collateral,
             nat_locales,
             False,
         )
 
-    defendant_nationalities = [
-        spec["nationality"]
-        for spec in cast_cfg.get("defendants", [])
-        if isinstance(spec, dict) and spec.get("nationality")
-    ] or ["GB"]
+    defendant_nationalities = [spec.nationality for spec in cast_cfg.defendants]
+    if not defendant_nationalities and (
+        cast_cfg.charged_orgs > 0 or cast_cfg.associated_orgs > 0
+    ):
+        raise ValueError(
+            "case.cast.defendants must not be empty when company auto-generation is enabled"
+        )
 
-    explicit_charged_orgs = case_cfg.get("charged_orgs")
+    explicit_charged_orgs = case_cfg.charged_orgs
     if isinstance(explicit_charged_orgs, list):
         charged_orgs = [
             normalize_org_record(org, f"case.charged_orgs[{index}]")
@@ -365,13 +396,13 @@ def resolve_case_entities(
         ]
     else:
         charged_orgs = build_orgs_from_count(
-            cast_cfg.get("charged_orgs", 3),
+            cast_cfg.charged_orgs,
             defendant_nationalities,
             nat_locales,
             vat_prefixes,
         )
 
-    explicit_associated_orgs = case_cfg.get("associated_orgs")
+    explicit_associated_orgs = case_cfg.associated_orgs
     if isinstance(explicit_associated_orgs, list):
         associated_orgs = [
             normalize_org_record(org, f"case.associated_orgs[{index}]")
@@ -379,7 +410,7 @@ def resolve_case_entities(
         ]
     else:
         associated_orgs = build_orgs_from_count(
-            cast_cfg.get("associated_orgs", 0),
+            cast_cfg.associated_orgs,
             defendant_nationalities,
             nat_locales,
             vat_prefixes,
@@ -388,89 +419,66 @@ def resolve_case_entities(
     return defendants, collateral, charged_orgs, associated_orgs
 
 
-def resolve_case_metadata(case_cfg: dict, doc_type: str) -> dict:
-    metadata = case_cfg.get("metadata")
-    metadata = metadata if isinstance(metadata, dict) else {}
-
-    offence_period_cfg = metadata.get("offence_period")
-    if is_auto(offence_period_cfg):
+def resolve_case_metadata(case_cfg: CaseConfig, doc_type: str) -> dict:
+    metadata = case_cfg.metadata
+    offence_period_cfg = metadata.offence_period
+    if is_auto(offence_period_cfg.start) and is_auto(offence_period_cfg.end):
         offence_period = None
     else:
-        if not isinstance(offence_period_cfg, dict):
-            raise ValueError("case.metadata.offence_period must be a mapping")
-        start_date = offence_period_cfg.get("start")
-        end_date = offence_period_cfg.get("end")
-        if is_auto(start_date) and is_auto(end_date):
-            offence_period = None
-        elif (
-            isinstance(start_date, str)
-            and isinstance(end_date, str)
-            and start_date
-            and end_date
+        if (
+            not is_auto(offence_period_cfg.start)
+            and not is_auto(offence_period_cfg.end)
+            and offence_period_cfg.start
+            and offence_period_cfg.end
         ):
-            offence_period = (start_date, end_date)
+            offence_period = (offence_period_cfg.start, offence_period_cfg.end)
         else:
             raise ValueError(
                 "case.metadata.offence_period must define non-empty start and end strings"
             )
 
     return {
-        "court": (
-            metadata.get("court")
-            if not is_auto(metadata.get("court"))
-            else random.choice(COURTS)
-        ),
+        "court": metadata.court if not is_auto(metadata.court) else random.choice(COURTS),
         "case_number": (
-            metadata.get("case_number")
-            if not is_auto(metadata.get("case_number"))
+            metadata.case_number
+            if not is_auto(metadata.case_number)
             else make_case_number(doc_type)
         ),
         "cross_ref": (
-            metadata.get("cross_ref")
-            if not is_auto(metadata.get("cross_ref"))
+            metadata.cross_ref
+            if not is_auto(metadata.cross_ref)
             else make_cross_ref()
         ),
         "filing_date": (
-            metadata.get("filing_date")
-            if not is_auto(metadata.get("filing_date"))
+            metadata.filing_date
+            if not is_auto(metadata.filing_date)
             else make_filing_date()
         ),
         "offence_period": offence_period,
     }
 
 
-def normalize_counts(counts_cfg: list) -> list[dict]:
-    counts = []
-    for index, count in enumerate(counts_cfg):
-        if not isinstance(count, dict):
-            raise ValueError(f"case.counts[{index}] must be a mapping")
-        missing = [
-            key
-            for key in ("offence", "statute", "particulars")
-            if not count.get(key)
-        ]
-        if missing:
-            raise ValueError(
-                f"case.counts[{index}] is missing required fields: {', '.join(missing)}"
-            )
-        counts.append({
-            "offence": count["offence"],
-            "statute": count["statute"],
-            "particulars": count["particulars"],
-        })
-    return counts
+def normalize_counts(counts_cfg: list[CountConfig]) -> list[dict]:
+    return [
+        {
+            "offence": count.offence,
+            "statute": count.statute,
+            "particulars": count.particulars,
+        }
+        for count in counts_cfg
+    ]
 
 
 def build_counts(
-    cfg: dict,
+    fraud_statutes: dict[str, list[CountConfig]],
     fraud_type: str,
     defendants: list,
     orgs: list,
     offence_period: tuple[str, str] | None = None,
 ) -> list[dict]:
-    statutes = cfg.get("fraud_statutes", {}).get(fraud_type)
+    statutes = fraud_statutes.get(fraud_type)
     if not statutes:
-        return []
+        raise ValueError(f"fraud_statutes is missing an entry for '{fraud_type}'")
 
     start_date, end_date = offence_period or make_offence_period()
     defendants_str = " and ".join(person["name"] for person in defendants)
@@ -479,7 +487,7 @@ def build_counts(
     counts = []
     for statute in statutes:
         particulars = (
-            statute["particulars"]
+            statute.particulars
             .replace("{defendants}", defendants_str)
             .replace("{companies}", companies_str)
             .replace("{start_date}", start_date)
@@ -487,16 +495,16 @@ def build_counts(
             .strip()
         )
         counts.append({
-            "offence": statute["offence"],
-            "statute": statute["statute"],
+            "offence": statute.offence,
+            "statute": statute.statute,
             "particulars": particulars,
         })
     return counts
 
 
 def resolve_counts(
-    cfg: dict,
-    case_cfg: dict,
+    fraud_statutes: dict[str, list[CountConfig]],
+    case_cfg: CaseConfig,
     doc_type: str,
     fraud_type: str,
     defendants: list,
@@ -506,12 +514,12 @@ def resolve_counts(
     if doc_type != "indictment":
         return []
 
-    counts_cfg = case_cfg.get("counts")
+    counts_cfg = case_cfg.counts
     if isinstance(counts_cfg, list):
         return normalize_counts(counts_cfg)
 
     return build_counts(
-        cfg,
+        fraud_statutes,
         fraud_type,
         defendants,
         charged_orgs,
@@ -520,15 +528,11 @@ def resolve_counts(
 
 
 def resolve_prose_overrides(
-    case_cfg: dict,
-    generation_cfg,
+    case_cfg: CaseConfig,
+    generation_cfg: GenerationConfig,
     doc_type: str,
 ) -> dict[str, str]:
-    prose_cfg = case_cfg.get("prose")
-    if is_auto(prose_cfg):
-        return {}
-    if not isinstance(prose_cfg, dict):
-        raise ValueError("case.prose must be a mapping")
+    prose_cfg = case_cfg.prose
 
     section_order = resolve_section_order(generation_cfg, doc_type)
     extra = [name for name in prose_cfg if name not in section_order]
@@ -539,7 +543,11 @@ def resolve_prose_overrides(
 
     resolved = {}
     for section_name in section_order:
-        value = prose_cfg.get(section_name, "auto")
+        if section_name not in prose_cfg:
+            raise ValueError(
+                f"case.prose is missing a value for section '{section_name}'"
+            )
+        value = prose_cfg[section_name]
         if is_auto(value):
             continue
         if not isinstance(value, str) or not value.strip():

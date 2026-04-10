@@ -7,6 +7,7 @@ from time import perf_counter
 
 import requests
 from src.synthetic_ner.tasks.tracer import TraceStore
+from src.synthetic_ner.types.app_config import OllamaConfig
 
 
 @dataclass(slots=True)
@@ -21,14 +22,12 @@ class TracedOllamaClient:
 
     def __init__(
         self,
-        base_url: str,
-        model: str,
-        timeout: int,
+        config: OllamaConfig,
         tracer: TraceStore,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.timeout = timeout
+        self.base_url = config.base_url.rstrip("/")
+        self.model = config.model
+        self.timeout = config.timeout
         self.tracer = tracer
 
     def invoke(
@@ -40,7 +39,7 @@ class TracedOllamaClient:
         system_prompt: str,
         user_prompt: str,
         parent_task_id: str | None = None,
-        temperature: float = 0.2,
+        temperature: float,
     ) -> OllamaCallResult:
         full_prompt = (
             f"[SYSTEM]\n{system_prompt.strip()}\n\n"

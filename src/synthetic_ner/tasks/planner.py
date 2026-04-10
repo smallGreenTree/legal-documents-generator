@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
+from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_inline_template
 
 
@@ -11,7 +12,7 @@ class Planner:
         self,
         *,
         client,
-        prompts: dict,
+        prompts: WorkflowPromptsConfig,
         planner_temperature: float,
     ) -> None:
         self.client = client
@@ -34,7 +35,7 @@ class Planner:
             for section_name in section_order
         )
         user_prompt = render_inline_template(
-            self.prompts["document_planner_user"],
+            self.prompts.document_planner_user,
             memory_text=memory_text,
             doc_type=doc_type,
             fraud_type=fraud_type.replace("_", " "),
@@ -45,7 +46,7 @@ class Planner:
             doc_id=doc_id,
             task_id="planner_document",
             stage="planner",
-            system_prompt=self.prompts["document_planner_system"],
+            system_prompt=self.prompts.document_planner_system,
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
@@ -64,7 +65,7 @@ class Planner:
         word_target: int,
     ) -> str:
         user_prompt = render_inline_template(
-            self.prompts["section_planner_user"],
+            self.prompts.section_planner_user,
             memory_text=memory_text,
             document_plan=document_plan,
             doc_type=doc_type,
@@ -76,7 +77,7 @@ class Planner:
             doc_id=doc_id,
             task_id=f"planner_{section_name}",
             stage="planner",
-            system_prompt=self.prompts["section_planner_system"],
+            system_prompt=self.prompts.section_planner_system,
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,

@@ -70,7 +70,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
     trace_store = TraceStore(context.trace_dir, context.langfuse_cfg)
     memory_manager = CaseMemoryManager(
         context.memory_dir,
-        summary_chars=context.workflow_cfg.get("memory_summary_chars", 500),
+        summary_chars=context.workflow_cfg.memory_summary_chars,
     )
     memory_path = memory_manager.create_initial_memory(
         doc_id=doc_id,
@@ -82,30 +82,26 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
     )
 
     client = TracedOllamaClient(
-        base_url=context.ollama_cfg["base_url"],
-        model=context.ollama_cfg["model"],
-        timeout=context.ollama_cfg.get("timeout", 180),
+        config=context.ollama_cfg,
         tracer=trace_store,
     )
-    prompts = context.workflow_cfg.get("prompts", {})
+    prompts = context.workflow_cfg.prompts
     planner = Planner(
         client=client,
         prompts=prompts,
-        planner_temperature=context.workflow_cfg.get("planner", {}).get("temperature", 0.2),
+        planner_temperature=context.workflow_cfg.planner.temperature,
     )
     writer = SectionWriter(
         client=client,
         prompts=prompts,
-        chunk_words=context.workflow_cfg.get("writer", {}).get("chunk_words", 700),
-        context_tail_chars=context.workflow_cfg.get("writer", {}).get(
-            "context_tail_chars", 600
-        ),
-        writer_temperature=context.workflow_cfg.get("writer", {}).get("temperature", 0.7),
+        chunk_words=context.workflow_cfg.writer.chunk_words,
+        context_tail_chars=context.workflow_cfg.writer.context_tail_chars,
+        writer_temperature=context.workflow_cfg.writer.temperature,
     )
     critic = SectionCritic(
         client=client,
         prompts=prompts,
-        critic_temperature=context.workflow_cfg.get("critic", {}).get("temperature", 0.2),
+        critic_temperature=context.workflow_cfg.critic.temperature,
     )
 
     trace_store.start_document_run(
@@ -442,7 +438,7 @@ class DocumentWorkflow:
     def route_after_validation(self, state: WorkflowState) -> str:
         return route_after_validation(
             state,
-            self.context.workflow_cfg.get("max_revisions", 2),
+            self.context.workflow_cfg.max_revisions,
         )
 
 
@@ -476,7 +472,7 @@ def write_generation_report(
     lines = [
         f"# Generation Report: {doc_id}",
         "",
-        f"- Workflow mode: {context.workflow_cfg.get('mode', 'langgraph')}",
+        f"- Workflow mode: {context.workflow_cfg.mode}",
         f"- Memory file: {memory_path}",
         f"- Trace directory: {context.trace_dir / doc_id}",
         f"- Langfuse enabled: {str(trace_info.enabled).lower()}",

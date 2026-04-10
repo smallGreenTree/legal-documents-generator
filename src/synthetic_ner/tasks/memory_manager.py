@@ -8,7 +8,7 @@ from src.synthetic_ner.tasks.facts import build_allowed_facts_section
 
 
 class CaseMemoryManager:
-    def __init__(self, base_dir: Path, summary_chars: int = 500) -> None:
+    def __init__(self, base_dir: Path, summary_chars: int) -> None:
         self.base_dir = base_dir
         self.summary_chars = summary_chars
 

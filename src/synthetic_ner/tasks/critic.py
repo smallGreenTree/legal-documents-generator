@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_inline_template
 
 
@@ -20,7 +21,7 @@ class SectionCritic:
         self,
         *,
         client,
-        prompts: dict,
+        prompts: WorkflowPromptsConfig,
         critic_temperature: float,
     ) -> None:
         self.client = client
@@ -39,7 +40,7 @@ class SectionCritic:
         revision_round: int,
     ) -> CriticResult:
         user_prompt = render_inline_template(
-            self.prompts["critic_user"],
+            self.prompts.critic_user,
             memory_text=memory_text,
             section_plan=section_plan,
             section_text=section_text,
@@ -49,7 +50,7 @@ class SectionCritic:
             doc_id=doc_id,
             task_id=f"critic_{section_name}_r{revision_round}",
             stage="critic",
-            system_prompt=self.prompts["critic_system"],
+            system_prompt=self.prompts.critic_system,
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.critic_temperature,
