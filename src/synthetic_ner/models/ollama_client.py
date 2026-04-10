@@ -1,4 +1,4 @@
-"""Traced Ollama client."""
+"""Ollama client."""
 
 from __future__ import annotations
 
@@ -6,29 +6,22 @@ from dataclasses import dataclass
 from time import perf_counter
 
 import requests
-from src.synthetic_ner.tasks.tracer import TraceStore
 from src.synthetic_ner.types.app_config import OllamaConfig
 
 
 @dataclass(slots=True)
 class OllamaCallResult:
     text: str
-    trace_id: str | None
     metadata: dict
 
 
-class TracedOllamaClient:
-    """Small wrapper around Ollama's generate API with full prompt tracing."""
+class OllamaClient:
+    """Small wrapper around Ollama's generate API."""
 
-    def __init__(
-        self,
-        config: OllamaConfig,
-        tracer: TraceStore,
-    ) -> None:
+    def __init__(self, config: OllamaConfig) -> None:
         self.base_url = config.base_url.rstrip("/")
         self.model = config.model
         self.timeout = config.timeout
-        self.tracer = tracer
 
     def invoke(
         self,
@@ -45,16 +38,10 @@ class TracedOllamaClient:
             f"[SYSTEM]\n{system_prompt.strip()}\n\n"
             f"[USER]\n{user_prompt.strip()}\n"
         )
-        trace = self.tracer.start_trace(
-            doc_id=doc_id,
-            task_id=task_id,
-            stage=stage,
-            model=self.model,
-            parent_task_id=parent_task_id,
-            prompt=full_prompt,
-            metadata={"temperature": temperature},
-        )
-
+        del doc_id
+        del task_id
+        del stage
+        del parent_task_id
         started = perf_counter()
         try:
             response = requests.post(
@@ -72,26 +59,8 @@ class TracedOllamaClient:
             text = payload.get("response", "").strip()
             latency_ms = round((perf_counter() - started) * 1000)
             metadata = self._build_metadata(payload, temperature, latency_ms)
-            self.tracer.record_llm_call(
-                trace,
-                prompt=full_prompt,
-                response=text,
-                metadata=metadata,
-            )
-            return OllamaCallResult(text=text, trace_id=trace.trace_id, metadata=metadata)
-        except Exception as exc:
-            latency_ms = round((perf_counter() - started) * 1000)
-            metadata = {
-                "temperature": temperature,
-                "latency_ms": latency_ms,
-                "error": str(exc),
-            }
-            self.tracer.record_error(
-                trace,
-                prompt=full_prompt,
-                error_message=str(exc),
-                metadata=metadata,
-            )
+            return OllamaCallResult(text=text, metadata=metadata)
+        except Exception:
             raise
 
     def _build_metadata(

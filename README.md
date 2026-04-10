@@ -43,18 +43,8 @@ generator primitives.
 That workflow adds:
 
 - persistent case memory under `memory/case_{doc_id}/CASE_MEMORY.md`
-- Langfuse tracing for LLM calls
-- local trace pointers under `traces/{doc_id}/TRACE_INDEX.md`
 - planner, writer, critic, and validator task modules
 - a generation report saved alongside the final document
-
-To enable Langfuse, export the standard credentials before running:
-
-```bash
-export LANGFUSE_PUBLIC_KEY=pk-lf-...
-export LANGFUSE_SECRET_KEY=sk-lf-...
-export LANGFUSE_BASE_URL=https://cloud.langfuse.com
-```
 
 The active workflow mode is controlled by `workflow.mode` in `config.yaml`,
 and can be overridden on the CLI with `--workflow-mode classic|langgraph`.

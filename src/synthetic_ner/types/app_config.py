@@ -9,7 +9,6 @@ class PathsConfig:
     output_dir: str
     schema_dir: str
     memory_dir: str
-    trace_dir: str
 
 
 @dataclass(frozen=True)
@@ -17,14 +16,6 @@ class OllamaConfig:
     base_url: str
     model: str
     timeout: int
-
-
-@dataclass(frozen=True)
-class LangfuseConfig:
-    enabled: bool
-    base_url: str
-    public_key_env: str
-    secret_key_env: str
 
 
 @dataclass(frozen=True)
@@ -134,7 +125,6 @@ class CaseConfig:
 class AppConfig:
     paths: PathsConfig
     ollama: OllamaConfig
-    langfuse: LangfuseConfig
     generation: GenerationConfig
     workflow: WorkflowConfig
     profile: ProfileConfig

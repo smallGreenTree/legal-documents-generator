@@ -9,18 +9,11 @@ paths:
   output_dir: output
   schema_dir: schemas
   memory_dir: memory
-  trace_dir: traces
 
 ollama:
   base_url: http://localhost:11434
   model: qwen3:8b
   timeout: 180
-
-langfuse:
-  enabled: true
-  base_url: https://cloud.langfuse.com
-  public_key_env: LANGFUSE_PUBLIC_KEY
-  secret_key_env: LANGFUSE_SECRET_KEY
 
 generation:
   words_per_page: 500
@@ -30,11 +23,11 @@ profile:
   fraud_type: financial_fraud
   documents: 1
   section_words:
-    history: 720
-    charges: 500
-    facts: 2200
-    evidence: 500
-    assessment: 700
+    history: 200
+    charges: 200
+    facts: 500
+    evidence: 200
+    assessment: 300
 
 workflow:
   mode: langgraph
@@ -50,7 +43,7 @@ workflow:
     temperature: 0.0
 
   critic:
-    temperature: 0.1
+    temperature: 0.0
 
   prompts:
     document_planner_system: |

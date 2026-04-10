@@ -8,7 +8,6 @@ from src.synthetic_ner.types.app_config import (
     AppConfig,
     CaseConfig,
     GenerationConfig,
-    LangfuseConfig,
     OllamaConfig,
     PathsConfig,
     ProfileConfig,
@@ -23,7 +22,6 @@ class RuntimeContext:
     generation_cfg: GenerationConfig
     profile: ProfileConfig
     case_cfg: CaseConfig
-    langfuse_cfg: LangfuseConfig
     ollama_cfg: OllamaConfig
     workflow_cfg: WorkflowConfig
     nat_locales: dict[str, str]
@@ -33,7 +31,6 @@ class RuntimeContext:
     output_dir: Path
     schema_dir: Path
     memory_dir: Path
-    trace_dir: Path
     template_env: Environment
     sections: dict
     labels: dict

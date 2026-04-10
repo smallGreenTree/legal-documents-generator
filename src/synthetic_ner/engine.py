@@ -262,11 +262,9 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     output_dir = resolve_project_path(project_root, app_config.paths.output_dir)
     schema_dir = resolve_project_path(project_root, app_config.paths.schema_dir)
     memory_dir = resolve_project_path(project_root, app_config.paths.memory_dir)
-    trace_dir = resolve_project_path(project_root, app_config.paths.trace_dir)
     output_dir.mkdir(exist_ok=True)
     schema_dir.mkdir(exist_ok=True)
     memory_dir.mkdir(exist_ok=True)
-    trace_dir.mkdir(exist_ok=True)
 
     try:
         section_word_targets = build_section_word_targets(
@@ -294,7 +292,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         generation_cfg=app_config.generation,
         profile=profile,
         case_cfg=app_config.case,
-        langfuse_cfg=app_config.langfuse,
         ollama_cfg=app_config.ollama,
         workflow_cfg=app_config.workflow,
         nat_locales=app_config.nationality_locales,
@@ -304,7 +301,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         output_dir=output_dir,
         schema_dir=schema_dir,
         memory_dir=memory_dir,
-        trace_dir=trace_dir,
         template_env=build_template_environment(project_root),
         sections=EN_SECTIONS[doc_type],
         labels=EN_LABELS,

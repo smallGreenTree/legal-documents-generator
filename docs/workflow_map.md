@@ -31,7 +31,7 @@ flowchart TD
 - `validate_section`: run deterministic checks for placeholders, short output, and invented references
 - `revise_section`: rewrite the section using critic instructions
 - `store_section`: persist approved section text and append a compressed summary into `CASE_MEMORY.md`
-- `render_document`: assemble template, save text, schema, ground truth, trace index, and generation report
+- `render_document`: assemble template, save text, schema, ground truth, and generation report
 
 ## Runtime State
 
@@ -78,4 +78,3 @@ Each run writes:
 - `output/<doc_id>/generation_report.md`
 - `schemas/<doc_id>.json`
 - `memory/case_<doc_id>/CASE_MEMORY.md`
-- `traces/<doc_id>/TRACE_INDEX.md`
