@@ -166,49 +166,33 @@ def generate_section(
 
 def build_section_word_targets(
     profile: ProfileConfig,
-    generation_cfg,
     doc_type: str,
 ) -> dict[str, int]:
-    section_order = resolve_section_order(generation_cfg, doc_type)
+    section_order = resolve_section_order(doc_type)
     configured = profile.section_words
 
-    if configured is not None:
-        missing = [name for name in section_order if name not in configured]
-        extra = [name for name in configured if name not in section_order]
-        invalid = [
-            name
-            for name in section_order
-            if name in configured
-            and (not isinstance(configured[name], int) or configured[name] <= 0)
-        ]
+    missing = [name for name in section_order if name not in configured]
+    extra = [name for name in configured if name not in section_order]
+    invalid = [
+        name
+        for name in section_order
+        if name in configured
+        and (not isinstance(configured[name], int) or configured[name] <= 0)
+    ]
 
-        problems = []
-        if missing:
-            problems.append(f"missing keys: {', '.join(missing)}")
-        if extra:
-            problems.append(f"unknown keys: {', '.join(extra)}")
-        if invalid:
-            problems.append(f"non-positive integer values: {', '.join(invalid)}")
-        if problems:
-            raise ValueError(
-                f"Invalid profile.section_words for {doc_type}: {'; '.join(problems)}"
-            )
-
-        return {name: configured[name] for name in section_order}
-
-    pages = profile.pages
-    if pages is None:
+    problems = []
+    if missing:
+        problems.append(f"missing keys: {', '.join(missing)}")
+    if extra:
+        problems.append(f"unknown keys: {', '.join(extra)}")
+    if invalid:
+        problems.append(f"non-positive integer values: {', '.join(invalid)}")
+    if problems:
         raise ValueError(
-            "Profile must define either valid section_words or a positive integer pages value"
+            f"Invalid profile.section_words for {doc_type}: {'; '.join(problems)}"
         )
 
-    total_words = pages * generation_cfg.words_per_page
-    prose_words = max(300, total_words - 200)
-    weights = generation_cfg.section_weights[doc_type]
-    return {
-        name: max(100, math.floor(prose_words * weights[name]))
-        for name in section_order
-    }
+    return {name: configured[name] for name in section_order}
 
 
 def resolve_documents_to_generate(profile: ProfileConfig) -> int:
@@ -267,11 +251,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
             raise SystemExit("--documents must be a positive integer")
         profile = replace(profile, documents=args.documents)
 
-    if args.pages is not None:
-        if args.pages <= 0:
-            raise SystemExit("--pages must be a positive integer")
-        profile = replace(profile, pages=args.pages, section_words=None)
-
     if args.doc_type is not None:
         profile = replace(profile, doc_type=args.doc_type)
     if args.fraud_type is not None:
@@ -292,7 +271,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     try:
         section_word_targets = build_section_word_targets(
             profile,
-            app_config.generation,
             doc_type,
         )
         documents = resolve_documents_to_generate(profile)
@@ -339,9 +317,7 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
 
 def build_size_label(context: RuntimeContext) -> str:
     total_prose_words = sum(context.section_word_targets.values())
-    if context.profile.section_words is not None:
-        return f"{total_prose_words}w prose"
-    return f"{context.profile.pages}p target (~{total_prose_words}w prose)"
+    return f"{total_prose_words}w prose"
 
 
 def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:

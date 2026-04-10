@@ -24,18 +24,17 @@ langfuse:
 
 generation:
   words_per_page: 500
-  section_weights:
-    indictment:
-      history: 0.15
-      charges: 0.10
-      facts: 0.50
-      evidence: 0.10
-      assessment: 0.15
-    court_decision:
-      background: 0.20
-      findings: 0.50
-      conclusions: 0.15
-      sentence: 0.15
+
+profile:
+  doc_type:   indictment
+  fraud_type: financial_fraud
+  documents: 1
+  section_words:
+    history: 720
+    charges: 500
+    facts: 2200
+    evidence: 500
+    assessment: 700
 
 workflow:
   mode: langgraph
@@ -137,36 +136,8 @@ workflow:
       - ...
       REVISION:
       one short instruction
-# ── Run profile — edit this between runs ──────────────────────────────────────
-#
-# doc_type:   indictment | court_decision
-# fraud_type: financial_fraud | procurement_fraud | eu_subsidy_fraud |
-#             customs_evasion | money_laundering | tax_evasion |
-#             bribery | insider_trading
-#
-# section_words controls the LLM-written prose directly.
-# If omitted, the generator falls back to pages + generation.section_weights.
-#
-# surface_forms per person:
-#   1 = full name only
-#   2 = full name + initials
-#   3 = full name + title+surname + initials
-#   4 = full name + title+surname + short name + initials
-#
-# nationalities: ISO 2-letter country codes (see mappings below)
-# titles: one per defendant/collateral in order
 
-profile:
-  doc_type:   indictment
-  fraud_type: financial_fraud
-  documents: 1
-  pages: null
-  section_words:
-    history: 720
-    charges: 500
-    facts: 2200
-    evidence: 500
-    assessment: 700
+
 
 # ── Case source of truth ──────────────────────────────────────────────────────
 #

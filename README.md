@@ -141,8 +141,6 @@ Useful fields:
 - `documents`: number of documents to generate in one run
 - `section_words`: exact target size for each prose section
 
-`section_words` is the preferred size control. If it is omitted, the generator can still fall back to `pages`.
-
 Case-specific inputs now live under `case`:
 
 - `case.metadata`: court, filing references, dates, offence period

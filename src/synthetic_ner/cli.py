@@ -36,12 +36,6 @@ def build_parser(project_root: Path) -> argparse.ArgumentParser:
         help="Load an existing case schema instead of auto-generating one",
     )
     parser.add_argument(
-        "--pages",
-        type=int,
-        default=None,
-        help="Override profile.pages and ignore profile.section_words for this run",
-    )
-    parser.add_argument(
         "--workflow-mode",
         choices=("classic", "langgraph"),
         default=None,

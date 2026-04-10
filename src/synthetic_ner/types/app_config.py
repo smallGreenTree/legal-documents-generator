@@ -30,7 +30,6 @@ class LangfuseConfig:
 @dataclass(frozen=True)
 class GenerationConfig:
     words_per_page: int
-    section_weights: dict[str, dict[str, float]]
 
 
 @dataclass(frozen=True)
@@ -78,8 +77,7 @@ class ProfileConfig:
     doc_type: str
     fraud_type: str
     documents: int
-    pages: int | None
-    section_words: dict[str, int] | None
+    section_words: dict[str, int]
 
 
 @dataclass(frozen=True)

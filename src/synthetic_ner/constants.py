@@ -1,6 +1,22 @@
 """Static literals."""
 from jinja2 import Environment
 
+PROSE_SECTION_ORDER = {
+    "indictment": [
+        "history",
+        "charges",
+        "facts",
+        "evidence",
+        "assessment",
+    ],
+    "court_decision": [
+        "background",
+        "findings",
+        "conclusions",
+        "sentence",
+    ],
+}
+
 SECTION_DESCRIPTIONS = {
     "history": (
         "Procedural history: how the investigation started, search warrants, "

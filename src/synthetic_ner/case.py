@@ -532,9 +532,10 @@ def resolve_prose_overrides(
     generation_cfg: GenerationConfig,
     doc_type: str,
 ) -> dict[str, str]:
+    del generation_cfg
     prose_cfg = case_cfg.prose
 
-    section_order = resolve_section_order(generation_cfg, doc_type)
+    section_order = resolve_section_order(doc_type)
     extra = [name for name in prose_cfg if name not in section_order]
     if extra:
         raise ValueError(

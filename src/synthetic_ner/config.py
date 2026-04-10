@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from src.synthetic_ner.constants import PROSE_SECTION_ORDER
 from src.synthetic_ner.types.app_config import (
     AppConfig,
     CaseCastConfig,
@@ -61,17 +62,18 @@ def build_app_config(cfg: dict[str, Any]) -> AppConfig:
 
 
 def resolve_doc_types(generation_cfg: GenerationConfig) -> tuple[str, ...]:
-    return tuple(generation_cfg.section_weights.keys())
+    del generation_cfg
+    return tuple(PROSE_SECTION_ORDER.keys())
 
 
-def resolve_section_order(generation_cfg: GenerationConfig, doc_type: str) -> list[str]:
-    section_weights = generation_cfg.section_weights.get(doc_type)
-    if section_weights is None:
-        available = ", ".join(sorted(generation_cfg.section_weights))
+def resolve_section_order(doc_type: str) -> list[str]:
+    section_order = PROSE_SECTION_ORDER.get(doc_type)
+    if section_order is None:
+        available = ", ".join(sorted(PROSE_SECTION_ORDER))
         raise ValueError(
             f"Unknown doc_type '{doc_type}'. Available configured doc types: {available}"
         )
-    return list(section_weights.keys())
+    return list(section_order)
 
 
 def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
@@ -111,23 +113,7 @@ def _build_generation_config(raw: dict[str, Any]) -> GenerationConfig:
         raw["words_per_page"],
         "generation.words_per_page",
     )
-    section_weights_raw = _require_mapping(
-        raw["section_weights"],
-        "generation.section_weights",
-    )
-
-    section_weights: dict[str, dict[str, float]] = {}
-    for doc_type, section_map in section_weights_raw.items():
-        section_path = f"generation.section_weights.{doc_type}"
-        section_weights[doc_type] = _build_float_mapping(
-            _require_mapping(section_map, section_path),
-            section_path,
-        )
-
-    return GenerationConfig(
-        words_per_page=words_per_page,
-        section_weights=section_weights,
-    )
+    return GenerationConfig(words_per_page=words_per_page)
 
 
 def _build_workflow_config(raw: dict[str, Any]) -> WorkflowConfig:
@@ -207,16 +193,14 @@ def _build_workflow_config(raw: dict[str, Any]) -> WorkflowConfig:
 
 
 def _build_profile_config(raw: dict[str, Any]) -> ProfileConfig:
-    section_words = _build_optional_int_mapping(
+    section_words = _build_required_int_mapping(
         raw["section_words"],
         "profile.section_words",
     )
-    pages = _require_optional_positive_int(raw["pages"], "profile.pages")
     return ProfileConfig(
         doc_type=_require_string(raw["doc_type"], "profile.doc_type"),
         fraud_type=_require_string(raw["fraud_type"], "profile.fraud_type"),
         documents=_require_positive_int(raw["documents"], "profile.documents"),
-        pages=pages,
         section_words=section_words,
     )
 
@@ -359,23 +343,14 @@ def _build_statute_list(raw: list[Any], path: str) -> list[CountConfig]:
     return statutes
 
 
-def _build_optional_int_mapping(
+def _build_required_int_mapping(
     value: Any,
     path: str,
-) -> dict[str, int] | None:
-    if value is None:
-        return None
+) -> dict[str, int]:
     raw = _require_mapping(value, path)
     return {
         key: _require_positive_int(item, f"{path}.{key}")
         for key, item in raw.items()
-    }
-
-
-def _build_float_mapping(raw: dict[str, Any], path: str) -> dict[str, float]:
-    return {
-        key: _require_positive_number(value, f"{path}.{key}")
-        for key, value in raw.items()
     }
 
 
@@ -452,20 +427,7 @@ def _require_non_negative_int(value: Any, path: str) -> int:
     return value
 
 
-def _require_optional_positive_int(value: Any, path: str) -> int | None:
-    if value is None:
-        return None
-    return _require_positive_int(value, path)
-
-
 def _require_number(value: Any, path: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{path} must be a number")
     return float(value)
-
-
-def _require_positive_number(value: Any, path: str) -> float:
-    number = _require_number(value, path)
-    if number <= 0:
-        raise ValueError(f"{path} must be a positive number")
-    return number

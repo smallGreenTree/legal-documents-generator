@@ -52,15 +52,15 @@ flowchart TD
 - `section_reviews`
 - `final_text`
 
-## Ten-Page Indictment Target
+## Example Indictment Target
 
-For `--pages 10`, the engine uses `500` words per page and allocates about `4800` prose words:
+With the current config, the indictment prose target is `4620` words:
 
-- `history`: about `720`
-- `charges`: about `480`
-- `facts`: about `2400`
-- `evidence`: about `480`
-- `assessment`: about `720`
+- `history`: `720`
+- `charges`: `500`
+- `facts`: `2200`
+- `evidence`: `500`
+- `assessment`: `700`
 
 With the current workflow config:
 
