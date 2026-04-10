@@ -15,6 +15,12 @@ ollama:
   model: qwen3:8b
   timeout: 180
 
+langfuse:
+  enabled: true
+  host: http://localhost:3000
+  public_key_env: LANGFUSE_PUBLIC_KEY
+  secret_key_env: LANGFUSE_SECRET_KEY
+
 generation:
   words_per_page: 500
 

@@ -292,6 +292,7 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         generation_cfg=app_config.generation,
         profile=profile,
         case_cfg=app_config.case,
+        langfuse_cfg=app_config.langfuse,
         ollama_cfg=app_config.ollama,
         workflow_cfg=app_config.workflow,
         nat_locales=app_config.nationality_locales,

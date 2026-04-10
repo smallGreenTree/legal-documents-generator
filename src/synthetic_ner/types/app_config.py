@@ -19,6 +19,14 @@ class OllamaConfig:
 
 
 @dataclass(frozen=True)
+class LangfuseConfig:
+    enabled: bool
+    host: str
+    public_key_env: str
+    secret_key_env: str
+
+
+@dataclass(frozen=True)
 class GenerationConfig:
     words_per_page: int
 
@@ -125,6 +133,7 @@ class CaseConfig:
 class AppConfig:
     paths: PathsConfig
     ollama: OllamaConfig
+    langfuse: LangfuseConfig
     generation: GenerationConfig
     workflow: WorkflowConfig
     profile: ProfileConfig

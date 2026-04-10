@@ -16,10 +16,11 @@ from src.synthetic_ner.engine import (
     resolve_schema_for_document,
     save_document_artifacts,
 )
-from src.synthetic_ner.models.ollama_client import OllamaClient
+from src.synthetic_ner.models.ollama_client import TracedOllamaClient
 from src.synthetic_ner.tasks.critic import SectionCritic
 from src.synthetic_ner.tasks.memory_manager import CaseMemoryManager
 from src.synthetic_ner.tasks.planner import Planner
+from src.synthetic_ner.tasks.tracer import TraceStore
 from src.synthetic_ner.tasks.validators import validate_section_text
 from src.synthetic_ner.tasks.writer import SectionWriter
 
@@ -66,6 +67,7 @@ def run_langgraph_workflow(args: Namespace, project_root: Path) -> None:
 
 
 def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
+    trace_store = TraceStore(context.langfuse_cfg)
     memory_manager = CaseMemoryManager(
         context.memory_dir,
         summary_chars=context.workflow_cfg.memory_summary_chars,
@@ -79,7 +81,10 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         section_order=list(context.section_word_targets.keys()),
     )
 
-    client = OllamaClient(config=context.ollama_cfg)
+    client = TracedOllamaClient(
+        config=context.ollama_cfg,
+        tracer=trace_store,
+    )
     prompts = context.workflow_cfg.prompts
     planner = Planner(
         client=client,
@@ -99,30 +104,59 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         critic_temperature=context.workflow_cfg.critic.temperature,
     )
 
-    graph = build_document_graph(
-        context=context,
-        document=document,
-        schema=schema,
+    trace_info = trace_store.start_document_run(
         doc_id=doc_id,
-        memory_path=memory_path,
-        memory_manager=memory_manager,
-        planner=planner,
-        writer=writer,
-        critic=critic,
-    )
-    graph.invoke(
-        {
+        name="document-workflow",
+        input_payload={
             "doc_id": doc_id,
-            "memory_path": memory_path,
-            "memory_text": memory_manager.read_memory(memory_path),
+            "doc_type": context.doc_type,
+            "fraud_type": context.fraud_type,
             "section_order": list(context.section_word_targets.keys()),
-            "section_index": 0,
-            "section_outputs": {},
-            "section_plans": {},
-            "section_reviews": {},
-            "revision_count": 0,
-        }
+        },
+        metadata={
+            "doc_id": doc_id,
+            "doc_type": context.doc_type,
+            "fraud_type": context.fraud_type,
+            "case_number": document.metadata["case_number"],
+        },
     )
+    if trace_info.trace_url:
+        print(f"  Trace   : {trace_info.trace_url}")
+
+    final_state = None
+    try:
+        graph = build_document_graph(
+            context=context,
+            document=document,
+            schema=schema,
+            doc_id=doc_id,
+            memory_path=memory_path,
+            memory_manager=memory_manager,
+            planner=planner,
+            writer=writer,
+            critic=critic,
+            trace_store=trace_store,
+        )
+        final_state = graph.invoke(
+            {
+                "doc_id": doc_id,
+                "memory_path": memory_path,
+                "memory_text": memory_manager.read_memory(memory_path),
+                "section_order": list(context.section_word_targets.keys()),
+                "section_index": 0,
+                "section_outputs": {},
+                "section_plans": {},
+                "section_reviews": {},
+                "revision_count": 0,
+            }
+        )
+    finally:
+        trace_store.end_document_run(
+            output_payload={
+                "doc_id": doc_id,
+                "rendered": bool(final_state and final_state.get("final_text")),
+            }
+        )
 
 
 def build_document_graph(
@@ -136,6 +170,7 @@ def build_document_graph(
     planner: Planner,
     writer: SectionWriter,
     critic: SectionCritic,
+    trace_store: TraceStore,
 ):
     workflow = DocumentWorkflow(
         context=context,
@@ -147,6 +182,7 @@ def build_document_graph(
         planner=planner,
         writer=writer,
         critic=critic,
+        trace_store=trace_store,
     )
     return workflow.build_graph()
 
@@ -164,6 +200,7 @@ class DocumentWorkflow:
         planner: Planner,
         writer: SectionWriter,
         critic: SectionCritic,
+        trace_store: TraceStore,
     ) -> None:
         self.context = context
         self.document = document
@@ -174,6 +211,7 @@ class DocumentWorkflow:
         self.planner = planner
         self.writer = writer
         self.critic = critic
+        self.trace_store = trace_store
 
     def build_graph(self):
         builder = StateGraph(WorkflowState)
@@ -396,6 +434,7 @@ class DocumentWorkflow:
             document_plan=state.get("document_plan", ""),
             section_plans=state.get("section_plans", {}),
             section_reviews=state.get("section_reviews", {}),
+            trace_store=self.trace_store,
         )
         return {"final_text": rendered_text}
 
@@ -428,13 +467,18 @@ def write_generation_report(
     document_plan: str,
     section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
+    trace_store: TraceStore,
 ) -> Path:
+    trace_info = trace_store.get_trace_info()
     report_path = context.output_dir / doc_id / "generation_report.md"
     lines = [
         f"# Generation Report: {doc_id}",
         "",
         f"- Workflow mode: {context.workflow_cfg.mode}",
         f"- Memory file: {memory_path}",
+        f"- Langfuse enabled: {str(trace_info.enabled).lower()}",
+        f"- Langfuse trace id: {trace_info.trace_id or 'n/a'}",
+        f"- Langfuse trace url: {trace_info.trace_url or 'n/a'}",
         "",
         "## Document Plan",
         document_plan or "- none",

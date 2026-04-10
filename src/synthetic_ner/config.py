@@ -14,6 +14,7 @@ from src.synthetic_ner.types.app_config import (
     CountConfig,
     CriticConfig,
     GenerationConfig,
+    LangfuseConfig,
     OffencePeriodConfig,
     OllamaConfig,
     PathsConfig,
@@ -38,6 +39,7 @@ def build_app_config(cfg: dict[str, Any]) -> AppConfig:
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
         ollama=_build_ollama_config(_require_mapping(cfg["ollama"], "ollama")),
+        langfuse=_build_langfuse_config(_require_mapping(cfg["langfuse"], "langfuse")),
         generation=_build_generation_config(
             _require_mapping(cfg["generation"], "generation")
         ),
@@ -87,6 +89,21 @@ def _build_ollama_config(raw: dict[str, Any]) -> OllamaConfig:
         base_url=_require_string(raw["base_url"], "ollama.base_url"),
         model=_require_string(raw["model"], "ollama.model"),
         timeout=_require_positive_int(raw["timeout"], "ollama.timeout"),
+    )
+
+
+def _build_langfuse_config(raw: dict[str, Any]) -> LangfuseConfig:
+    return LangfuseConfig(
+        enabled=_require_bool(raw["enabled"], "langfuse.enabled"),
+        host=_require_string(raw["host"], "langfuse.host"),
+        public_key_env=_require_string(
+            raw["public_key_env"],
+            "langfuse.public_key_env",
+        ),
+        secret_key_env=_require_string(
+            raw["secret_key_env"],
+            "langfuse.secret_key_env",
+        ),
     )
 
 
