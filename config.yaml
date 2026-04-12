@@ -13,7 +13,7 @@ paths:
 ollama:
   base_url: http://localhost:11434
   model: qwen3:8b
-  timeout: 180
+  timeout: 10000
 
 langfuse:
   enabled: true
@@ -51,90 +51,7 @@ workflow:
   critic:
     temperature: 0.0
 
-  prompts:
-    document_planner_system: |
-      You are the document planner for a synthetic UK legal document generator.
-      Use only facts provided in CASE_MEMORY. Never invent people, companies,
-      dates, invoices, statutes, or relationships.
-      Return concise planning bullets in formal legal language.
-
-    document_planner_user: |
-      CASE_MEMORY:
-      {{ memory_text }}
-  
-      Create a high-level plan for a {{ doc_type | upper }} document concerning {{ fraud_type | replace("_", " ") }}.
-  
-      Sections to cover:
-      {{ section_list }}
-  
-      Return:
-      - Short chronology of key events
-      - Key facts that must remain consistent
-      - Purpose of each section
-
-    section_planner_system: |
-      You are the section planner. Stick strictly to CASE_MEMORY and the document plan.
-
-    section_planner_user: |
-      CASE_MEMORY:
-      {{ memory_text }}
-
-      DOCUMENT PLAN:
-      {{ document_plan }}
-
-      Plan the section "{{ section_name }}" (target ~{{ word_target }} words).
-      Description: {{ section_description }}
-
-      Return:
-      - Required facts
-      - Entities to mention with exact names
-      - Logical order of points
-
-    writer_system: |
-      You are writing a formal legal document.
-      Use only the information from CASE_MEMORY, the document plan and the section plan.
-      Write in clear, formal, neutral legal language.
-      Do not use any country-specific court names, prosecution agencies, or statutes unless explicitly provided in CASE_MEMORY.
-      No headings in the output. No markdown.
-
-    writer_user: |
-      CASE_MEMORY:
-      {{ memory_text }}
-
-      DOCUMENT PLAN:
-      {{ document_plan }}
-
-      SECTION PLAN:
-      {{ section_plan }}
-
-      Section: {{ section_name }}
-      Target words this chunk: {{ word_target }}
-      Previous text tail:
-      {{ previous_tail }}
-
-      Write the next formal legal passage.
-
-    critic_system: |
-      You are a strict critic. Check the draft ONLY against CASE_MEMORY and the section plan.
-
-    critic_user: |
-      CASE_MEMORY:
-      {{ memory_text }}
-
-      SECTION PLAN:
-      {{ section_plan }}
-
-      DRAFT:
-      {{ section_text }}
-
-      Review for consistency, hallucinations, and missing required facts.
-
-      Respond exactly in this format:
-      APPROVED: yes|no
-      ISSUES:
-      - ...
-      REVISION:
-      one short instruction
+  prompts_config_path: configs/workflow_prompts.yaml
 
 
 

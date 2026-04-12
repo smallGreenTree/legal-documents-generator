@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_inline_template
 
-
-@dataclass(slots=True)
-class CriticResult:
-    approved: bool
-    issues: list[str]
-    revision_instruction: str
-    raw_text: str
 
 
 class SectionCritic:
@@ -23,10 +17,12 @@ class SectionCritic:
         client,
         prompts: WorkflowPromptsConfig,
         critic_temperature: float,
+        prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
         self.critic_temperature = critic_temperature
+        self.prompt_clients = prompt_clients or {}
 
     def review_section(
         self,
@@ -54,6 +50,7 @@ class SectionCritic:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.critic_temperature,
+            prompt_object=self.prompt_clients.get("critic_user"),
         )
         return self._parse_result(result.text)
 
@@ -82,6 +79,10 @@ class SectionCritic:
             revision_instruction = "Fix the inconsistencies flagged by the critic."
         if not approved and not issues:
             issues = ["Critic rejected the section without specific issues."]
+        if not approved and revision_instruction.lower() == "keep as is":
+            revision_instruction = (
+                "Revise the section to resolve consistency issues and remove any invented facts."
+            )
 
         return CriticResult(
             approved=approved and not issues,

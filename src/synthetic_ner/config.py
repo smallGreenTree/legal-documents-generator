@@ -25,17 +25,22 @@ from src.synthetic_ner.types.app_config import (
     WorkflowPromptsConfig,
     WriterConfig,
 )
-from src.synthetic_ner.utils import load_config
+from src.synthetic_ner.utils import load_config, resolve_project_path
 
 
 def load_app_config(path: Path | str) -> AppConfig:
-    raw = load_config(path)
+    config_path = Path(path)
+    raw = load_config(config_path)
     if not isinstance(raw, dict):
         raise ValueError("config.yaml must load into a top-level mapping")
-    return build_app_config(raw)
+    return build_app_config(raw, config_path=config_path)
 
 
-def build_app_config(cfg: dict[str, Any]) -> AppConfig:
+def build_app_config(
+    cfg: dict[str, Any],
+    *,
+    config_path: Path | None = None,
+) -> AppConfig:
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
         ollama=_build_ollama_config(_require_mapping(cfg["ollama"], "ollama")),
@@ -43,7 +48,10 @@ def build_app_config(cfg: dict[str, Any]) -> AppConfig:
         generation=_build_generation_config(
             _require_mapping(cfg["generation"], "generation")
         ),
-        workflow=_build_workflow_config(_require_mapping(cfg["workflow"], "workflow")),
+        workflow=_build_workflow_config(
+            _require_mapping(cfg["workflow"], "workflow"),
+            config_path=config_path,
+        ),
         profile=_build_profile_config(_require_mapping(cfg["profile"], "profile")),
         case=_build_case_config(_require_mapping(cfg["case"], "case")),
         nationality_locales=_build_string_mapping(
@@ -115,8 +123,12 @@ def _build_generation_config(raw: dict[str, Any]) -> GenerationConfig:
     return GenerationConfig(words_per_page=words_per_page)
 
 
-def _build_workflow_config(raw: dict[str, Any]) -> WorkflowConfig:
-    prompts = _require_mapping(raw["prompts"], "workflow.prompts")
+def _build_workflow_config(
+    raw: dict[str, Any],
+    *,
+    config_path: Path | None = None,
+) -> WorkflowConfig:
+    prompts = _resolve_workflow_prompts(raw, config_path=config_path)
 
     return WorkflowConfig(
         mode=_require_string(raw["mode"], "workflow.mode"),
@@ -189,6 +201,37 @@ def _build_workflow_config(raw: dict[str, Any]) -> WorkflowConfig:
             ),
         ),
     )
+
+
+def _resolve_workflow_prompts(
+    raw: dict[str, Any],
+    *,
+    config_path: Path | None = None,
+) -> dict[str, Any]:
+    prompts_path = raw.get("prompts_config_path")
+    if prompts_path is None:
+        return _require_mapping(raw["prompts"], "workflow.prompts")
+
+    if config_path is None:
+        raise ValueError(
+            "workflow.prompts_config_path requires load_app_config to be called with a file path"
+        )
+
+    prompts_config_path = resolve_project_path(
+        config_path.resolve().parent,
+        _require_string(prompts_path, "workflow.prompts_config_path"),
+    )
+    prompts_raw = load_config(prompts_config_path)
+    if not isinstance(prompts_raw, dict):
+        raise ValueError(
+            f"{prompts_config_path} must contain a top-level mapping"
+        )
+    if "prompts" in prompts_raw:
+        return _require_mapping(
+            prompts_raw["prompts"],
+            f"{prompts_config_path}.prompts",
+        )
+    return prompts_raw
 
 
 def _build_profile_config(raw: dict[str, Any]) -> ProfileConfig:

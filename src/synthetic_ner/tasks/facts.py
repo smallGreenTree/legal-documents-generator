@@ -168,6 +168,117 @@ def collect_allowed_facts(document) -> AllowedFacts:
     )
 
 
+def collect_allowed_facts_from_memory(memory_text: str) -> AllowedFacts:
+    seed_memory = _extract_seed_memory(memory_text)
+    refs_block = _extract_markdown_section(seed_memory, "### Case References and Dates")
+    people_block = _extract_markdown_section(seed_memory, "### Allowed Person Surface Forms")
+    orgs_block = _extract_markdown_section(seed_memory, "### Allowed Organisations")
+
+    case_refs, dates = _parse_case_refs_and_dates(refs_block)
+    person_surface_forms, titled_people, initials, people_dates = _parse_people_block(
+        people_block
+    )
+    dates.update(people_dates)
+    org_names, vat_numbers = _parse_orgs_block(orgs_block)
+
+    return AllowedFacts(
+        person_surface_forms=person_surface_forms,
+        titled_people=titled_people,
+        initials=initials,
+        org_names=org_names,
+        vat_numbers=vat_numbers,
+        case_refs=case_refs,
+        dates=dates,
+    )
+
+
+def _parse_case_refs_and_dates(block: str) -> tuple[set[str], set[str]]:
+    case_refs = {normalize_phrase(match) for match in CASE_REF_RE.findall(block)}
+    dates = {normalize_phrase(match) for match in DATE_RE.findall(block)}
+    return case_refs, dates
+
+
+def _parse_people_block(block: str) -> tuple[set[str], set[str], set[str], set[str]]:
+    person_surface_forms: set[str] = set()
+    dates: set[str] = set()
+
+    for line in _iter_bullet_lines(block):
+        parts = [part.strip() for part in line.split("|")]
+        if not parts:
+            continue
+        _add_person_parts(parts, person_surface_forms, dates)
+
+    person_blob = "\n".join(sorted(person_surface_forms))
+    titled_people = {
+        normalize_title_phrase(match)
+        for match in TITLE_NAME_RE.findall(person_blob)
+    }
+    initials = {
+        normalize_phrase(match)
+        for match in INITIALS_RE.findall(person_blob)
+    }
+    return person_surface_forms, titled_people, initials, dates
+
+
+def _add_person_parts(parts: list[str], person_surface_forms: set[str], dates: set[str]) -> None:
+    base_name = normalize_phrase(parts[0])
+    if base_name and base_name.lower() != "none":
+        person_surface_forms.add(base_name)
+
+    for part in parts[1:]:
+        lowered = part.lower()
+        if lowered.startswith("allowed forms:"):
+            _add_allowed_forms(part, person_surface_forms)
+        elif lowered.startswith("dob:"):
+            dob = normalize_phrase(part.split(":", 1)[1])
+            if dob:
+                dates.add(dob)
+
+
+def _add_allowed_forms(part: str, person_surface_forms: set[str]) -> None:
+    raw_forms = part.split(":", 1)[1]
+    for form in raw_forms.split(";"):
+        normalized = normalize_phrase(form)
+        if normalized:
+            person_surface_forms.add(normalized)
+
+
+def _parse_orgs_block(block: str) -> tuple[set[str], set[str]]:
+    org_names: set[str] = set()
+    vat_numbers: set[str] = set()
+
+    for line in _iter_bullet_lines(block):
+        parts = [part.strip() for part in line.split("|")]
+        if not parts:
+            continue
+        _add_org_parts(parts, org_names, vat_numbers)
+
+    if not org_names:
+        org_names = {
+            normalize_phrase(match)
+            for match in ORG_NAME_RE.findall(block)
+        }
+    if not vat_numbers:
+        vat_numbers = {
+            normalize_phrase(match)
+            for match in VAT_RE.findall(block)
+        }
+    return org_names, vat_numbers
+
+
+def _add_org_parts(parts: list[str], org_names: set[str], vat_numbers: set[str]) -> None:
+    org_name = normalize_phrase(parts[0])
+    if org_name and org_name.lower() != "none":
+        org_names.add(org_name)
+
+    for part in parts[1:]:
+        lowered = part.lower()
+        if lowered.startswith("vat:"):
+            vat_number = normalize_phrase(part.split(":", 1)[1])
+            if vat_number:
+                vat_numbers.add(vat_number)
+
+
 def normalize_phrase(value: str) -> str:
     return " ".join(str(value).strip().split()).strip(".,;:()[]{}")
 
@@ -196,3 +307,34 @@ def unique_phrases(values: list[str]) -> list[str]:
         seen.add(key)
         unique.append(normalized)
     return unique
+
+
+def _extract_seed_memory(memory_text: str) -> str:
+    marker = "\n## Document Plan\n"
+    if marker in memory_text:
+        return memory_text.split(marker, 1)[0]
+    return memory_text
+
+
+def _extract_markdown_section(memory_text: str, heading: str) -> str:
+    start = memory_text.find(heading)
+    if start == -1:
+        return ""
+
+    start_index = start + len(heading)
+    tail = memory_text[start_index:]
+    next_h2 = tail.find("\n## ")
+    next_h3 = tail.find("\n### ")
+
+    candidates = [idx for idx in (next_h2, next_h3) if idx != -1]
+    end_index = min(candidates) if candidates else len(tail)
+    return tail[:end_index]
+
+
+def _iter_bullet_lines(block: str) -> list[str]:
+    lines: list[str] = []
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if line.startswith("- "):
+            lines.append(line[2:].strip())
+    return lines

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Any
 
 import requests
 from src.synthetic_ner.tasks.tracer import TraceStore
@@ -35,11 +36,16 @@ class TracedOllamaClient:
         user_prompt: str,
         parent_task_id: str | None = None,
         temperature: float,
+        prompt_object: Any | None = None,
     ) -> OllamaCallResult:
         full_prompt = (
             f"[SYSTEM]\n{system_prompt.strip()}\n\n"
             f"[USER]\n{user_prompt.strip()}\n"
         )
+        prompt_payload = {
+            "system_prompt": system_prompt.strip(),
+            "user_prompt": user_prompt.strip(),
+        }
         trace = self.tracer.start_trace(
             doc_id=doc_id,
             task_id=task_id,
@@ -47,6 +53,8 @@ class TracedOllamaClient:
             model=self.model,
             parent_task_id=parent_task_id,
             prompt=full_prompt,
+            prompt_payload=prompt_payload,
+            prompt_object=prompt_object,
             metadata={"model_parameters": {"temperature": temperature}},
         )
         started = perf_counter()

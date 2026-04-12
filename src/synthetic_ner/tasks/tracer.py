@@ -4,34 +4,19 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 from langfuse import Langfuse
-from src.synthetic_ner.types.app_config import LangfuseConfig
-
-
-@dataclass(slots=True)
-class TraceHandle:
-    observation: Any
-
-
-@dataclass(slots=True)
-class DocumentTraceSession:
-    enabled: bool
-    trace_id: str | None
-    trace_url: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class NodeExecutionRecord:
-    node_name: str
-    status: str
-    latency_ms: int
-    next_node: str | None
-    section_name: str | None
+from src.synthetic_ner.types.app_config import LangfuseConfig, WorkflowPromptsConfig
+from src.synthetic_ner.types.trace import (
+    DocumentTraceSession,
+    NodeExecutionRecord,
+    ResolvedWorkflowPrompts,
+    TraceHandle,
+)
 
 
 class TraceStore:
@@ -41,6 +26,7 @@ class TraceStore:
         self._document_context = None
         self._document_observation = None
         self._node_runs: list[NodeExecutionRecord] = []
+        self._prompt_sync_summary = "Langfuse prompts: not resolved"
         self._current_session = DocumentTraceSession(
             enabled=self.enabled,
             trace_id=None,
@@ -199,6 +185,8 @@ class TraceStore:
         model: str,
         parent_task_id: str | None = None,
         prompt: str | None = None,
+        prompt_payload: dict[str, Any] | None = None,
+        prompt_object: Any | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> TraceHandle:
         del doc_id
@@ -209,12 +197,13 @@ class TraceStore:
             name=task_id,
             as_type="generation",
             model=model,
-            input=prompt,
+            input=prompt_payload if prompt_payload is not None else prompt,
             metadata={
                 "stage": stage,
                 "parent_task_id": parent_task_id,
                 **(metadata or {}),
             },
+            prompt=prompt_object,
             model_parameters=(metadata or {}).get("model_parameters"),
         )
         return TraceHandle(observation=observation)
@@ -258,6 +247,59 @@ class TraceStore:
 
     def get_trace_info(self) -> DocumentTraceSession:
         return self._current_session
+
+    def resolve_workflow_prompts(
+        self,
+        fallback_prompts: WorkflowPromptsConfig,
+    ) -> ResolvedWorkflowPrompts:
+        prompt_templates = asdict(fallback_prompts)
+        resolved_templates: dict[str, str] = dict(prompt_templates)
+        prompt_clients: dict[str, Any] = {}
+        managed_count = 0
+        seeded_count = 0
+        fallback_count = 0
+        error_count = 0
+
+        if not self.enabled or self.client is None:
+            self._prompt_sync_summary = "Langfuse prompts disabled: using config.yaml prompts only"
+            return ResolvedWorkflowPrompts(
+                prompts=WorkflowPromptsConfig(**resolved_templates),
+                prompt_clients=prompt_clients,
+                sync_summary=self._prompt_sync_summary,
+            )
+
+        for key, fallback_template in prompt_templates.items():
+            prompt_name = f"synthetic_ner.{key}"
+            prompt_client, status = self._get_or_seed_prompt(
+                name=prompt_name,
+                fallback_template=fallback_template,
+            )
+            if status == "managed":
+                managed_count += 1
+            elif status == "seeded":
+                seeded_count += 1
+            elif status == "fallback":
+                fallback_count += 1
+            else:
+                error_count += 1
+            if prompt_client is None:
+                continue
+
+            prompt_clients[key] = prompt_client
+            prompt_text = getattr(prompt_client, "prompt", None)
+            if isinstance(prompt_text, str) and prompt_text.strip():
+                resolved_templates[key] = prompt_text
+
+        self._prompt_sync_summary = (
+            "Langfuse prompt sync: "
+            f"managed={managed_count}, seeded={seeded_count}, "
+            f"fallback={fallback_count}, errors={error_count}"
+        )
+        return ResolvedWorkflowPrompts(
+            prompts=WorkflowPromptsConfig(**resolved_templates),
+            prompt_clients=prompt_clients,
+            sync_summary=self._prompt_sync_summary,
+        )
 
     def get_langgraph_node_summary(self) -> list[dict[str, Any]]:
         summary_by_node: dict[str, dict[str, Any]] = {}
@@ -356,6 +398,58 @@ class TraceStore:
                 section_name=section_name if isinstance(section_name, str) else None,
             )
         )
+
+    def _get_or_seed_prompt(
+        self,
+        *,
+        name: str,
+        fallback_template: str,
+    ) -> tuple[Any | None, str]:
+        if self.client is None:
+            return None, "fallback"
+
+        label = _optional_env("LANGFUSE_PROMPT_LABEL")
+        auto_seed = os.getenv("LANGFUSE_PROMPT_AUTOSEED", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+        try:
+            get_prompt_kwargs: dict[str, Any] = {
+                "name": name,
+                "type": "text",
+                "cache_ttl_seconds": 300,
+                "fetch_timeout_seconds": 3,
+                "max_retries": 1,
+            }
+            if label:
+                get_prompt_kwargs["label"] = label
+            return self.client.get_prompt(**get_prompt_kwargs), "managed"
+        except Exception as exc:
+            get_error = exc
+            if not auto_seed:
+                print(f"  Prompts : failed to fetch '{name}' ({exc}); using config fallback")
+                return None, "fallback"
+
+        try:
+            labels = [label] if label else ["production"]
+            prompt_client = self.client.create_prompt(
+                name=name,
+                prompt=fallback_template,
+                labels=labels,
+                type="text",
+                commit_message="Seeded from synthetic-ner fallback prompt",
+            )
+            print(f"  Prompts : seeded '{name}' in Langfuse with labels={labels}")
+            return prompt_client, "seeded"
+        except Exception as exc:
+            print(
+                f"  Prompts : failed to seed '{name}' "
+                f"(fetch_error={get_error}; seed_error={exc}); using config fallback"
+            )
+            return None, "error"
 
 
 def _build_usage_details(metadata: dict[str, Any]) -> dict[str, int] | None:
@@ -495,3 +589,11 @@ def _preview_text(value: str, *, limit: int = 180) -> str:
 
 def _string_value(value: Any) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _optional_env(key: str) -> str | None:
+    value = os.getenv(key)
+    if not value:
+        return None
+    trimmed = value.strip()
+    return trimmed or None

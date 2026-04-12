@@ -23,7 +23,7 @@ from src.synthetic_ner.tasks.critic import SectionCritic
 from src.synthetic_ner.tasks.memory_manager import CaseMemoryManager
 from src.synthetic_ner.tasks.planner import Planner
 from src.synthetic_ner.tasks.tracer import TraceStore
-from src.synthetic_ner.tasks.validators import validate_section_text
+from src.synthetic_ner.tasks.validators import repair_section_text, validate_section_text
 from src.synthetic_ner.tasks.writer import SectionWriter
 
 
@@ -40,6 +40,7 @@ class WorkflowState(TypedDict, total=False):
     current_section_issues: list[str]
     current_revision_instruction: str
     revision_count: int
+    repair_attempts: int
     section_outputs: dict[str, str]
     section_plans: dict[str, str]
     section_reviews: dict[str, list[str]]
@@ -87,11 +88,14 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         config=context.ollama_cfg,
         tracer=trace_store,
     )
-    prompts = context.workflow_cfg.prompts
+    resolved_prompts = trace_store.resolve_workflow_prompts(context.workflow_cfg.prompts)
+    prompts = resolved_prompts.prompts
+    print(f"  Prompts : {resolved_prompts.sync_summary}")
     planner = Planner(
         client=client,
         prompts=prompts,
         planner_temperature=context.workflow_cfg.planner.temperature,
+        prompt_clients=resolved_prompts.prompt_clients,
     )
     writer = SectionWriter(
         client=client,
@@ -99,11 +103,13 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         chunk_words=context.workflow_cfg.writer.chunk_words,
         context_tail_chars=context.workflow_cfg.writer.context_tail_chars,
         writer_temperature=context.workflow_cfg.writer.temperature,
+        prompt_clients=resolved_prompts.prompt_clients,
     )
     critic = SectionCritic(
         client=client,
         prompts=prompts,
         critic_temperature=context.workflow_cfg.critic.temperature,
+        prompt_clients=resolved_prompts.prompt_clients,
     )
 
     trace_info = trace_store.start_document_run(
@@ -150,6 +156,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
                 "section_plans": {},
                 "section_reviews": {},
                 "revision_count": 0,
+                "repair_attempts": 0,
             }
         )
     finally:
@@ -279,6 +286,14 @@ class DocumentWorkflow:
             ),
         )
         builder.add_node(
+            "repair_section",
+            self._trace_node(
+                "repair_section",
+                self.repair_section_node,
+                next_node="validate_section",
+            ),
+        )
+        builder.add_node(
             "store_section",
             self._trace_node(
                 "store_section",
@@ -341,10 +356,12 @@ class DocumentWorkflow:
             self.route_after_validation,
             {
                 "revise_section": "revise_section",
+                "repair_section": "repair_section",
                 "store_section": "store_section",
             },
         )
         builder.add_edge("revise_section", "critique_section")
+        builder.add_edge("repair_section", "validate_section")
         builder.add_edge("store_section", "prepare_section")
         builder.add_edge("render_document", END)
 
@@ -375,6 +392,7 @@ class DocumentWorkflow:
             "current_section_issues": [],
             "current_revision_instruction": "",
             "revision_count": 0,
+            "repair_attempts": 0,
         }
 
     def plan_section_node(self, state: WorkflowState) -> WorkflowState:
@@ -431,7 +449,7 @@ class DocumentWorkflow:
         validator_issues = validate_section_text(
             section_name=section_name,
             section_text=state["current_section_text"],
-            document=self.document,
+            memory_text=state["memory_text"],
             word_target=self.context.section_word_targets[section_name],
         )
         for issue in validator_issues:
@@ -439,12 +457,16 @@ class DocumentWorkflow:
                 issues.append(issue)
 
         revision_instruction = state.get("current_revision_instruction", "")
-        if validator_issues and not revision_instruction:
+        if validator_issues:
             validator_lines = "\n".join(f"- {issue}" for issue in validator_issues)
-            revision_instruction = (
+            validator_block = (
                 "Fix the deterministic validation issues before approving:\n"
                 f"{validator_lines}"
             )
+            if revision_instruction:
+                revision_instruction = f"{revision_instruction}\n\n{validator_block}"
+            else:
+                revision_instruction = validator_block
         return {
             "current_section_issues": issues,
             "current_revision_instruction": revision_instruction,
@@ -470,13 +492,73 @@ class DocumentWorkflow:
             "revision_count": revision_count,
         }
 
+    def repair_section_node(self, state: WorkflowState) -> WorkflowState:
+        section_name = state["current_section"]
+        issues = list(state.get("current_section_issues", []))
+        repaired_text = repair_section_text(
+            section_text=state.get("current_section_text", ""),
+            issues=issues,
+            memory_text=state["memory_text"],
+        )
+        repair_attempts = state.get("repair_attempts", 0) + 1
+        if repaired_text and repaired_text != state.get("current_section_text", ""):
+            return {
+                "current_section_text": repaired_text,
+                "repair_attempts": repair_attempts,
+            }
+
+        revision_count = state.get("revision_count", 0) + 1
+        forced_instruction = (
+            "Rewrite the section using only entities, organisations, dates, case references, "
+            "and VAT/reference numbers listed in CASE_MEMORY. "
+            "If a value is not listed, omit it. "
+            f"Resolve these issues:\n{chr(10).join(f'- {issue}' for issue in issues) or '- none'}"
+        )
+        rewritten_text = self.writer.write_section(
+            doc_id=self.doc_id,
+            parent_task_id=f"repair_{section_name}",
+            memory_text=state["memory_text"],
+            document_plan=state["document_plan"],
+            section_name=section_name,
+            section_plan=state["current_section_plan"],
+            case_number=self.document.metadata["case_number"],
+            word_target=self.context.section_word_targets[section_name],
+            revision_instruction=forced_instruction,
+            revision_round=revision_count,
+        )
+        return {
+            "current_section_text": rewritten_text,
+            "current_revision_instruction": forced_instruction,
+            "revision_count": revision_count,
+            "repair_attempts": repair_attempts,
+        }
+
     def store_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
         issues = list(state.get("current_section_issues", []))
         if issues:
-            raise RuntimeError(
-                f"Section '{section_name}' failed validation: {'; '.join(issues)}"
+            repaired_text = repair_section_text(
+                section_text=state.get("current_section_text", ""),
+                issues=issues,
+                memory_text=state["memory_text"],
             )
+            final_text = repaired_text or state.get("current_section_text", "")
+            final_issues = validate_section_text(
+                section_name=section_name,
+                section_text=final_text,
+                memory_text=state["memory_text"],
+                word_target=self.context.section_word_targets[section_name],
+            )
+            if final_issues:
+                print(
+                    "  Warning : storing section with unresolved issues after repair "
+                    f"({section_name}): {'; '.join(final_issues)}"
+                )
+            state = {
+                **state,
+                "current_section_text": final_text,
+            }
+            issues = final_issues
 
         section_outputs = dict(state.get("section_outputs", {}))
         section_outputs[section_name] = state["current_section_text"]
@@ -494,6 +576,7 @@ class DocumentWorkflow:
             "section_reviews": section_reviews,
             "section_index": state.get("section_index", 0) + 1,
             "memory_text": self.memory_manager.read_memory(self.memory_path),
+            "repair_attempts": 0,
         }
 
     def render_document_node(self, state: WorkflowState) -> WorkflowState:
@@ -546,8 +629,11 @@ def route_after_prepare(state: WorkflowState) -> str:
 def route_after_validation(state: WorkflowState, max_revisions: int) -> str:
     issues = state.get("current_section_issues", [])
     revision_count = state.get("revision_count", 0)
+    repair_attempts = state.get("repair_attempts", 0)
     if issues and revision_count < max_revisions:
         return "revise_section"
+    if issues and repair_attempts < 1:
+        return "repair_section"
     return "store_section"
 
 

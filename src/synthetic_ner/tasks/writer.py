@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
@@ -18,12 +19,14 @@ class SectionWriter:
         chunk_words: int,
         context_tail_chars: int,
         writer_temperature: float,
+        prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
         self.chunk_words = chunk_words
         self.context_tail_chars = context_tail_chars
         self.writer_temperature = writer_temperature
+        self.prompt_clients = prompt_clients or {}
 
     def write_section(
         self,
@@ -59,6 +62,15 @@ class SectionWriter:
                 previous_tail=previous_tail,
                 revision_instruction=revision_instruction or "none",
             )
+            if revision_instruction.strip():
+                user_prompt = (
+                    f"{user_prompt}\n\n"
+                    "REVISION REQUIREMENTS:\n"
+                    f"{revision_instruction.strip()}\n"
+                    "- Use only entities, dates, case references, and VAT/reference numbers "
+                    "present in CASE_MEMORY.\n"
+                    "- Remove any unknown identifiers instead of inventing replacements.\n"
+                )
             task_id = (
                 f"writer_{section_name}_r{revision_round}_chunk_{chunk_index:02d}"
             )
@@ -70,6 +82,7 @@ class SectionWriter:
                 user_prompt=user_prompt,
                 parent_task_id=parent_task_id,
                 temperature=self.writer_temperature,
+                prompt_object=self.prompt_clients.get("writer_user"),
             )
             text = re.sub(r"<think>.*?</think>", "", result.text, flags=re.DOTALL).strip()
             if not text:

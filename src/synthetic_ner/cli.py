@@ -1,6 +1,7 @@
 """CLI entrypoint for the generator."""
 
 import argparse
+import os
 from pathlib import Path
 
 from src.synthetic_ner.config import load_app_config, resolve_doc_types
@@ -52,8 +53,38 @@ def resolve_workflow_mode(project_root: Path, args: argparse.Namespace) -> str:
     return app_config.workflow.mode
 
 
+def load_env_files(project_root: Path) -> None:
+    for env_name in (".env", ".env.langfuse"):
+        _load_env_file(project_root / env_name)
+
+
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+
+        os.environ.setdefault(key, value)
+
+
 def main(project_root: Path | None = None) -> None:
     resolved_project_root = project_root or Path(__file__).resolve().parents[2]
+    load_env_files(resolved_project_root)
     args = build_parser(resolved_project_root).parse_args()
     workflow_mode = resolve_workflow_mode(resolved_project_root, args)
 

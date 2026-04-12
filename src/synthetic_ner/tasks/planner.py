@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_inline_template
@@ -14,10 +16,12 @@ class Planner:
         client,
         prompts: WorkflowPromptsConfig,
         planner_temperature: float,
+        prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
         self.planner_temperature = planner_temperature
+        self.prompt_clients = prompt_clients or {}
 
     def plan_document(
         self,
@@ -50,6 +54,7 @@ class Planner:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
+            prompt_object=self.prompt_clients.get("document_planner_user"),
         )
         return result.text
 
@@ -81,5 +86,6 @@ class Planner:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
+            prompt_object=self.prompt_clients.get("section_planner_user"),
         )
         return result.text

@@ -8,10 +8,12 @@ The generator works in three layers:
 - `prose` = the narrative text written by the model
 - `template` = the final document shell
 
-`config.yaml` is now the single authored source of truth for generation inputs:
+`config.yaml` remains the run control file, and workflow prompts now live in
+`configs/workflow_prompts.yaml`:
 
 - `profile` holds document-level run settings
 - `case` holds case-specific inputs, either as `auto` generators or explicit records
+- `workflow.prompts_config_path` points to prompt templates (Jinja text)
 - templates remain render-only
 
 ## How It Works
@@ -35,6 +37,10 @@ Current package split:
 - `src/synthetic_ner/tasks/` for the LangGraph planner/writer/critic workflow
 - `src/synthetic_ner/models/ollama_client.py` for traced Ollama access
 
+At startup, the CLI auto-loads environment variables from `.env` and `.env.langfuse`
+if present (without overriding already-exported shell variables). This helps IDE
+debugger runs pick up Langfuse credentials.
+
 ## LangGraph Workflow
 
 The project now supports a LangGraph-based workflow around the existing
@@ -46,9 +52,29 @@ That workflow adds:
 - planner, writer, critic, and validator task modules
 - a generation report saved alongside the final document
 - node-level Langfuse spans for every LangGraph node, including section, revision, next-node, and latency metadata
+- Langfuse Prompt Management integration (prompts fetched by name with config fallback)
 
 The active workflow mode is controlled by `workflow.mode` in `config.yaml`,
 and can be overridden on the CLI with `--workflow-mode classic|langgraph`.
+
+When Langfuse is enabled, the workflow tries to fetch these managed text prompts:
+
+- `synthetic_ner.document_planner_system`
+- `synthetic_ner.document_planner_user`
+- `synthetic_ner.section_planner_system`
+- `synthetic_ner.section_planner_user`
+- `synthetic_ner.writer_system`
+- `synthetic_ner.writer_user`
+- `synthetic_ner.critic_system`
+- `synthetic_ner.critic_user`
+
+If a prompt does not exist, the app falls back to `configs/workflow_prompts.yaml` and can auto-seed
+the missing prompt in Langfuse.
+
+Optional env vars:
+
+- `LANGFUSE_PROMPT_LABEL` (default label for fetch/seed, e.g. `production`)
+- `LANGFUSE_PROMPT_AUTOSEED` (`true` by default; set `false` to disable auto-seeding)
 
 ## What The Case Schema Does
 
@@ -149,6 +175,12 @@ Generate with the current profile:
 
 ```bash
 poetry run python generator.py
+```
+
+Sync prompt templates to Langfuse Prompt Management:
+
+```bash
+poetry run python -m src.synthetic_ner.sync_langfuse_prompts
 ```
 
 Generate from an existing schema:
