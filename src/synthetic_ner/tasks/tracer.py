@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import asdict
 from pathlib import Path
@@ -16,6 +17,11 @@ from src.synthetic_ner.types.trace import (
     NodeExecutionRecord,
     ResolvedWorkflowPrompts,
     TraceHandle,
+)
+
+_RUBRIC_LINE_RE = re.compile(
+    r"^\s*-\s*([a-zA-Z][a-zA-Z0-9_ -]{1,40})\s*:\s*([1-5])(?:\s*/\s*5)?\s*$",
+    re.MULTILINE,
 )
 
 
@@ -218,12 +224,18 @@ class TraceStore:
     ) -> None:
         if handle.observation is None:
             return
+        enriched_metadata = dict(metadata)
+        rubrics = _extract_rubric_scores(response) if metadata.get("stage") == "critic" else {}
+        if rubrics:
+            enriched_metadata["critic_rubrics"] = rubrics
         handle.observation.update(
             input=prompt,
             output=response,
-            metadata=metadata,
-            usage_details=_build_usage_details(metadata),
+            metadata=enriched_metadata,
+            usage_details=_build_usage_details(enriched_metadata),
         )
+        if rubrics:
+            self._record_rubric_scores(handle, rubrics)
         handle.observation.end()
 
     def record_error(
@@ -451,6 +463,33 @@ class TraceStore:
             )
             return None, "error"
 
+    def _record_rubric_scores(self, handle: TraceHandle, rubrics: dict[str, int]) -> None:
+        observation = handle.observation
+        if observation is None:
+            return
+
+        score_values: list[float] = []
+        for metric, score in sorted(rubrics.items()):
+            if not (1 <= score <= 5):
+                continue
+            score_value = float(score)
+            score_values.append(score_value)
+            observation.score(
+                name=f"rubric.{metric}",
+                value=score_value,
+                data_type="NUMERIC",
+                comment=f"{score}/5",
+            )
+
+        if score_values:
+            overall = round(sum(score_values) / len(score_values), 2)
+            observation.score(
+                name="rubric.overall",
+                value=overall,
+                data_type="NUMERIC",
+                comment="Average rubric score (1-5)",
+            )
+
 
 def _build_usage_details(metadata: dict[str, Any]) -> dict[str, int] | None:
     prompt_tokens = metadata.get("tokens_prompt")
@@ -597,3 +636,26 @@ def _optional_env(key: str) -> str | None:
         return None
     trimmed = value.strip()
     return trimmed or None
+
+
+def _extract_rubric_scores(raw_text: str) -> dict[str, int]:
+    rubrics_marker = raw_text.find("RUBRICS:")
+    if rubrics_marker == -1:
+        return {}
+
+    issues_marker = raw_text.find("ISSUES:")
+    revision_marker = raw_text.find("REVISION:")
+    block_end = (
+        issues_marker
+        if issues_marker != -1
+        else (revision_marker if revision_marker != -1 else len(raw_text))
+    )
+    rubric_block = raw_text[rubrics_marker + len("RUBRICS:"):block_end]
+
+    rubrics: dict[str, int] = {}
+    for metric, raw_score in _RUBRIC_LINE_RE.findall(rubric_block):
+        key = metric.strip().lower().replace(" ", "_").replace("-", "_")
+        score = int(raw_score)
+        if key and 1 <= score <= 5:
+            rubrics[key] = score
+    return rubrics

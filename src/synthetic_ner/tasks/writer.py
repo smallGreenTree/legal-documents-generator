@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
+from src.synthetic_ner.tasks.validators import clean_generated_section_text
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_inline_template
 
@@ -84,11 +84,13 @@ class SectionWriter:
                 temperature=self.writer_temperature,
                 prompt_object=self.prompt_clients.get("writer_user"),
             )
-            text = re.sub(r"<think>.*?</think>", "", result.text, flags=re.DOTALL).strip()
+            text = clean_generated_section_text(result.text)
             if not text:
                 break
             chunks.append(text)
             words_so_far += len(text.split())
             chunk_index += 1
 
-        return "\n\n".join(chunks) if chunks else "[section not generated]"
+        if not chunks:
+            return "[section not generated]"
+        return clean_generated_section_text("\n\n".join(chunks))

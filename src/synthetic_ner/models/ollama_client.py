@@ -73,7 +73,7 @@ class TracedOllamaClient:
             payload = response.json()
             text = payload.get("response", "").strip()
             latency_ms = round((perf_counter() - started) * 1000)
-            metadata = self._build_metadata(payload, temperature, latency_ms)
+            metadata = self._build_metadata(payload, stage, temperature, latency_ms)
             self.tracer.record_llm_call(
                 trace,
                 prompt=full_prompt,
@@ -88,6 +88,7 @@ class TracedOllamaClient:
                 prompt=full_prompt,
                 error_message=str(exc),
                 metadata={
+                    "stage": stage,
                     "temperature": temperature,
                     "latency_ms": latency_ms,
                 },
@@ -97,6 +98,7 @@ class TracedOllamaClient:
     def _build_metadata(
         self,
         payload: dict,
+        stage: str,
         temperature: float,
         latency_ms: int,
     ) -> dict:
@@ -105,6 +107,7 @@ class TracedOllamaClient:
             latency_ms = round(total_duration / 1_000_000)
 
         return {
+            "stage": stage,
             "temperature": temperature,
             "latency_ms": latency_ms,
             "tokens_prompt": payload.get("prompt_eval_count"),

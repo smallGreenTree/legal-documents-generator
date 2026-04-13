@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
 from typing import Any
 
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
+from src.synthetic_ner.types.critic import CriticResult
 from src.synthetic_ner.utils import render_inline_template
 
+_RUBRIC_LINE_RE = re.compile(
+    r"^\s*-\s*([a-zA-Z][a-zA-Z0-9_ -]{1,40})\s*:\s*([1-5])(?:\s*/\s*5)?\s*$",
+    re.MULTILINE,
+)
 
 
 class SectionCritic:
@@ -61,9 +66,19 @@ class SectionCritic:
 
         issues = []
         revision_instruction = "keep as is"
+        rubrics: dict[str, int] = {}
 
+        rubrics_marker = normalized.find("RUBRICS:")
         issues_marker = normalized.find("ISSUES:")
         revision_marker = normalized.find("REVISION:")
+        if rubrics_marker != -1:
+            rubric_block_end = (
+                issues_marker
+                if issues_marker != -1
+                else (revision_marker if revision_marker != -1 else len(normalized))
+            )
+            rubric_block = normalized[rubrics_marker + len("RUBRICS:"):rubric_block_end]
+            rubrics = _parse_rubrics(rubric_block)
         if issues_marker != -1:
             issues_block_end = revision_marker if revision_marker != -1 else len(normalized)
             issues_block = normalized[issues_marker + len("ISSUES:"):issues_block_end]
@@ -88,5 +103,16 @@ class SectionCritic:
             approved=approved and not issues,
             issues=issues,
             revision_instruction=revision_instruction,
+            rubrics=rubrics,
             raw_text=raw_text,
         )
+
+
+def _parse_rubrics(rubric_block: str) -> dict[str, int]:
+    rubrics: dict[str, int] = {}
+    for metric, raw_score in _RUBRIC_LINE_RE.findall(rubric_block):
+        key = metric.strip().lower().replace(" ", "_").replace("-", "_")
+        score = int(raw_score)
+        if key and 1 <= score <= 5:
+            rubrics[key] = score
+    return rubrics

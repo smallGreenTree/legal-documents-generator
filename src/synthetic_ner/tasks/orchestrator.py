@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from argparse import Namespace
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import wraps
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from src.synthetic_ner.engine import (
@@ -23,7 +23,12 @@ from src.synthetic_ner.tasks.critic import SectionCritic
 from src.synthetic_ner.tasks.memory_manager import CaseMemoryManager
 from src.synthetic_ner.tasks.planner import Planner
 from src.synthetic_ner.tasks.tracer import TraceStore
-from src.synthetic_ner.tasks.validators import repair_section_text, validate_section_text
+from src.synthetic_ner.tasks.validators import (
+    build_deterministic_fallback_section,
+    clean_generated_section_text,
+    repair_section_text,
+    validate_section_text,
+)
 from src.synthetic_ner.tasks.writer import SectionWriter
 
 
@@ -44,6 +49,9 @@ class WorkflowState(TypedDict, total=False):
     section_outputs: dict[str, str]
     section_plans: dict[str, str]
     section_reviews: dict[str, list[str]]
+    instruction_channel: dict[str, Any]
+    review_channel: dict[str, Any]
+    content_channel: dict[str, Any]
     final_text: str
 
 
@@ -133,6 +141,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
 
     final_state = None
     try:
+        seed_memory_text = memory_manager.read_memory(memory_path)
         graph = build_document_graph(
             context=context,
             document=document,
@@ -149,12 +158,15 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
             {
                 "doc_id": doc_id,
                 "memory_path": memory_path,
-                "memory_text": memory_manager.read_memory(memory_path),
+                "memory_text": seed_memory_text,
                 "section_order": list(context.section_word_targets.keys()),
                 "section_index": 0,
                 "section_outputs": {},
                 "section_plans": {},
                 "section_reviews": {},
+                "instruction_channel": {},
+                "review_channel": {},
+                "content_channel": {},
                 "revision_count": 0,
                 "repair_attempts": 0,
             }
@@ -375,22 +387,34 @@ class DocumentWorkflow:
             case_number=self.document.metadata["case_number"],
             section_order=state["section_order"],
         )
-        self.memory_manager.append_document_plan(self.memory_path, document_plan)
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["document_plan"] = document_plan
         return {
             "document_plan": document_plan,
-            "memory_text": self.memory_manager.read_memory(self.memory_path),
+            "instruction_channel": instruction_channel,
         }
 
     def prepare_section_node(self, state: WorkflowState) -> WorkflowState:
         section_index = state.get("section_index", 0)
         if section_index >= len(state["section_order"]):
             return {"current_section": ""}
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["current_revision_instruction"] = ""
+        review_channel = dict(state.get("review_channel", {}))
+        review_channel["current_section_issues"] = []
+        review_channel["critic_rubrics"] = {}
+        review_channel["critic_approved"] = False
+        content_channel = dict(state.get("content_channel", {}))
+        content_channel["current_section_text"] = ""
         return {
             "current_section": state["section_order"][section_index],
             "current_section_plan": "",
             "current_section_text": "",
             "current_section_issues": [],
             "current_revision_instruction": "",
+            "instruction_channel": instruction_channel,
+            "review_channel": review_channel,
+            "content_channel": content_channel,
             "revision_count": 0,
             "repair_attempts": 0,
         }
@@ -425,30 +449,46 @@ class DocumentWorkflow:
             case_number=self.document.metadata["case_number"],
             word_target=self.context.section_word_targets[section_name],
         )
-        return {"current_section_text": section_text}
+        clean_text = clean_generated_section_text(section_text)
+        content_channel = dict(state.get("content_channel", {}))
+        content_channel["current_section_text"] = clean_text
+        return {
+            "current_section_text": clean_text,
+            "content_channel": content_channel,
+        }
 
     def critique_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
+        current_text = _current_section_text(state)
         review = self.critic.review_section(
             doc_id=self.doc_id,
             parent_task_id=f"writer_{section_name}",
             memory_text=state["memory_text"],
             section_name=section_name,
             section_plan=state["current_section_plan"],
-            section_text=state["current_section_text"],
+            section_text=current_text,
             revision_round=state.get("revision_count", 0),
         )
+        review_channel = dict(state.get("review_channel", {}))
+        review_channel["current_section_issues"] = list(review.issues)
+        review_channel["critic_rubrics"] = dict(review.rubrics)
+        review_channel["critic_approved"] = bool(review.approved)
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["current_revision_instruction"] = review.revision_instruction
         return {
             "current_section_issues": review.issues,
             "current_revision_instruction": review.revision_instruction,
+            "review_channel": review_channel,
+            "instruction_channel": instruction_channel,
         }
 
     def validate_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
-        issues = list(state.get("current_section_issues", []))
+        current_text = clean_generated_section_text(_current_section_text(state))
+        issues = list(_current_section_issues(state))
         validator_issues = validate_section_text(
             section_name=section_name,
-            section_text=state["current_section_text"],
+            section_text=current_text,
             memory_text=state["memory_text"],
             word_target=self.context.section_word_targets[section_name],
         )
@@ -456,7 +496,7 @@ class DocumentWorkflow:
             if issue not in issues:
                 issues.append(issue)
 
-        revision_instruction = state.get("current_revision_instruction", "")
+        revision_instruction = _current_revision_instruction(state)
         if validator_issues:
             validator_lines = "\n".join(f"- {issue}" for issue in validator_issues)
             validator_block = (
@@ -467,9 +507,19 @@ class DocumentWorkflow:
                 revision_instruction = f"{revision_instruction}\n\n{validator_block}"
             else:
                 revision_instruction = validator_block
+        review_channel = dict(state.get("review_channel", {}))
+        review_channel["current_section_issues"] = list(issues)
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["current_revision_instruction"] = revision_instruction
+        content_channel = dict(state.get("content_channel", {}))
+        content_channel["current_section_text"] = current_text
         return {
+            "current_section_text": current_text,
             "current_section_issues": issues,
             "current_revision_instruction": revision_instruction,
+            "review_channel": review_channel,
+            "instruction_channel": instruction_channel,
+            "content_channel": content_channel,
         }
 
     def revise_section_node(self, state: WorkflowState) -> WorkflowState:
@@ -484,26 +534,35 @@ class DocumentWorkflow:
             section_plan=state["current_section_plan"],
             case_number=self.document.metadata["case_number"],
             word_target=self.context.section_word_targets[section_name],
-            revision_instruction=state.get("current_revision_instruction", ""),
+            revision_instruction=_current_revision_instruction(state),
             revision_round=revision_count,
         )
+        clean_text = clean_generated_section_text(revised_text)
+        content_channel = dict(state.get("content_channel", {}))
+        content_channel["current_section_text"] = clean_text
         return {
-            "current_section_text": revised_text,
+            "current_section_text": clean_text,
+            "content_channel": content_channel,
             "revision_count": revision_count,
         }
 
     def repair_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
-        issues = list(state.get("current_section_issues", []))
+        issues = list(_current_section_issues(state))
+        current_text = _current_section_text(state)
         repaired_text = repair_section_text(
-            section_text=state.get("current_section_text", ""),
+            section_text=current_text,
             issues=issues,
             memory_text=state["memory_text"],
         )
+        repaired_text = clean_generated_section_text(repaired_text)
         repair_attempts = state.get("repair_attempts", 0) + 1
-        if repaired_text and repaired_text != state.get("current_section_text", ""):
+        if repaired_text and repaired_text != current_text:
+            content_channel = dict(state.get("content_channel", {}))
+            content_channel["current_section_text"] = repaired_text
             return {
                 "current_section_text": repaired_text,
+                "content_channel": content_channel,
                 "repair_attempts": repair_attempts,
             }
 
@@ -526,56 +585,84 @@ class DocumentWorkflow:
             revision_instruction=forced_instruction,
             revision_round=revision_count,
         )
+        clean_rewritten_text = clean_generated_section_text(rewritten_text)
+        content_channel = dict(state.get("content_channel", {}))
+        content_channel["current_section_text"] = clean_rewritten_text
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["current_revision_instruction"] = forced_instruction
         return {
-            "current_section_text": rewritten_text,
+            "current_section_text": clean_rewritten_text,
             "current_revision_instruction": forced_instruction,
             "revision_count": revision_count,
             "repair_attempts": repair_attempts,
+            "content_channel": content_channel,
+            "instruction_channel": instruction_channel,
         }
 
     def store_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
-        issues = list(state.get("current_section_issues", []))
+        word_target = self.context.section_word_targets[section_name]
+        issues = list(_current_section_issues(state))
+        current_text = clean_generated_section_text(_current_section_text(state))
+
+        final_text = current_text
         if issues:
             repaired_text = repair_section_text(
-                section_text=state.get("current_section_text", ""),
+                section_text=current_text,
                 issues=issues,
                 memory_text=state["memory_text"],
             )
-            final_text = repaired_text or state.get("current_section_text", "")
-            final_issues = validate_section_text(
+            final_text = clean_generated_section_text(repaired_text) or current_text
+
+        final_issues = validate_section_text(
+            section_name=section_name,
+            section_text=final_text,
+            memory_text=state["memory_text"],
+            word_target=word_target,
+        )
+
+        if final_issues:
+            fallback_text = build_deterministic_fallback_section(
                 section_name=section_name,
-                section_text=final_text,
                 memory_text=state["memory_text"],
-                word_target=self.context.section_word_targets[section_name],
+                word_target=word_target,
             )
-            if final_issues:
-                print(
-                    "  Warning : storing section with unresolved issues after repair "
-                    f"({section_name}): {'; '.join(final_issues)}"
-                )
-            state = {
-                **state,
-                "current_section_text": final_text,
-            }
-            issues = final_issues
+            fallback_text = clean_generated_section_text(fallback_text)
+            fallback_issues = validate_section_text(
+                section_name=section_name,
+                section_text=fallback_text,
+                memory_text=state["memory_text"],
+                word_target=word_target,
+            )
+            if fallback_text:
+                final_text = fallback_text
+                final_issues = fallback_issues
+            print(
+                "  Warning : replaced invalid section output with deterministic fallback "
+                f"({section_name}). Remaining issues: "
+                f"{'; '.join(final_issues) if final_issues else 'none'}"
+            )
 
         section_outputs = dict(state.get("section_outputs", {}))
-        section_outputs[section_name] = state["current_section_text"]
+        section_outputs[section_name] = final_text
         section_reviews = dict(state.get("section_reviews", {}))
-        section_reviews[section_name] = issues
-        self.memory_manager.append_section_result(
-            self.memory_path,
-            section_name=section_name,
-            section_plan=state["current_section_plan"],
-            section_text=state["current_section_text"],
-            issues=section_reviews[section_name],
-        )
+        section_reviews[section_name] = final_issues
+        review_channel = dict(state.get("review_channel", {}))
+        review_channel["current_section_issues"] = list(final_issues)
+        content_channel = dict(state.get("content_channel", {}))
+        content_channel["current_section_text"] = final_text
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["current_revision_instruction"] = ""
         return {
             "section_outputs": section_outputs,
             "section_reviews": section_reviews,
             "section_index": state.get("section_index", 0) + 1,
-            "memory_text": self.memory_manager.read_memory(self.memory_path),
+            "current_section_text": final_text,
+            "current_section_issues": final_issues,
+            "current_revision_instruction": "",
+            "review_channel": review_channel,
+            "content_channel": content_channel,
+            "instruction_channel": instruction_channel,
             "repair_attempts": 0,
         }
 
@@ -627,7 +714,7 @@ def route_after_prepare(state: WorkflowState) -> str:
 
 
 def route_after_validation(state: WorkflowState, max_revisions: int) -> str:
-    issues = state.get("current_section_issues", [])
+    issues = _current_section_issues(state)
     revision_count = state.get("revision_count", 0)
     repair_attempts = state.get("repair_attempts", 0)
     if issues and revision_count < max_revisions:
@@ -635,6 +722,38 @@ def route_after_validation(state: WorkflowState, max_revisions: int) -> str:
     if issues and repair_attempts < 1:
         return "repair_section"
     return "store_section"
+
+
+def _current_section_text(state: Mapping[str, Any]) -> str:
+    content_channel = state.get("content_channel")
+    if isinstance(content_channel, Mapping):
+        value = content_channel.get("current_section_text")
+        if isinstance(value, str):
+            return value
+    fallback = state.get("current_section_text")
+    return fallback if isinstance(fallback, str) else ""
+
+
+def _current_section_issues(state: Mapping[str, Any]) -> list[str]:
+    review_channel = state.get("review_channel")
+    if isinstance(review_channel, Mapping):
+        value = review_channel.get("current_section_issues")
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, str)]
+    fallback = state.get("current_section_issues")
+    if isinstance(fallback, list):
+        return [item for item in fallback if isinstance(item, str)]
+    return []
+
+
+def _current_revision_instruction(state: Mapping[str, Any]) -> str:
+    instruction_channel = state.get("instruction_channel")
+    if isinstance(instruction_channel, Mapping):
+        value = instruction_channel.get("current_revision_instruction")
+        if isinstance(value, str):
+            return value
+    fallback = state.get("current_revision_instruction")
+    return fallback if isinstance(fallback, str) else ""
 
 
 def write_generation_report(

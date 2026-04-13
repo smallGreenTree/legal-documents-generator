@@ -13,7 +13,7 @@ paths:
 ollama:
   base_url: http://localhost:11434
   model: qwen3:8b
-  timeout: 10000
+  timeout: 900
 
 langfuse:
   enabled: true

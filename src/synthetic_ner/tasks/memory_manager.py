@@ -42,7 +42,11 @@ class CaseMemoryManager:
         return memory_path.read_text(encoding="utf-8")
 
     def append_document_plan(self, memory_path: Path, document_plan: str) -> None:
-        self._append_block(memory_path, "## Document Plan", document_plan.strip())
+        self._append_runtime_block(
+            memory_path,
+            "## Document Plan",
+            document_plan.strip(),
+        )
 
     def append_section_result(
         self,
@@ -63,12 +67,23 @@ class CaseMemoryManager:
             f"Summary:\n{summary}\n\n"
             f"Issues:\n{issue_lines}"
         )
-        self._append_block(memory_path, f"## Section Memory: {section_name}", content)
+        self._append_runtime_block(
+            memory_path,
+            f"## Section Memory: {section_name}",
+            content,
+        )
 
-    def _append_block(self, memory_path: Path, heading: str, content: str) -> None:
-        current = memory_path.read_text(encoding="utf-8").rstrip()
+    def _runtime_log_path(self, memory_path: Path) -> Path:
+        return memory_path.with_name("RUN_HISTORY.md")
+
+    def _append_runtime_block(self, memory_path: Path, heading: str, content: str) -> None:
+        runtime_path = self._runtime_log_path(memory_path)
+        if runtime_path.exists():
+            current = runtime_path.read_text(encoding="utf-8").rstrip()
+        else:
+            current = "# RUN_HISTORY"
         updated = f"{current}\n\n{heading}\n{content.strip()}\n"
-        memory_path.write_text(updated, encoding="utf-8")
+        runtime_path.write_text(updated, encoding="utf-8")
 
     def _build_initial_memory(
         self,
