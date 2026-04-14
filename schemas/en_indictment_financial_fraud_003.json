@@ -1,135 +1,135 @@
 {
-  "doc_id": "en_indictment_financial_fraud_001",
+  "doc_id": "en_indictment_financial_fraud_003",
   "fraud_type": "financial_fraud",
   "persons": [
     {
       "id": "p0",
-      "name": "Margarete Riehl",
-      "display": "MARGARETE RIEHL",
+      "name": "Telse Zänker",
+      "display": "TELSE ZÄNKER",
       "type": "defendant"
     },
     {
       "id": "p1",
-      "name": "Lara Camiscione",
-      "display": "LARA CAMISCIONE",
+      "name": "Adriano Torricelli",
+      "display": "ADRIANO TORRICELLI",
       "type": "defendant"
     },
     {
       "id": "p2",
-      "name": "Antoine Guérin",
-      "display": "ANTOINE GUÉRIN",
+      "name": "Laure Maillet",
+      "display": "LAURE MAILLET",
       "type": "defendant"
     },
     {
       "id": "p3",
-      "name": "Ernestine Gotthard",
-      "display": "Ernestine Gotthard",
+      "name": "Anna-Luise Drub",
+      "display": "Anna-Luise Drub",
       "type": "collateral"
     },
     {
       "id": "p4",
-      "name": "Helma Kobelt",
-      "display": "Helma Kobelt",
+      "name": "Lena Wagenknecht",
+      "display": "Lena Wagenknecht",
       "type": "collateral"
     },
     {
       "id": "p5",
-      "name": "Hans-Uwe Stroh",
-      "display": "Hans-Uwe Stroh",
+      "name": "Slavica Mälzer",
+      "display": "Slavica Mälzer",
       "type": "collateral"
     },
     {
       "id": "p6",
-      "name": "Arsenio Abate",
-      "display": "Arsenio Abate",
+      "name": "Oreste Bocca",
+      "display": "Oreste Bocca",
       "type": "collateral"
     },
     {
       "id": "p7",
-      "name": "Tonia Argan",
-      "display": "Tonia Argan",
+      "name": "Cirillo Travaglio",
+      "display": "Cirillo Travaglio",
       "type": "collateral"
     },
     {
       "id": "p8",
-      "name": "Ignazio Biagi",
-      "display": "Ignazio Biagi",
+      "name": "Chiara Soderini",
+      "display": "Chiara Soderini",
       "type": "collateral"
     },
     {
       "id": "p9",
-      "name": "Maryse Marchal",
-      "display": "Maryse Marchal",
+      "name": "Margot Gosselin",
+      "display": "Margot Gosselin",
       "type": "collateral"
     },
     {
       "id": "p10",
-      "name": "Jacqueline Dias",
-      "display": "Jacqueline Dias",
+      "name": "Philippine Fabre",
+      "display": "Philippine Fabre",
       "type": "collateral"
     },
     {
       "id": "p11",
-      "name": "Sylwia Leszczak",
-      "display": "Sylwia Leszczak",
+      "name": "Olgierd Frydrychowicz",
+      "display": "Olgierd Frydrychowicz",
       "type": "collateral"
     },
     {
       "id": "p12",
-      "name": "Dominik Dziduch",
-      "display": "Dominik Dziduch",
+      "name": "Daniel Pych",
+      "display": "Daniel Pych",
       "type": "collateral"
     }
   ],
   "orgs": [
     {
       "id": "o0",
-      "name": "BRUN CONSULTING LTD",
+      "name": "PETIT INTERNATIONAL LTD",
       "type": "charged"
     },
     {
       "id": "o1",
-      "name": "UNGARETTI SERVICES LTD",
+      "name": "TAMBURI CONSULTING LTD",
       "type": "charged"
     },
     {
       "id": "o2",
-      "name": "BASSO SOLUTIONS LTD",
+      "name": "BONBACH CONSULTING LTD",
       "type": "charged"
     },
     {
       "id": "o3",
-      "name": "ACKERMANN SCHOLTZ HOLDINGS LTD",
+      "name": "KABUS GREIN GROTH CONSULTING LTD",
       "type": "charged"
     },
     {
       "id": "o4",
-      "name": "WAGNER HOLDINGS LTD",
+      "name": "MILLET LTD",
       "type": "charged"
     },
     {
       "id": "o5",
-      "name": "GERLACH MANS GROUP LTD",
+      "name": "KÖSTER BUCHHOLZ HOLDINGS LTD",
       "type": "associated"
     },
     {
       "id": "o6",
-      "name": "GUSSONI HOLDINGS LTD",
+      "name": "ROSKOTH CONSULTING LTD",
       "type": "associated"
     },
     {
       "id": "o7",
-      "name": "ADAM SOLUTIONS LTD",
+      "name": "LECONTE SOLUTIONS LTD",
       "type": "associated"
     },
     {
       "id": "o8",
-      "name": "CORRER BECCARIA HOLDINGS LTD",
+      "name": "FIEBIG LIMITED",
       "type": "associated"
     },
     {
       "id": "o9",
-      "name": "JOLY GROUP LTD",
+      "name": "VIOLA TIRABASSI SERVICES LTD",
       "type": "associated"
     }
   ],
@@ -138,121 +138,121 @@
       "from": "p0",
       "to": "o0",
       "type": "controlled",
-      "label": "Margarete Riehl controlled BRUN CONSULTING LTD"
+      "label": "Telse Zänker controlled PETIT INTERNATIONAL LTD"
     },
     {
       "from": "p1",
       "to": "o1",
       "type": "controlled",
-      "label": "Lara Camiscione controlled UNGARETTI SERVICES LTD"
+      "label": "Adriano Torricelli controlled TAMBURI CONSULTING LTD"
     },
     {
       "from": "p2",
       "to": "o2",
       "type": "controlled",
-      "label": "Antoine Guérin controlled BASSO SOLUTIONS LTD"
+      "label": "Laure Maillet controlled BONBACH CONSULTING LTD"
     },
     {
       "from": "p0",
       "to": "p3",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Ernestine Gotthard"
+      "label": "Telse Zänker instructed Anna-Luise Drub"
     },
     {
       "from": "p0",
       "to": "p4",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Helma Kobelt"
+      "label": "Telse Zänker instructed Lena Wagenknecht"
     },
     {
       "from": "p0",
       "to": "p5",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Hans-Uwe Stroh"
+      "label": "Telse Zänker instructed Slavica Mälzer"
     },
     {
       "from": "p0",
       "to": "p6",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Arsenio Abate"
+      "label": "Telse Zänker instructed Oreste Bocca"
     },
     {
       "from": "p0",
       "to": "p7",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Tonia Argan"
+      "label": "Telse Zänker instructed Cirillo Travaglio"
     },
     {
       "from": "p0",
       "to": "p8",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Ignazio Biagi"
+      "label": "Telse Zänker instructed Chiara Soderini"
     },
     {
       "from": "p0",
       "to": "p9",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Maryse Marchal"
+      "label": "Telse Zänker instructed Margot Gosselin"
     },
     {
       "from": "p0",
       "to": "p10",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Jacqueline Dias"
+      "label": "Telse Zänker instructed Philippine Fabre"
     },
     {
       "from": "p0",
       "to": "p11",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Sylwia Leszczak"
+      "label": "Telse Zänker instructed Olgierd Frydrychowicz"
     },
     {
       "from": "p0",
       "to": "p12",
       "type": "instructed",
-      "label": "Margarete Riehl instructed Dominik Dziduch"
+      "label": "Telse Zänker instructed Daniel Pych"
     },
     {
       "from": "p0",
       "to": "p1",
       "type": "conspired_with",
-      "label": "Margarete Riehl conspired with Lara Camiscione"
+      "label": "Telse Zänker conspired with Adriano Torricelli"
     },
     {
       "from": "p1",
       "to": "p2",
       "type": "conspired_with",
-      "label": "Lara Camiscione conspired with Antoine Guérin"
+      "label": "Adriano Torricelli conspired with Laure Maillet"
     },
     {
       "from": "o0",
       "to": "o5",
       "type": "received_funds_from",
-      "label": "GERLACH MANS GROUP LTD received funds from BRUN CONSULTING LTD"
+      "label": "KÖSTER BUCHHOLZ HOLDINGS LTD received funds from PETIT INTERNATIONAL LTD"
     },
     {
       "from": "o1",
       "to": "o6",
       "type": "received_funds_from",
-      "label": "GUSSONI HOLDINGS LTD received funds from UNGARETTI SERVICES LTD"
+      "label": "ROSKOTH CONSULTING LTD received funds from TAMBURI CONSULTING LTD"
     },
     {
       "from": "o2",
       "to": "o7",
       "type": "received_funds_from",
-      "label": "ADAM SOLUTIONS LTD received funds from BASSO SOLUTIONS LTD"
+      "label": "LECONTE SOLUTIONS LTD received funds from BONBACH CONSULTING LTD"
     },
     {
       "from": "o3",
       "to": "o8",
       "type": "received_funds_from",
-      "label": "CORRER BECCARIA HOLDINGS LTD received funds from ACKERMANN SCHOLTZ HOLDINGS LTD"
+      "label": "FIEBIG LIMITED received funds from KABUS GREIN GROTH CONSULTING LTD"
     },
     {
       "from": "o4",
       "to": "o9",
       "type": "received_funds_from",
-      "label": "JOLY GROUP LTD received funds from WAGNER HOLDINGS LTD"
+      "label": "VIOLA TIRABASSI SERVICES LTD received funds from MILLET LTD"
     }
   ]
 }

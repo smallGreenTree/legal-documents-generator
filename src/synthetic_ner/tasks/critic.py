@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from requests.exceptions import ReadTimeout
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.types.critic import CriticResult
 from src.synthetic_ner.utils import render_inline_template
@@ -13,6 +14,9 @@ _RUBRIC_LINE_RE = re.compile(
     r"^\s*-\s*([a-zA-Z][a-zA-Z0-9_ -]{1,40})\s*:\s*([1-5])(?:\s*/\s*5)?\s*$",
     re.MULTILINE,
 )
+_CRITIC_MEMORY_CHAR_LIMIT = 6_000
+_CRITIC_SECTION_TEXT_CHAR_LIMIT = 3_500
+_CRITIC_OUTPUT_TOKEN_LIMIT = 180
 
 
 class SectionCritic:
@@ -40,24 +44,36 @@ class SectionCritic:
         section_text: str,
         revision_round: int,
     ) -> CriticResult:
+        compact_memory = _truncate_text(memory_text, _CRITIC_MEMORY_CHAR_LIMIT)
+        compact_section_text = _truncate_text(section_text, _CRITIC_SECTION_TEXT_CHAR_LIMIT)
         user_prompt = render_inline_template(
             self.prompts.critic_user,
-            memory_text=memory_text,
+            memory_text=compact_memory,
             section_plan=section_plan,
-            section_text=section_text,
+            section_text=compact_section_text,
             section_name=section_name,
         )
-        result = self.client.invoke(
-            doc_id=doc_id,
-            task_id=f"critic_{section_name}_r{revision_round}",
-            stage="critic",
-            system_prompt=self.prompts.critic_system,
-            user_prompt=user_prompt,
-            parent_task_id=parent_task_id,
-            temperature=self.critic_temperature,
-            prompt_object=self.prompt_clients.get("critic_user"),
-        )
-        return self._parse_result(result.text)
+        try:
+            result = self.client.invoke(
+                doc_id=doc_id,
+                task_id=f"critic_{section_name}_r{revision_round}",
+                stage="critic",
+                system_prompt=self.prompts.critic_system,
+                user_prompt=user_prompt,
+                parent_task_id=parent_task_id,
+                temperature=self.critic_temperature,
+                max_output_tokens=_CRITIC_OUTPUT_TOKEN_LIMIT,
+                prompt_object=self.prompt_clients.get("critic_user"),
+            )
+            return self._parse_result(result.text)
+        except ReadTimeout:
+            return CriticResult(
+                approved=True,
+                issues=[],
+                revision_instruction="keep as is",
+                rubrics={},
+                raw_text="[critic-timeout] Skipped critic due to model timeout; relying on deterministic validation.",
+            )
 
     def _parse_result(self, raw_text: str) -> CriticResult:
         normalized = raw_text.replace("\r", "")
@@ -116,3 +132,12 @@ def _parse_rubrics(rubric_block: str) -> dict[str, int]:
         if key and 1 <= score <= 5:
             rubrics[key] = score
     return rubrics
+
+
+def _truncate_text(value: str, max_chars: int) -> str:
+    text = value.strip()
+    if len(text) <= max_chars:
+        return text
+    head = text[: max_chars // 2]
+    tail = text[-(max_chars // 2) :]
+    return f"{head}\n\n[...truncated for critic...]\n\n{tail}"

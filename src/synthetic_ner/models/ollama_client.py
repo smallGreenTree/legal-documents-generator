@@ -36,6 +36,7 @@ class TracedOllamaClient:
         user_prompt: str,
         parent_task_id: str | None = None,
         temperature: float,
+        max_output_tokens: int | None = None,
         prompt_object: Any | None = None,
     ) -> OllamaCallResult:
         full_prompt = (
@@ -59,13 +60,16 @@ class TracedOllamaClient:
         )
         started = perf_counter()
         try:
+            options: dict[str, Any] = {"temperature": temperature}
+            if isinstance(max_output_tokens, int) and max_output_tokens > 0:
+                options["num_predict"] = max_output_tokens
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
                     "prompt": full_prompt,
                     "stream": False,
-                    "options": {"temperature": temperature},
+                    "options": options,
                 },
                 timeout=self.timeout,
             )

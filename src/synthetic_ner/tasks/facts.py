@@ -173,12 +173,15 @@ def collect_allowed_facts_from_memory(memory_text: str) -> AllowedFacts:
     refs_block = _extract_markdown_section(seed_memory, "### Case References and Dates")
     people_block = _extract_markdown_section(seed_memory, "### Allowed Person Surface Forms")
     orgs_block = _extract_markdown_section(seed_memory, "### Allowed Organisations")
+    counts_block = _extract_markdown_section(seed_memory, "## Counts")
 
     case_refs, dates = _parse_case_refs_and_dates(refs_block)
     person_surface_forms, titled_people, initials, people_dates = _parse_people_block(
         people_block
     )
     dates.update(people_dates)
+    dates.update({normalize_phrase(match) for match in DATE_RE.findall(counts_block)})
+    case_refs.update({normalize_phrase(match) for match in CASE_REF_RE.findall(counts_block)})
     org_names, vat_numbers = _parse_orgs_block(orgs_block)
 
     return AllowedFacts(

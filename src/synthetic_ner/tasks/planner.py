@@ -54,6 +54,7 @@ class Planner:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
+            max_output_tokens=450,
             prompt_object=self.prompt_clients.get("document_planner_user"),
         )
         return result.text
@@ -86,6 +87,7 @@ class Planner:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
+            max_output_tokens=350,
             prompt_object=self.prompt_clients.get("section_planner_user"),
         )
         return result.text

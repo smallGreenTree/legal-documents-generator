@@ -82,6 +82,7 @@ class SectionWriter:
                 user_prompt=user_prompt,
                 parent_task_id=parent_task_id,
                 temperature=self.writer_temperature,
+                max_output_tokens=_estimate_writer_output_tokens(chunk_target),
                 prompt_object=self.prompt_clients.get("writer_user"),
             )
             text = clean_generated_section_text(result.text)
@@ -94,3 +95,9 @@ class SectionWriter:
         if not chunks:
             return "[section not generated]"
         return clean_generated_section_text("\n\n".join(chunks))
+
+
+def _estimate_writer_output_tokens(chunk_words: int) -> int:
+    # Conservative cap to prevent runaway generations while preserving section quality.
+    estimated = int(chunk_words * 1.8)
+    return max(220, min(1100, estimated))

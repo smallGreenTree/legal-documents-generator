@@ -387,6 +387,7 @@ class DocumentWorkflow:
             case_number=self.document.metadata["case_number"],
             section_order=state["section_order"],
         )
+        self.memory_manager.append_document_plan(self.memory_path, document_plan)
         instruction_channel = dict(state.get("instruction_channel", {}))
         instruction_channel["document_plan"] = document_plan
         return {
@@ -647,6 +648,13 @@ class DocumentWorkflow:
         section_outputs[section_name] = final_text
         section_reviews = dict(state.get("section_reviews", {}))
         section_reviews[section_name] = final_issues
+        self.memory_manager.append_section_result(
+            self.memory_path,
+            section_name=section_name,
+            section_plan=state["current_section_plan"],
+            section_text=final_text,
+            issues=final_issues,
+        )
         review_channel = dict(state.get("review_channel", {}))
         review_channel["current_section_issues"] = list(final_issues)
         content_channel = dict(state.get("content_channel", {}))
