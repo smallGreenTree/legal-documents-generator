@@ -140,11 +140,8 @@ def _build_workflow_config(
             raw["memory_summary_chars"],
             "workflow.memory_summary_chars",
         ),
-        planner=PlannerConfig(
-            temperature=_require_number(
-                _require_mapping(raw["planner"], "workflow.planner")["temperature"],
-                "workflow.planner.temperature",
-            )
+        planner=_build_planner_config(
+            _require_mapping(raw["planner"], "workflow.planner")
         ),
         writer=WriterConfig(
             chunk_words=_require_positive_int(
@@ -158,6 +155,10 @@ def _build_workflow_config(
             temperature=_require_number(
                 _require_mapping(raw["writer"], "workflow.writer")["temperature"],
                 "workflow.writer.temperature",
+            ),
+            max_output_tokens=_require_positive_int(
+                _require_mapping(raw["writer"], "workflow.writer")["max_output_tokens"],
+                "workflow.writer.max_output_tokens",
             ),
         ),
         critic=_build_critic_config(
@@ -231,11 +232,36 @@ def _resolve_workflow_prompts(
     return prompts_raw
 
 
+def _build_planner_config(raw: dict[str, Any]) -> PlannerConfig:
+    max_output_tokens = _require_mapping(
+        raw["max_output_tokens"],
+        "workflow.planner.max_output_tokens",
+    )
+    return PlannerConfig(
+        temperature=_require_number(
+            raw["temperature"],
+            "workflow.planner.temperature",
+        ),
+        document_max_output_tokens=_require_positive_int(
+            max_output_tokens["document"],
+            "workflow.planner.max_output_tokens.document",
+        ),
+        section_max_output_tokens=_require_positive_int(
+            max_output_tokens["section"],
+            "workflow.planner.max_output_tokens.section",
+        ),
+    )
+
+
 def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
     return CriticConfig(
         temperature=_require_number(
             raw["temperature"],
             "workflow.critic.temperature",
+        ),
+        max_output_tokens=_require_positive_int(
+            raw["max_output_tokens"],
+            "workflow.critic.max_output_tokens",
         ),
         rubrics=_build_string_mapping(
             _require_mapping(raw["rubrics"], "workflow.critic.rubrics"),

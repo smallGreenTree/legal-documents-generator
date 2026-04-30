@@ -16,11 +16,15 @@ class Planner:
         client,
         prompts: WorkflowPromptsConfig,
         planner_temperature: float,
+        document_max_output_tokens: int,
+        section_max_output_tokens: int,
         prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
         self.planner_temperature = planner_temperature
+        self.document_max_output_tokens = document_max_output_tokens
+        self.section_max_output_tokens = section_max_output_tokens
         self.prompt_clients = prompt_clients or {}
 
     def plan_document(
@@ -56,7 +60,7 @@ class Planner:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
-            max_output_tokens=450,
+            max_output_tokens=self.document_max_output_tokens,
             prompt_object=prompt_client,
         )
         return result.text
@@ -91,7 +95,7 @@ class Planner:
             user_prompt=user_prompt,
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
-            max_output_tokens=350,
+            max_output_tokens=self.section_max_output_tokens,
             prompt_object=prompt_client,
         )
         return result.text

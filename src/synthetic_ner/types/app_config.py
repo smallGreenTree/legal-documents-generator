@@ -34,6 +34,8 @@ class GenerationConfig:
 @dataclass(frozen=True)
 class PlannerConfig:
     temperature: float
+    document_max_output_tokens: int
+    section_max_output_tokens: int
 
 
 @dataclass(frozen=True)
@@ -41,11 +43,13 @@ class WriterConfig:
     chunk_words: int
     context_tail_chars: int
     temperature: float
+    max_output_tokens: int
 
 
 @dataclass(frozen=True)
 class CriticConfig:
     temperature: float
+    max_output_tokens: int
     rubrics: dict[str, str]
 
 

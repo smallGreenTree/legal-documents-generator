@@ -16,7 +16,6 @@ _RUBRIC_LINE_RE = re.compile(
 )
 _CRITIC_MEMORY_CHAR_LIMIT = 6_000
 _CRITIC_SECTION_TEXT_CHAR_LIMIT = 3_500
-_CRITIC_OUTPUT_TOKEN_LIMIT = 180
 
 
 class SectionCritic:
@@ -26,12 +25,14 @@ class SectionCritic:
         client,
         prompts: WorkflowPromptsConfig,
         critic_temperature: float,
+        max_output_tokens: int,
         rubrics: dict[str, str],
         prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
         self.critic_temperature = critic_temperature
+        self.max_output_tokens = max_output_tokens
         self.rubrics = rubrics
         self.prompt_clients = prompt_clients or {}
 
@@ -67,7 +68,7 @@ class SectionCritic:
                 user_prompt=user_prompt,
                 parent_task_id=parent_task_id,
                 temperature=self.critic_temperature,
-                max_output_tokens=_CRITIC_OUTPUT_TOKEN_LIMIT,
+                max_output_tokens=self.max_output_tokens,
                 prompt_object=prompt_client,
             )
             return self._parse_result(result.text)

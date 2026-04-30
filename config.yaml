@@ -42,14 +42,19 @@ workflow:
 
   planner:
     temperature: 0.0
+    max_output_tokens:
+      document: 1600
+      section: 1200
 
   writer:
     chunk_words: 500
     context_tail_chars: 900
     temperature: 0.0
+    max_output_tokens: 2500
 
   critic:
     temperature: 0.0
+    max_output_tokens: 800
     rubrics:
       grounding: "1-5"
       completeness: "1-5"
