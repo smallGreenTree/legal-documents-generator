@@ -50,6 +50,11 @@ workflow:
 
   critic:
     temperature: 0.0
+    rubrics:
+      grounding: "1-5"
+      completeness: "1-5"
+      legal_style: "1-5"
+      chronology: "1-5"
 
   prompts_config_path: configs/workflow_prompts.yaml
 

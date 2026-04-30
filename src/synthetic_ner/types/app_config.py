@@ -46,6 +46,7 @@ class WriterConfig:
 @dataclass(frozen=True)
 class CriticConfig:
     temperature: float
+    rubrics: dict[str, str]
 
 
 @dataclass(frozen=True)

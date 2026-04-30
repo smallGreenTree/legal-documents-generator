@@ -26,11 +26,13 @@ class SectionCritic:
         client,
         prompts: WorkflowPromptsConfig,
         critic_temperature: float,
+        rubrics: dict[str, str],
         prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
         self.critic_temperature = critic_temperature
+        self.rubrics = rubrics
         self.prompt_clients = prompt_clients or {}
 
     def review_section(
@@ -52,6 +54,7 @@ class SectionCritic:
             section_plan=section_plan,
             section_text=compact_section_text,
             section_name=section_name,
+            critic_rubrics=_format_rubrics(self.rubrics),
         )
         try:
             result = self.client.invoke(
@@ -141,3 +144,7 @@ def _truncate_text(value: str, max_chars: int) -> str:
     head = text[: max_chars // 2]
     tail = text[-(max_chars // 2) :]
     return f"{head}\n\n[...truncated for critic...]\n\n{tail}"
+
+
+def _format_rubrics(rubrics: dict[str, str]) -> str:
+    return "\n".join(f"- {name}: {description}" for name, description in rubrics.items())

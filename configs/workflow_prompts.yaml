@@ -79,10 +79,7 @@ prompts:
     Respond exactly in this format:
     APPROVED: yes|no
     RUBRICS:
-    - grounding: 1-5
-    - completeness: 1-5
-    - legal_style: 1-5
-    - chronology: 1-5
+    {{ critic_rubrics }}
     ISSUES:
     - ...
     REVISION:

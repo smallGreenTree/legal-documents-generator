@@ -160,11 +160,8 @@ def _build_workflow_config(
                 "workflow.writer.temperature",
             ),
         ),
-        critic=CriticConfig(
-            temperature=_require_number(
-                _require_mapping(raw["critic"], "workflow.critic")["temperature"],
-                "workflow.critic.temperature",
-            )
+        critic=_build_critic_config(
+            _require_mapping(raw["critic"], "workflow.critic")
         ),
         prompts=WorkflowPromptsConfig(
             document_planner_system=_require_string(
@@ -232,6 +229,19 @@ def _resolve_workflow_prompts(
             f"{prompts_config_path}.prompts",
         )
     return prompts_raw
+
+
+def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
+    return CriticConfig(
+        temperature=_require_number(
+            raw["temperature"],
+            "workflow.critic.temperature",
+        ),
+        rubrics=_build_string_mapping(
+            _require_mapping(raw["rubrics"], "workflow.critic.rubrics"),
+            "workflow.critic.rubrics",
+        ),
+    )
 
 
 def _build_profile_config(raw: dict[str, Any]) -> ProfileConfig:

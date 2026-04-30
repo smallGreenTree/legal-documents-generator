@@ -117,6 +117,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         client=client,
         prompts=prompts,
         critic_temperature=context.workflow_cfg.critic.temperature,
+        rubrics=context.workflow_cfg.critic.rubrics,
         prompt_clients=resolved_prompts.prompt_clients,
     )
 
