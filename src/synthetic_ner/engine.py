@@ -537,7 +537,8 @@ def save_document_artifacts(
     doc_dir = context.output_dir / doc_id
     schema_path = context.schema_dir / f"{doc_id}.json"
     ensure_target_paths_available(context, doc_dir, schema_path)
-    doc_dir.mkdir(exist_ok=True)
+    doc_dir.mkdir(parents=True, exist_ok=True)
+    schema_path.parent.mkdir(parents=True, exist_ok=True)
 
     write_case_schema(schema_path, schema)
 
