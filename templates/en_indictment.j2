@@ -10,7 +10,7 @@ To the {{ court }}
 {{ sections.section_persons }}
 
 {% for p in persons %}
-{{ loop.index }}. {{ p.name }}, {{ labels.born }} {{ p.dob }} {{ labels.in }} {{ p.birthplace }}, {{ p.nationality }} national, {{ p.role }}, {{ labels.address }} {{ p.address }}.
+{{ loop.index }}. {{ p.name | upper }}, {{ labels.born }} {{ p.dob }} {{ labels.in }} {{ p.birthplace }}, {{ p.nationality }} national, {{ p.role }}, {{ labels.address }} {{ p.address }}.
 
 {% endfor %}
 {{ sections.section_companies }}

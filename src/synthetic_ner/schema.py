@@ -16,8 +16,7 @@ def make_schema_nodes(
     person_nodes = [
         {
             "id": f"p{index}",
-            "name": person["name_plain"],
-            "display": person["name"],
+            "name": person["name"],
             "type": "defendant" if person["is_defendant"] else "collateral",
         }
         for index, person in enumerate(persons)
@@ -58,7 +57,7 @@ def make_case_schema(
             "from": f"p{person_index}",
             "to": f"o{org_index}",
             "type": "controlled",
-            "label": f"{person['name_plain']} controlled {all_orgs[org_index]['name']}",
+            "label": f"{person['name']} controlled {all_orgs[org_index]['name']}",
         })
 
     if defendants and collateral:
@@ -70,8 +69,8 @@ def make_case_schema(
                 "to": f"p{person_index}",
                 "type": "instructed",
                 "label": (
-                    f"{defendants[main_defendant_index]['name_plain']} instructed "
-                    f"{collateral_person['name_plain']}"
+                    f"{defendants[main_defendant_index]['name']} instructed "
+                    f"{collateral_person['name']}"
                 ),
             })
 
@@ -81,8 +80,8 @@ def make_case_schema(
             "to": f"p{index + 1}",
             "type": "conspired_with",
             "label": (
-                f"{defendants[index]['name_plain']} conspired with "
-                f"{defendants[index + 1]['name_plain']}"
+                f"{defendants[index]['name']} conspired with "
+                f"{defendants[index + 1]['name']}"
             ),
         })
 

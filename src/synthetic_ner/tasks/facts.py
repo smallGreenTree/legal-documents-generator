@@ -51,7 +51,6 @@ def build_allowed_facts_section(document, schema: dict) -> str:
     for person in document.defendants + document.collateral:
         forms = unique_phrases(
             [
-                person["name_plain"],
                 person["name"],
                 person["initials"],
                 person["title_surname"],
@@ -60,7 +59,7 @@ def build_allowed_facts_section(document, schema: dict) -> str:
             ]
         )
         people_lines.append(
-            f"- {person['name_plain']} | allowed forms: {'; '.join(forms)} | "
+            f"- {person['name']} | allowed forms: {'; '.join(forms)} | "
             f"dob: {person['dob']} | nationality: {person['nationality']}"
         )
 
@@ -101,7 +100,6 @@ def collect_allowed_facts(document) -> AllowedFacts:
         for form in (
             [
                 person.get("name"),
-                person.get("name_plain"),
                 person.get("title_surname"),
                 person.get("short_name"),
                 person.get("initials"),

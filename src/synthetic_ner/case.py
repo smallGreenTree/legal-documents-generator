@@ -133,12 +133,11 @@ def make_person(
     first_name = parts[0]
     last_name = parts[-1]
 
-    display_name = raw_name.upper() if is_defendant else raw_name
     initials = ".".join(part[0].upper() for part in parts if part) + "."
     title_surname = f"{title} {last_name}" if title else last_name
     short_name = first_name
 
-    forms = [display_name]
+    forms = [raw_name]
     if surface_forms >= 2:
         forms.append(initials)
     if surface_forms >= 3:
@@ -152,8 +151,7 @@ def make_person(
     city_postcode = f"{fake.city()} {fake.postcode()}"
 
     return {
-        "name": display_name,
-        "name_plain": raw_name,
+        "name": raw_name,
         "initials": initials,
         "title_surname": title_surname,
         "short_name": short_name,
@@ -243,10 +241,9 @@ def normalize_person_record(person: dict, is_defendant: bool, context: str) -> d
     if missing:
         raise ValueError(f"{context} is missing required fields: {', '.join(missing)}")
 
-    raw_name = person.get("name_plain") or name
-    parts = raw_name.split()
+    parts = name.split()
     if len(parts) < 2:
-        parts = [raw_name, raw_name]
+        parts = [name, name]
 
     first_name = parts[0]
     last_name = parts[-1]
@@ -258,8 +255,7 @@ def normalize_person_record(person: dict, is_defendant: bool, context: str) -> d
 
     return {
         "name": name,
-        "name_plain": raw_name,
-        "initials": person.get("initials") or make_initials(raw_name),
+        "initials": person.get("initials") or make_initials(name),
         "title_surname": person.get("title_surname") or (
             f"{title} {last_name}".strip() if title else last_name
         ),
@@ -481,7 +477,7 @@ def build_counts(
         raise ValueError(f"fraud_statutes is missing an entry for '{fraud_type}'")
 
     start_date, end_date = offence_period or make_offence_period()
-    defendants_str = " and ".join(person["name"] for person in defendants)
+    defendants_str = " and ".join(person["name"].upper() for person in defendants)
     companies_str = " and ".join(org["name"] for org in orgs)
 
     counts = []

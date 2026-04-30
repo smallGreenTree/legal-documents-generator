@@ -88,7 +88,7 @@ def generate_section(
     all_orgs = charged_orgs + associated_orgs
 
     persons_str = ", ".join(
-        f"{person['name_plain']} ({person['initials']})"
+        f"{person['name']} ({person['initials']})"
         for person in all_persons
     )
     orgs_str = ", ".join(org["name"] for org in all_orgs)

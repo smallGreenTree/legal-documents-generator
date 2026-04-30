@@ -98,14 +98,14 @@ class CaseMemoryManager:
         metadata = document.metadata
         defendants = "\n".join(
             (
-                f"- {person['name_plain']} | role: {person['role']} | "
+                f"- {person['name']} | role: {person['role']} | "
                 f"nationality: {person['nationality']} | address: {person['address']}"
             )
             for person in document.defendants
         ) or "- none"
         collateral = "\n".join(
             (
-                f"- {person['name_plain']} | role: {person['role']} | "
+                f"- {person['name']} | role: {person['role']} | "
                 f"nationality: {person['nationality']}"
             )
             for person in document.collateral
