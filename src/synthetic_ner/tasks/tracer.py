@@ -199,6 +199,7 @@ class TraceStore:
         if not self.enabled or self.client is None:
             return TraceHandle(observation=None)
 
+        prompt_metadata = _build_prompt_metadata(prompt_object)
         observation = self.client.start_observation(
             name=task_id,
             as_type="generation",
@@ -207,9 +208,10 @@ class TraceStore:
             metadata={
                 "stage": stage,
                 "parent_task_id": parent_task_id,
+                **prompt_metadata,
                 **(metadata or {}),
             },
-            prompt=prompt_object,
+            prompt=None,
             model_parameters=(metadata or {}).get("model_parameters"),
         )
         return TraceHandle(observation=observation)
@@ -502,6 +504,22 @@ def _build_usage_details(metadata: dict[str, Any]) -> dict[str, int] | None:
     if isinstance(prompt_tokens, int) and isinstance(response_tokens, int):
         usage_details["total"] = prompt_tokens + response_tokens
     return usage_details or None
+
+
+def _build_prompt_metadata(prompt_object: Any | None) -> dict[str, Any]:
+    if prompt_object is None:
+        return {}
+
+    metadata: dict[str, Any] = {"managed_prompt_attached": False}
+    for attr_name, metadata_key in (
+        ("name", "managed_prompt_name"),
+        ("version", "managed_prompt_version"),
+        ("variables", "managed_prompt_variables"),
+    ):
+        value = getattr(prompt_object, attr_name, None)
+        if value is not None:
+            metadata[metadata_key] = value
+    return metadata
 
 
 def _build_langgraph_node_metadata(
