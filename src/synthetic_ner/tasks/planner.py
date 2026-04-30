@@ -6,7 +6,7 @@ from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
-from src.synthetic_ner.utils import render_inline_template
+from src.synthetic_ner.utils import render_prompt_template
 
 
 class Planner:
@@ -38,10 +38,12 @@ class Planner:
             f"- {section_name}: {SECTION_DESCRIPTIONS.get(section_name, section_name)}"
             for section_name in section_order
         )
-        user_prompt = render_inline_template(
+        prompt_client = self.prompt_clients.get("document_planner_user")
+        user_prompt = render_prompt_template(
             self.prompts.document_planner_user,
+            prompt_client=prompt_client,
             memory_text=memory_text,
-            doc_type=doc_type,
+            doc_type=doc_type.upper(),
             fraud_type=fraud_type.replace("_", " "),
             case_number=case_number,
             section_list=section_list,
@@ -55,7 +57,7 @@ class Planner:
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
             max_output_tokens=450,
-            prompt_object=self.prompt_clients.get("document_planner_user"),
+            prompt_object=prompt_client,
         )
         return result.text
 
@@ -70,8 +72,10 @@ class Planner:
         section_name: str,
         word_target: int,
     ) -> str:
-        user_prompt = render_inline_template(
+        prompt_client = self.prompt_clients.get("section_planner_user")
+        user_prompt = render_prompt_template(
             self.prompts.section_planner_user,
+            prompt_client=prompt_client,
             memory_text=memory_text,
             document_plan=document_plan,
             doc_type=doc_type,
@@ -88,6 +92,6 @@ class Planner:
             parent_task_id=parent_task_id,
             temperature=self.planner_temperature,
             max_output_tokens=350,
-            prompt_object=self.prompt_clients.get("section_planner_user"),
+            prompt_object=prompt_client,
         )
         return result.text

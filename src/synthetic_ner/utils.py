@@ -2,6 +2,7 @@
 
 import csv
 from pathlib import Path
+from typing import Any
 
 import yaml
 from src.synthetic_ner.constants import (
@@ -60,3 +61,14 @@ def make_initials(name: str) -> str:
 
 def render_inline_template(template: str, **context) -> str:
     return INLINE_TEMPLATE_ENV.from_string(template).render(**context)
+
+
+def render_prompt_template(
+    template: str,
+    *,
+    prompt_client: Any | None = None,
+    **context,
+) -> str:
+    if prompt_client is not None and hasattr(prompt_client, "compile"):
+        return prompt_client.compile(**context)
+    return render_inline_template(template, **context)

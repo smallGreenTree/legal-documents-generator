@@ -7,7 +7,7 @@ from typing import Any
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
 from src.synthetic_ner.tasks.validators import clean_generated_section_text
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
-from src.synthetic_ner.utils import render_inline_template
+from src.synthetic_ner.utils import render_prompt_template
 
 
 class SectionWriter:
@@ -50,8 +50,10 @@ class SectionWriter:
             remaining = word_target - words_so_far
             chunk_target = min(self.chunk_words, remaining)
             previous_tail = chunks[-1][-self.context_tail_chars:] if chunks else "n/a"
-            user_prompt = render_inline_template(
+            prompt_client = self.prompt_clients.get("writer_user")
+            user_prompt = render_prompt_template(
                 self.prompts.writer_user,
+                prompt_client=prompt_client,
                 memory_text=memory_text,
                 document_plan=document_plan,
                 section_plan=section_plan,
@@ -83,7 +85,7 @@ class SectionWriter:
                 parent_task_id=parent_task_id,
                 temperature=self.writer_temperature,
                 max_output_tokens=_estimate_writer_output_tokens(chunk_target),
-                prompt_object=self.prompt_clients.get("writer_user"),
+                prompt_object=prompt_client,
             )
             text = clean_generated_section_text(result.text)
             if not text:

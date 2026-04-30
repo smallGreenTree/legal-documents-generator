@@ -8,7 +8,7 @@ from typing import Any
 from requests.exceptions import ReadTimeout
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.types.critic import CriticResult
-from src.synthetic_ner.utils import render_inline_template
+from src.synthetic_ner.utils import render_prompt_template
 
 _RUBRIC_LINE_RE = re.compile(
     r"^\s*-\s*([a-zA-Z][a-zA-Z0-9_ -]{1,40})\s*:\s*([1-5])(?:\s*/\s*5)?\s*$",
@@ -48,8 +48,10 @@ class SectionCritic:
     ) -> CriticResult:
         compact_memory = _truncate_text(memory_text, _CRITIC_MEMORY_CHAR_LIMIT)
         compact_section_text = _truncate_text(section_text, _CRITIC_SECTION_TEXT_CHAR_LIMIT)
-        user_prompt = render_inline_template(
+        prompt_client = self.prompt_clients.get("critic_user")
+        user_prompt = render_prompt_template(
             self.prompts.critic_user,
+            prompt_client=prompt_client,
             memory_text=compact_memory,
             section_plan=section_plan,
             section_text=compact_section_text,
@@ -66,7 +68,7 @@ class SectionCritic:
                 parent_task_id=parent_task_id,
                 temperature=self.critic_temperature,
                 max_output_tokens=_CRITIC_OUTPUT_TOKEN_LIMIT,
-                prompt_object=self.prompt_clients.get("critic_user"),
+                prompt_object=prompt_client,
             )
             return self._parse_result(result.text)
         except ReadTimeout:

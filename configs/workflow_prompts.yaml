@@ -9,7 +9,7 @@ prompts:
     CASE_MEMORY:
     {{ memory_text }}
 
-    Create a high-level plan for a {{ doc_type | upper }} document concerning {{ fraud_type | replace("_", " ") }}.
+    Create a high-level plan for a {{ doc_type }} document concerning {{ fraud_type }}.
 
     Sections to cover:
     {{ section_list }}
