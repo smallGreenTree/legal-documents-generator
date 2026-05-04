@@ -27,6 +27,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Relative path to app config from project root (default: config.yaml)",
     )
     parser.add_argument(
+        "--case-config",
+        default="config_case/case_1.yaml",
+        help=(
+            "Relative path to case recipe config from project root "
+            "(default: config_case/case_1.yaml)"
+        ),
+    )
+    parser.add_argument(
         "--label",
         default="production",
         help="Prompt label to target in Langfuse (default: production)",
@@ -48,9 +56,10 @@ def main() -> None:
     args = build_parser().parse_args()
     project_root = Path(args.project_root).resolve()
     config_path = project_root / args.config
+    case_config_path = project_root / args.case_config
 
     load_env_files(project_root)
-    app_config = load_app_config(config_path)
+    app_config = load_app_config(config_path, case_config_path)
     langfuse_cfg = app_config.langfuse
     if not langfuse_cfg.enabled:
         raise SystemExit("Langfuse is disabled in config.")

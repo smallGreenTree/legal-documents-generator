@@ -241,7 +241,10 @@ def build_template_environment(project_root: Path) -> Environment:
 
 def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext:
     try:
-        app_config = load_app_config(project_root / "config.yaml")
+        app_config = load_app_config(
+            project_root / "config.yaml",
+            resolve_project_path(project_root, args.case_config),
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 

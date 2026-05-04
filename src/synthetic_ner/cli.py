@@ -13,6 +13,12 @@ def build_parser(project_root: Path) -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--case-config",
+        default="config_case/case_1.yaml",
+        metavar="PATH",
+        help="Case recipe config path relative to project root",
+    )
+    parser.add_argument(
         "--documents",
         "--count",
         dest="documents",
@@ -49,7 +55,10 @@ def resolve_workflow_mode(project_root: Path, args: argparse.Namespace) -> str:
     if args.workflow_mode is not None:
         return args.workflow_mode
 
-    app_config = load_app_config(project_root / "config.yaml")
+    app_config = load_app_config(
+        project_root / "config.yaml",
+        project_root / args.case_config,
+    )
     return app_config.workflow.mode
 
 

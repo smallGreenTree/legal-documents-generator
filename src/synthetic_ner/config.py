@@ -30,17 +30,35 @@ from src.synthetic_ner.types.app_config import (
 from src.synthetic_ner.utils import load_config, resolve_project_path
 
 
-def load_app_config(path: Path | str) -> AppConfig:
+def load_app_config(
+    path: Path | str,
+    case_config_path: Path | str | None = None,
+) -> AppConfig:
     config_path = Path(path)
     raw = load_config(config_path)
     if not isinstance(raw, dict):
         raise ValueError("config.yaml must load into a top-level mapping")
-    return build_app_config(raw, config_path=config_path)
+    resolved_case_config_path = (
+        Path(case_config_path)
+        if case_config_path is not None
+        else config_path.resolve().parent / "config_case" / "case_1.yaml"
+    )
+    case_raw = load_config(resolved_case_config_path)
+    if not isinstance(case_raw, dict):
+        raise ValueError(
+            f"{resolved_case_config_path} must load into a top-level mapping"
+        )
+    return build_app_config(
+        raw,
+        case_cfg=case_raw,
+        config_path=config_path,
+    )
 
 
 def build_app_config(
     cfg: dict[str, Any],
     *,
+    case_cfg: dict[str, Any],
     config_path: Path | None = None,
 ) -> AppConfig:
     return AppConfig(
@@ -57,18 +75,18 @@ def build_app_config(
             _require_mapping(cfg["workflow"], "workflow"),
             config_path=config_path,
         ),
-        profile=_build_profile_config(_require_mapping(cfg["profile"], "profile")),
-        case=_build_case_config(_require_mapping(cfg["case"], "case")),
+        profile=_build_profile_config(_require_mapping(case_cfg["profile"], "profile")),
+        case=_build_case_config(_require_mapping(case_cfg["case"], "case")),
         nationality_locales=_build_string_mapping(
-            _require_mapping(cfg["nationality_locales"], "nationality_locales"),
+            _require_mapping(case_cfg["nationality_locales"], "nationality_locales"),
             "nationality_locales",
         ),
         vat_prefixes=_build_string_mapping(
-            _require_mapping(cfg["vat_prefixes"], "vat_prefixes"),
+            _require_mapping(case_cfg["vat_prefixes"], "vat_prefixes"),
             "vat_prefixes",
         ),
         fraud_statutes=_build_statute_mapping(
-            _require_mapping(cfg["fraud_statutes"], "fraud_statutes"),
+            _require_mapping(case_cfg["fraud_statutes"], "fraud_statutes"),
             "fraud_statutes",
         ),
     )
