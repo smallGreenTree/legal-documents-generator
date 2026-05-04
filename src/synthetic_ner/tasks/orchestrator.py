@@ -116,6 +116,8 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         context_tail_chars=context.workflow_cfg.writer.context_tail_chars,
         writer_temperature=context.workflow_cfg.writer.temperature,
         max_output_tokens=context.workflow_cfg.writer.max_output_tokens,
+        min_output_tokens=context.workflow_cfg.writer.min_output_tokens,
+        output_token_multiplier=context.workflow_cfg.writer.output_token_multiplier,
         prompt_clients=resolved_prompts.prompt_clients,
     )
     critic = SectionCritic(
@@ -123,6 +125,8 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         prompts=prompts,
         critic_temperature=context.workflow_cfg.critic.temperature,
         max_output_tokens=context.workflow_cfg.critic.max_output_tokens,
+        memory_char_limit=context.workflow_cfg.critic.memory_char_limit,
+        section_text_char_limit=context.workflow_cfg.critic.section_text_char_limit,
         rubrics=context.workflow_cfg.critic.rubrics,
         prompt_clients=resolved_prompts.prompt_clients,
     )

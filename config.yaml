@@ -1,9 +1,3 @@
-# =============================================================================
-# Synthetic Legal NER Generator
-# Rule: only configure DECISIONS. Constants and generated values live in code.
-# =============================================================================
-
-# ── System ────────────────────────────────────────────────────────────────────
 
 paths:
   output_dir: output
@@ -43,7 +37,7 @@ workflow:
   planner:
     temperature: 0.0
     max_output_tokens:
-      document: 1600
+      document: 2000
       section: 1200
 
   writer:
@@ -51,10 +45,14 @@ workflow:
     context_tail_chars: 900
     temperature: 0.0
     max_output_tokens: 2500
+    min_output_tokens: 1200
+    output_token_multiplier: 1.8
 
   critic:
     temperature: 0.0
-    max_output_tokens: 800
+    max_output_tokens: 1200
+    memory_char_limit: 6000
+    section_text_char_limit: 3500
     rubrics:
       grounding: "1-5"
       completeness: "1-5"
@@ -63,19 +61,6 @@ workflow:
 
   prompts_config_path: configs/workflow_prompts.yaml
 
-
-
-# ── Case source of truth ──────────────────────────────────────────────────────
-#
-# Keep fields as `auto` to preserve the current generator behavior.
-# Replace them with explicit values only when you want the config file to hold
-# the fully resolved case.
-#
-# `cast` = generation specs
-# `defendants` / `collateral` / `charged_orgs` / `associated_orgs` = explicit records
-# `schema` = embedded case schema (same shape as case_schema.json)
-# `prose` = explicit section prose; leave entries as `auto` to generate them
-# `counts` = explicit indictment counts
 
 case:
   metadata:
@@ -149,7 +134,6 @@ case:
     assessment: auto
   counts: auto
 
-# ── Country mappings ──────────────────────────────────────────────────────────
 
 nationality_locales:
   GB: en_GB
@@ -196,9 +180,6 @@ vat_prefixes:
   HR: HR
   SK: SK
   SI: SI
-
-# ── Fraud statutes (English law) ──────────────────────────────────────────────
-# {defendants} {companies} {start_date} {end_date} substituted at runtime
 
 fraud_statutes:
   financial_fraud:

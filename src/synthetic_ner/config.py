@@ -129,6 +129,20 @@ def _build_workflow_config(
     config_path: Path | None = None,
 ) -> WorkflowConfig:
     prompts = _resolve_workflow_prompts(raw, config_path=config_path)
+    writer = _require_mapping(raw["writer"], "workflow.writer")
+    writer_max_output_tokens = _require_positive_int(
+        writer["max_output_tokens"],
+        "workflow.writer.max_output_tokens",
+    )
+    writer_min_output_tokens = _require_positive_int(
+        writer["min_output_tokens"],
+        "workflow.writer.min_output_tokens",
+    )
+    if writer_min_output_tokens > writer_max_output_tokens:
+        raise ValueError(
+            "workflow.writer.min_output_tokens must be less than or equal to "
+            "workflow.writer.max_output_tokens"
+        )
 
     return WorkflowConfig(
         mode=_require_string(raw["mode"], "workflow.mode"),
@@ -145,20 +159,22 @@ def _build_workflow_config(
         ),
         writer=WriterConfig(
             chunk_words=_require_positive_int(
-                _require_mapping(raw["writer"], "workflow.writer")["chunk_words"],
+                writer["chunk_words"],
                 "workflow.writer.chunk_words",
             ),
             context_tail_chars=_require_positive_int(
-                _require_mapping(raw["writer"], "workflow.writer")["context_tail_chars"],
+                writer["context_tail_chars"],
                 "workflow.writer.context_tail_chars",
             ),
             temperature=_require_number(
-                _require_mapping(raw["writer"], "workflow.writer")["temperature"],
+                writer["temperature"],
                 "workflow.writer.temperature",
             ),
-            max_output_tokens=_require_positive_int(
-                _require_mapping(raw["writer"], "workflow.writer")["max_output_tokens"],
-                "workflow.writer.max_output_tokens",
+            max_output_tokens=writer_max_output_tokens,
+            min_output_tokens=writer_min_output_tokens,
+            output_token_multiplier=_require_positive_number(
+                writer["output_token_multiplier"],
+                "workflow.writer.output_token_multiplier",
             ),
         ),
         critic=_build_critic_config(
@@ -262,6 +278,14 @@ def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
         max_output_tokens=_require_positive_int(
             raw["max_output_tokens"],
             "workflow.critic.max_output_tokens",
+        ),
+        memory_char_limit=_require_positive_int(
+            raw["memory_char_limit"],
+            "workflow.critic.memory_char_limit",
+        ),
+        section_text_char_limit=_require_positive_int(
+            raw["section_text_char_limit"],
+            "workflow.critic.section_text_char_limit",
         ),
         rubrics=_build_string_mapping(
             _require_mapping(raw["rubrics"], "workflow.critic.rubrics"),
@@ -509,3 +533,10 @@ def _require_number(value: Any, path: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{path} must be a number")
     return float(value)
+
+
+def _require_positive_number(value: Any, path: str) -> float:
+    number = _require_number(value, path)
+    if number <= 0:
+        raise ValueError(f"{path} must be a positive number")
+    return number

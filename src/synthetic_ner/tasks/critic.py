@@ -14,8 +14,6 @@ _RUBRIC_LINE_RE = re.compile(
     r"^\s*-\s*([a-zA-Z][a-zA-Z0-9_ -]{1,40})\s*:\s*([1-5])(?:\s*/\s*5)?\s*$",
     re.MULTILINE,
 )
-_CRITIC_MEMORY_CHAR_LIMIT = 6_000
-_CRITIC_SECTION_TEXT_CHAR_LIMIT = 3_500
 
 
 class SectionCritic:
@@ -26,6 +24,8 @@ class SectionCritic:
         prompts: WorkflowPromptsConfig,
         critic_temperature: float,
         max_output_tokens: int,
+        memory_char_limit: int,
+        section_text_char_limit: int,
         rubrics: dict[str, str],
         prompt_clients: dict[str, Any] | None = None,
     ) -> None:
@@ -33,6 +33,8 @@ class SectionCritic:
         self.prompts = prompts
         self.critic_temperature = critic_temperature
         self.max_output_tokens = max_output_tokens
+        self.memory_char_limit = memory_char_limit
+        self.section_text_char_limit = section_text_char_limit
         self.rubrics = rubrics
         self.prompt_clients = prompt_clients or {}
 
@@ -47,8 +49,8 @@ class SectionCritic:
         section_text: str,
         revision_round: int,
     ) -> CriticResult:
-        compact_memory = _truncate_text(memory_text, _CRITIC_MEMORY_CHAR_LIMIT)
-        compact_section_text = _truncate_text(section_text, _CRITIC_SECTION_TEXT_CHAR_LIMIT)
+        compact_memory = _truncate_text(memory_text, self.memory_char_limit)
+        compact_section_text = _truncate_text(section_text, self.section_text_char_limit)
         prompt_client = self.prompt_clients.get("critic_user")
         user_prompt = render_prompt_template(
             self.prompts.critic_user,

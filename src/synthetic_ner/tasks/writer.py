@@ -20,6 +20,8 @@ class SectionWriter:
         context_tail_chars: int,
         writer_temperature: float,
         max_output_tokens: int,
+        min_output_tokens: int,
+        output_token_multiplier: float,
         prompt_clients: dict[str, Any] | None = None,
     ) -> None:
         self.client = client
@@ -28,6 +30,8 @@ class SectionWriter:
         self.context_tail_chars = context_tail_chars
         self.writer_temperature = writer_temperature
         self.max_output_tokens = max_output_tokens
+        self.min_output_tokens = min_output_tokens
+        self.output_token_multiplier = output_token_multiplier
         self.prompt_clients = prompt_clients or {}
 
     def write_section(
@@ -89,6 +93,8 @@ class SectionWriter:
                 max_output_tokens=_estimate_writer_output_tokens(
                     chunk_target,
                     max_output_tokens=self.max_output_tokens,
+                    min_output_tokens=self.min_output_tokens,
+                    output_token_multiplier=self.output_token_multiplier,
                 ),
                 prompt_object=prompt_client,
             )
@@ -108,7 +114,8 @@ def _estimate_writer_output_tokens(
     chunk_words: int,
     *,
     max_output_tokens: int,
+    min_output_tokens: int,
+    output_token_multiplier: float,
 ) -> int:
-    # Conservative cap to prevent runaway generations while preserving section quality.
-    estimated = int(chunk_words * 1.8)
-    return max(220, min(max_output_tokens, estimated))
+    estimated = int(chunk_words * output_token_multiplier)
+    return max(min_output_tokens, min(max_output_tokens, estimated))

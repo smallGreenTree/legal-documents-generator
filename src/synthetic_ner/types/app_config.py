@@ -44,12 +44,16 @@ class WriterConfig:
     context_tail_chars: int
     temperature: float
     max_output_tokens: int
+    min_output_tokens: int
+    output_token_multiplier: float
 
 
 @dataclass(frozen=True)
 class CriticConfig:
     temperature: float
     max_output_tokens: int
+    memory_char_limit: int
+    section_text_char_limit: int
     rubrics: dict[str, str]
 
 
