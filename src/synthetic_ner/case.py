@@ -455,8 +455,16 @@ def build_people_from_specs(
             nat=spec.nationality,
             title=spec.title,
             surface_forms=spec.surface_forms,
-            nickname_variants=person_variants.nickname_variants,
-            misspelling_variants=person_variants.misspelling_variants,
+            nickname_variants=(
+                person_variants.nickname_variants
+                if spec.variants.nickname
+                else 0
+            ),
+            misspelling_variants=(
+                person_variants.misspelling_variants
+                if spec.variants.misspelling
+                else 0
+            ),
             nat_locales=nat_locales,
             is_defendant=is_defendant,
         )

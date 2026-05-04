@@ -71,6 +71,8 @@ _META_LINE_PREFIXES = (
 )
 _META_LINE_LABELS = {
     "history",
+    "persons",
+    "companies",
     "charges",
     "facts",
     "evidence",
@@ -81,7 +83,15 @@ _META_LINE_LABELS = {
     "logical order",
     "strict compliance notes",
 }
-_SECTION_ENTITY_CHECK = {"history", "charges", "facts", "findings", "background"}
+_SECTION_ENTITY_CHECK = {
+    "persons",
+    "companies",
+    "history",
+    "charges",
+    "facts",
+    "findings",
+    "background",
+}
 
 
 def validate_section_text(
@@ -457,6 +467,23 @@ def _fallback_sentence_bank(
             f"It further records that {_ensure_terminal_punctuation(relationship_facts[1])}"
         )
     section_specific: dict[str, list[str]] = {
+        "persons": [
+            (
+                f"The persons section identifies {people_text} using only the "
+                "biographical and address details recorded in CASE_MEMORY."
+            ),
+            "No additional personal history or allegation is added in this identifying section.",
+        ],
+        "companies": [
+            (
+                f"The companies section identifies {org_text} using only the "
+                "registered address and VAT details recorded in CASE_MEMORY."
+            ),
+            (
+                "No additional corporate history or transaction detail is added "
+                "in this identifying section."
+            ),
+        ],
         "history": [
             (
                 "The procedural sequence runs from alleged conduct in the charged period "

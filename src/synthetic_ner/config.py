@@ -20,6 +20,7 @@ from src.synthetic_ner.types.app_config import (
     OllamaConfig,
     PathsConfig,
     PersonSpecConfig,
+    PersonVariantEligibilityConfig,
     PersonVariantGenerationConfig,
     PlannerConfig,
     ProfileConfig,
@@ -457,9 +458,29 @@ def _build_person_specs(raw: list[Any], path: str) -> list[PersonSpecConfig]:
                     mapping["surface_forms"],
                     f"{item_path}.surface_forms",
                 ),
+                variants=_build_person_variant_eligibility(
+                    mapping.get("variants"),
+                    f"{item_path}.variants",
+                ),
             )
         )
     return specs
+
+
+def _build_person_variant_eligibility(
+    raw: Any,
+    path: str,
+) -> PersonVariantEligibilityConfig:
+    if raw is None:
+        return PersonVariantEligibilityConfig(nickname=True, misspelling=True)
+
+    mapping = _require_mapping(raw, path)
+    nickname = mapping["nickname"] if "nickname" in mapping else True
+    misspelling = mapping["misspelling"] if "misspelling" in mapping else True
+    return PersonVariantEligibilityConfig(
+        nickname=_require_bool(nickname, f"{path}.nickname"),
+        misspelling=_require_bool(misspelling, f"{path}.misspelling"),
+    )
 
 
 def _build_statute_mapping(

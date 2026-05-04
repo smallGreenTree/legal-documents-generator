@@ -40,6 +40,12 @@ class PersonVariantGenerationConfig:
 
 
 @dataclass(frozen=True)
+class PersonVariantEligibilityConfig:
+    nickname: bool
+    misspelling: bool
+
+
+@dataclass(frozen=True)
 class EntityVariantsConfig:
     persons: PersonVariantGenerationConfig
 
@@ -121,6 +127,7 @@ class PersonSpecConfig:
     nationality: str
     title: str
     surface_forms: int
+    variants: PersonVariantEligibilityConfig
 
 
 @dataclass(frozen=True)

@@ -3,13 +3,13 @@ profile:
   fraud_type: financial_fraud
   documents: 1
   section_words:
-    persons: 220
-    companies: 220
-    history: 200
-    charges: 200
+    persons: 160
+    companies: 160
+    history: 180
+    charges: 220
     facts: 500
-    evidence: 200
-    assessment: 300
+    evidence: 180
+    assessment: 200
 
 case:
   metadata:
@@ -25,45 +25,84 @@ case:
     defendants:
       - nationality: DE
         title: Dr
-        surface_forms: 2
+        surface_forms: 3
+        variants:
+          nickname: true
+          misspelling: false
       - nationality: IT
         title: Mr
         surface_forms: 2
+        variants:
+          nickname: false
+          misspelling: true
       - nationality: FR
         title: Ms
-        surface_forms: 1
+        surface_forms: 4
+        variants:
+          nickname: true
+          misspelling: true
 
     collateral:
       - nationality: DE
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: false
       - nationality: DE
         title: ""
         surface_forms: 1
+        variants:
+          nickname: true
+          misspelling: false
       - nationality: DE
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: true
       - nationality: IT
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: false
       - nationality: IT
         title: ""
         surface_forms: 1
+        variants:
+          nickname: true
+          misspelling: false
       - nationality: IT
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: true
       - nationality: FR
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: false
       - nationality: FR
         title: ""
         surface_forms: 1
+        variants:
+          nickname: true
+          misspelling: false
       - nationality: PL
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: true
       - nationality: PL
         title: ""
         surface_forms: 1
+        variants:
+          nickname: false
+          misspelling: false
 
     charged_orgs: 5
     associated_orgs: 5

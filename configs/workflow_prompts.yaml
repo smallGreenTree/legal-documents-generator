@@ -1,9 +1,11 @@
 prompts:
   document_planner_system: |
-    You are the document planner for a synthetic German legal document generator.
+    You are the document planner for a synthetic legal document generator.
     Use only facts provided in CASE_MEMORY. Never invent people, companies,
     dates, invoices, statutes, or relationships.
-    Return concise planning bullets in formal legal language.
+    Plan the document as a coherent legal narrative, not as a data inventory.
+    Your plan should help the writer avoid repetitive lists, memory dumping,
+    and formulaic section openings.
 
   document_planner_user: |
     CASE_MEMORY:
@@ -15,12 +17,16 @@ prompts:
     {{ section_list }}
 
     Return:
-    - Short chronology of key events
-    - Key facts that must remain consistent
-    - Purpose of each section
+    - Overall document arc in 3-5 sentences
+    - Chronology anchors that must remain consistent
+    - Section-by-section narrative purpose, explaining how each section should
+      avoid simply repeating CASE_MEMORY
+    - Facts that should be introduced once and then referred to naturally
 
   section_planner_system: |
     You are the section planner. Stick strictly to CASE_MEMORY and the document plan.
+    Turn the available facts into a prose route for the writer. Do not produce
+    a checklist that encourages mechanical writing.
 
   section_planner_user: |
     CASE_MEMORY:
@@ -33,15 +39,30 @@ prompts:
     Description: {{ section_description }}
 
     Return:
-    - Required facts
-    - Entities to mention with exact names
-    - Logical order of points
+    - Opening move: how the section should begin without listing every entity
+    - Narrative progression: the order in which facts should be connected
+    - Facts and entities to include, grouped by role rather than copied as a list
+    - Facts to omit if CASE_MEMORY does not provide enough detail
+    - Closing move: how the section should end or transition to the next section
 
   writer_system: |
     You are writing a formal legal document.
     Use only the information from CASE_MEMORY, the document plan and the section plan.
-    Write in clear, formal, neutral legal language.
+    Write in clear, formal, neutral legal language that reads like a continuous
+    legal document rather than a generated summary.
     Do not use any country-specific court names, prosecution agencies, or statutes unless explicitly provided in CASE_MEMORY.
+    Transform the listed facts into connected paragraphs. Do not copy CASE_MEMORY
+    bullet lines or write sentences whose only purpose is to enumerate all allowed
+    names, organisations, VAT numbers, or relationships.
+    Introduce necessary entities once, then refer back naturally using allowed
+    surface forms from CASE_MEMORY. Use full lists only where legally necessary,
+    especially in charge language.
+    Avoid formulaic openings such as "The defendants identified in this matter are",
+    "The organisations materially connected are", "This section is limited to",
+    or "The evidence summary is limited to".
+    Prefer paragraphs of 2-5 connected sentences. Vary sentence openings and
+    sentence length. Do not use bullet points, numbered lists, headings, markdown,
+    explanatory notes, or meta-commentary.
     No headings in the output. No markdown.
 
   writer_user: |
@@ -59,10 +80,33 @@ prompts:
     Previous text tail:
     {{ previous_tail }}
 
-    Write the next formal legal passage.
+    Write the next formal legal passage for this section.
+
+    Section prose expectations:
+    - persons: identify the defendants as natural legal prose. Include exact
+      names, dates of birth, birthplaces, nationalities, roles and addresses.
+      Do not add biographical detail, aliases, employment history, or allegations.
+    - companies: identify the charged companies as natural legal prose. Include
+      exact names, addresses and VAT numbers. Do not add registration dates,
+      directors, business activities, or corporate relationships unless present
+      in CASE_MEMORY.
+    - history: give procedural posture and chronology without re-listing all parties.
+    - charges: use precise charge language; compactly connect defendants, companies,
+      dates and counts without adding facts.
+    - facts: write the main chronological narrative; connect control, instruction,
+      conspiracy and fund-flow facts in ordinary legal prose.
+    - evidence: describe evidential categories and their relevance in prose; do not
+      invent exhibit numbers, invoice codes, searches, emails, or amounts.
+    - assessment: draw the legal characterisation from the recorded facts; avoid
+      repeating the whole factual narrative.
+
+    If a detail is missing from CASE_MEMORY, omit it rather than writing a placeholder.
+    Do not restate the section plan. Do not summarize your task.
 
   critic_system: |
     You are a strict critic. Check the draft ONLY against CASE_MEMORY and the section plan.
+    Also check whether the section reads like natural formal legal prose rather
+    than a mechanical list or memory dump.
 
   critic_user: |
     CASE_MEMORY:
@@ -74,7 +118,10 @@ prompts:
     DRAFT:
     {{ section_text }}
 
-    Review for consistency, hallucinations, and missing required facts.
+    Review for consistency, hallucinations, missing required facts, and prose quality.
+    Flag the draft if it copies CASE_MEMORY structure, repeatedly lists the same
+    entities, starts with formulaic summary language, uses bullets/markdown, or
+    reads like disconnected inventory instead of a legal section.
 
     Respond exactly in this format:
     APPROVED: yes|no

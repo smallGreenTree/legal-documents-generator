@@ -9,19 +9,12 @@ To the {{ court }}
 
 {{ sections.section_persons }}
 
-{% for p in persons %}
-{{ loop.index }}. {{ p.name | upper }}, {{ labels.born }} {{ p.dob }} {{ labels.in }} {{ p.birthplace }}, {{ p.nationality }} national, {{ p.role }}, {{ labels.address }} {{ p.address }}.
+{{ llm_sections[0] }}
 
-{% endfor %}
 {{ sections.section_companies }}
 
-{% for o in orgs %}
-{{ o.name }}
-{{ o.street }}
-{{ o.city_postcode }}
-{{ labels.vat }}: {{ o.vat }}
+{{ llm_sections[1] }}
 
-{% endfor %}
 {% for count in counts %}
 COUNT {{ loop.index }}
 
@@ -36,20 +29,20 @@ PARTICULARS OF OFFENCE
 {% endfor %}
 {{ sections.section_history }}
 
-{{ llm_sections[0] }}
+{{ llm_sections[2] }}
 
 {{ sections.section_charges }}
 
-{{ llm_sections[1] }}
+{{ llm_sections[3] }}
 
 {{ sections.section_facts }}
 
-{{ llm_sections[2] }}
+{{ llm_sections[4] }}
 
 {{ sections.section_evidence }}
 
-{{ llm_sections[3] }}
+{{ llm_sections[5] }}
 
 {{ sections.section_assessment }}
 
-{{ llm_sections[4] }}
+{{ llm_sections[6] }}

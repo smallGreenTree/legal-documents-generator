@@ -3,6 +3,8 @@ from jinja2 import Environment
 
 PROSE_SECTION_ORDER = {
     "indictment": [
+        "persons",
+        "companies",
         "history",
         "charges",
         "facts",
@@ -18,6 +20,15 @@ PROSE_SECTION_ORDER = {
 }
 
 SECTION_DESCRIPTIONS = {
+    "persons": (
+        "Persons section: identify the defendants in natural legal prose, "
+        "preserving exact names, dates of birth, birthplaces, nationalities, "
+        "roles and addresses."
+    ),
+    "companies": (
+        "Companies section: identify the charged organisations in natural legal "
+        "prose, preserving exact company names, addresses and VAT numbers."
+    ),
     "history": (
         "Procedural history: how the investigation started, search warrants, "
         "key dates, documents seized."
