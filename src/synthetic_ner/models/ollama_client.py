@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -56,7 +57,12 @@ class TracedOllamaClient:
             prompt=full_prompt,
             prompt_payload=prompt_payload,
             prompt_object=prompt_object,
-            metadata={"model_parameters": {"temperature": temperature}},
+            metadata={
+                "model_parameters": {
+                    "temperature": temperature,
+                    "num_predict": max_output_tokens,
+                }
+            },
         )
         started = perf_counter()
         try:
@@ -77,7 +83,17 @@ class TracedOllamaClient:
             payload = response.json()
             text = payload.get("response", "").strip()
             latency_ms = round((perf_counter() - started) * 1000)
-            metadata = self._build_metadata(payload, stage, temperature, latency_ms)
+            metadata = self._build_metadata(
+                payload,
+                stage,
+                temperature,
+                latency_ms,
+                task_id=task_id,
+                model=self.model,
+                prompt=full_prompt,
+                response=text,
+                options=options,
+            )
             self.tracer.record_llm_call(
                 trace,
                 prompt=full_prompt,
@@ -93,8 +109,13 @@ class TracedOllamaClient:
                 error_message=str(exc),
                 metadata={
                     "stage": stage,
+                    "task_id": task_id,
+                    "model": self.model,
                     "temperature": temperature,
                     "latency_ms": latency_ms,
+                    "prompt_chars": len(full_prompt),
+                    "response_chars": 0,
+                    "response_empty": True,
                 },
             )
             raise
@@ -105,6 +126,12 @@ class TracedOllamaClient:
         stage: str,
         temperature: float,
         latency_ms: int,
+        *,
+        task_id: str,
+        model: str,
+        prompt: str,
+        response: str,
+        options: dict[str, Any],
     ) -> dict:
         total_duration = payload.get("total_duration")
         if isinstance(total_duration, int):
@@ -112,11 +139,34 @@ class TracedOllamaClient:
 
         return {
             "stage": stage,
+            "task_id": task_id,
+            "section_name": _extract_section_name(task_id),
+            "revision_round": _extract_revision_round(task_id),
+            "model": model,
             "temperature": temperature,
+            "output_budget": options.get("num_predict"),
             "latency_ms": latency_ms,
+            "prompt_chars": len(prompt),
+            "response_chars": len(response),
+            "response_empty": not bool(response.strip()),
             "tokens_prompt": payload.get("prompt_eval_count"),
             "tokens_response": payload.get("eval_count"),
             "done_reason": payload.get("done_reason"),
             "load_duration_ns": payload.get("load_duration"),
             "eval_duration_ns": payload.get("eval_duration"),
         }
+
+
+def _extract_section_name(task_id: str) -> str | None:
+    for prefix in ("section_planner_", "writer_", "critic_"):
+        if not task_id.startswith(prefix):
+            continue
+        tail = task_id.removeprefix(prefix)
+        revision_marker = tail.find("_r")
+        return tail[:revision_marker] if revision_marker != -1 else tail
+    return None
+
+
+def _extract_revision_round(task_id: str) -> int | None:
+    match = re.search(r"_r(\d+)", task_id)
+    return int(match.group(1)) if match else None

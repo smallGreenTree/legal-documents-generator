@@ -32,6 +32,7 @@ class TraceStore:
         self._document_context = None
         self._document_observation = None
         self._node_runs: list[NodeExecutionRecord] = []
+        self._llm_calls: list[dict[str, Any]] = []
         self._prompt_sync_summary = "Langfuse prompts: not resolved"
         self._current_session = DocumentTraceSession(
             enabled=self.enabled,
@@ -224,12 +225,13 @@ class TraceStore:
         response: str,
         metadata: dict[str, Any],
     ) -> None:
-        if handle.observation is None:
-            return
         enriched_metadata = dict(metadata)
         rubrics = _extract_rubric_scores(response) if metadata.get("stage") == "critic" else {}
         if rubrics:
             enriched_metadata["critic_rubrics"] = rubrics
+        self._record_llm_call_metadata(enriched_metadata)
+        if handle.observation is None:
+            return
         handle.observation.update(
             input=prompt,
             output=response,
@@ -248,12 +250,18 @@ class TraceStore:
         error_message: str,
         metadata: dict[str, Any],
     ) -> None:
+        enriched_metadata = {
+            **metadata,
+            "error": True,
+            "error_message": error_message,
+        }
+        self._record_llm_call_metadata(enriched_metadata)
         if handle.observation is None:
             return
         handle.observation.update(
             input=prompt,
             output=f"[error] {error_message}",
-            metadata=metadata,
+            metadata=enriched_metadata,
             level="ERROR",
             status_message=error_message,
         )
@@ -357,6 +365,71 @@ class TraceStore:
 
         return rows
 
+    def get_llm_call_records(self) -> list[dict[str, Any]]:
+        return [dict(call) for call in self._llm_calls]
+
+    def get_llm_run_summary(self) -> dict[str, Any]:
+        calls = self.get_llm_call_records()
+        by_stage: dict[str, dict[str, Any]] = {}
+        revised_sections: set[str] = set()
+
+        for call in calls:
+            stage = _string_value(call.get("stage")) or "unknown"
+            bucket = by_stage.setdefault(
+                stage,
+                {
+                    "stage": stage,
+                    "calls": 0,
+                    "total_latency_ms": 0,
+                    "prompt_tokens": 0,
+                    "response_tokens": 0,
+                    "empty_responses": 0,
+                    "truncated_calls": 0,
+                    "errors": 0,
+                },
+            )
+            bucket["calls"] += 1
+            bucket["total_latency_ms"] += _int_value(call.get("latency_ms"))
+            bucket["prompt_tokens"] += _int_value(call.get("tokens_prompt"))
+            bucket["response_tokens"] += _int_value(call.get("tokens_response"))
+            if call.get("response_empty") is True:
+                bucket["empty_responses"] += 1
+            if call.get("done_reason") == "length":
+                bucket["truncated_calls"] += 1
+            if call.get("error") is True:
+                bucket["errors"] += 1
+
+            revision_round = call.get("revision_round")
+            section_name = _string_value(call.get("section_name"))
+            if isinstance(revision_round, int) and revision_round > 0 and section_name:
+                revised_sections.add(section_name)
+
+        stage_rows = []
+        for stage in sorted(by_stage):
+            row = by_stage[stage]
+            calls_count = row["calls"]
+            row["avg_latency_ms"] = (
+                round(row["total_latency_ms"] / calls_count) if calls_count else 0
+            )
+            stage_rows.append(row)
+
+        return {
+            "total_llm_calls": len(calls),
+            "total_latency_ms": sum(_int_value(call.get("latency_ms")) for call in calls),
+            "total_prompt_tokens": sum(_int_value(call.get("tokens_prompt")) for call in calls),
+            "total_response_tokens": sum(
+                _int_value(call.get("tokens_response")) for call in calls
+            ),
+            "empty_responses": sum(1 for call in calls if call.get("response_empty") is True),
+            "truncated_calls": sum(1 for call in calls if call.get("done_reason") == "length"),
+            "error_calls": sum(1 for call in calls if call.get("error") is True),
+            "sections_with_revisions": sorted(revised_sections),
+            "largest_prompt": _max_call(calls, "prompt_chars"),
+            "largest_response": _max_call(calls, "response_chars"),
+            "slowest_call": _max_call(calls, "latency_ms"),
+            "by_stage": stage_rows,
+        }
+
     def _run_langgraph_node_without_langfuse(
         self,
         *,
@@ -411,6 +484,27 @@ class TraceStore:
                 next_node=next_node,
                 section_name=section_name if isinstance(section_name, str) else None,
             )
+        )
+
+    def _record_llm_call_metadata(self, metadata: dict[str, Any]) -> None:
+        self._llm_calls.append(
+            {
+                "task_id": metadata.get("task_id"),
+                "stage": metadata.get("stage"),
+                "section_name": metadata.get("section_name"),
+                "revision_round": metadata.get("revision_round"),
+                "model": metadata.get("model"),
+                "latency_ms": metadata.get("latency_ms"),
+                "prompt_chars": metadata.get("prompt_chars"),
+                "response_chars": metadata.get("response_chars"),
+                "tokens_prompt": metadata.get("tokens_prompt"),
+                "tokens_response": metadata.get("tokens_response"),
+                "output_budget": metadata.get("output_budget"),
+                "done_reason": metadata.get("done_reason"),
+                "response_empty": metadata.get("response_empty"),
+                "error": metadata.get("error", False),
+                "error_message": metadata.get("error_message"),
+            }
         )
 
     def _get_or_seed_prompt(
@@ -646,6 +740,28 @@ def _preview_text(value: str, *, limit: int = 180) -> str:
 
 def _string_value(value: Any) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _int_value(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    return value if isinstance(value, int) else 0
+
+
+def _max_call(calls: list[dict[str, Any]], field_name: str) -> dict[str, Any] | None:
+    candidates = [call for call in calls if isinstance(call.get(field_name), int)]
+    if not candidates:
+        return None
+    call = max(candidates, key=lambda item: item[field_name])
+    return {
+        "task_id": call.get("task_id"),
+        "stage": call.get("stage"),
+        "section_name": call.get("section_name"),
+        "revision_round": call.get("revision_round"),
+        field_name: call.get(field_name),
+        "done_reason": call.get("done_reason"),
+        "response_empty": call.get("response_empty"),
+    }
 
 
 def _optional_env(key: str) -> str | None:

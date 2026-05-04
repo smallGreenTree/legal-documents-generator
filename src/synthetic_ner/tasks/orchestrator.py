@@ -787,6 +787,8 @@ def write_generation_report(
 ) -> Path:
     trace_info = trace_store.get_trace_info()
     node_summary = trace_store.get_langgraph_node_summary()
+    llm_summary = trace_store.get_llm_run_summary()
+    llm_calls = trace_store.get_llm_call_records()
     report_path = context.output_dir / doc_id / "generation_report.md"
     lines = [
         f"# Generation Report: {doc_id}",
@@ -796,6 +798,10 @@ def write_generation_report(
         f"- Langfuse enabled: {str(trace_info.enabled).lower()}",
         f"- Langfuse trace id: {trace_info.trace_id or 'n/a'}",
         f"- Langfuse trace url: {trace_info.trace_url or 'n/a'}",
+        f"- Total LLM calls: {llm_summary['total_llm_calls']}",
+        f"- Total LLM latency ms: {llm_summary['total_latency_ms']}",
+        f"- Empty LLM responses: {llm_summary['empty_responses']}",
+        f"- Truncated LLM calls: {llm_summary['truncated_calls']}",
         "",
         "## Document Plan",
         document_plan or "- none",
@@ -839,5 +845,87 @@ def write_generation_report(
                 f"{next_nodes} |"
             )
         lines.append("")
+    if llm_calls:
+        lines.extend(_format_llm_analytics(llm_summary, llm_calls))
     report_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return report_path
+
+
+def _format_llm_analytics(
+    llm_summary: dict[str, Any],
+    llm_calls: list[dict[str, Any]],
+) -> list[str]:
+    lines = [
+        "## LLM Run Analytics",
+        "",
+        "### Stage Totals",
+        "",
+        "| Stage | Calls | Total ms | Avg ms | Prompt Tokens | Response Tokens | Empty | Truncated | Errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in llm_summary["by_stage"]:
+        lines.append(
+            "| "
+            f"{row['stage']} | "
+            f"{row['calls']} | "
+            f"{row['total_latency_ms']} | "
+            f"{row['avg_latency_ms']} | "
+            f"{row['prompt_tokens']} | "
+            f"{row['response_tokens']} | "
+            f"{row['empty_responses']} | "
+            f"{row['truncated_calls']} | "
+            f"{row['errors']} |"
+        )
+
+    revised_sections = llm_summary["sections_with_revisions"]
+    lines.extend(
+        [
+            "",
+            "### Bottleneck Candidates",
+            "",
+            f"- Slowest call: {_format_call_summary(llm_summary['slowest_call'], 'latency_ms')}",
+            f"- Largest prompt: {_format_call_summary(llm_summary['largest_prompt'], 'prompt_chars')}",
+            f"- Largest response: {_format_call_summary(llm_summary['largest_response'], 'response_chars')}",
+            "- Sections with revisions: "
+            + (", ".join(revised_sections) if revised_sections else "none"),
+            "",
+            "### LLM Calls",
+            "",
+            "| Task | Stage | Section | Rev | Prompt chars | Response chars | Prompt tokens | Response tokens | Budget | ms | Done | Empty |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+        ]
+    )
+    for call in llm_calls:
+        lines.append(
+            "| "
+            f"{call.get('task_id') or '-'} | "
+            f"{call.get('stage') or '-'} | "
+            f"{call.get('section_name') or '-'} | "
+            f"{_format_optional_int(call.get('revision_round'))} | "
+            f"{_format_optional_int(call.get('prompt_chars'))} | "
+            f"{_format_optional_int(call.get('response_chars'))} | "
+            f"{_format_optional_int(call.get('tokens_prompt'))} | "
+            f"{_format_optional_int(call.get('tokens_response'))} | "
+            f"{_format_optional_int(call.get('output_budget'))} | "
+            f"{_format_optional_int(call.get('latency_ms'))} | "
+            f"{call.get('done_reason') or '-'} | "
+            f"{str(call.get('response_empty')).lower()} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _format_optional_int(value: Any) -> str:
+    if isinstance(value, bool):
+        return "-"
+    return str(value) if isinstance(value, int) else "-"
+
+
+def _format_call_summary(call: dict[str, Any] | None, field_name: str) -> str:
+    if not call:
+        return "n/a"
+    task_id = call.get("task_id") or "-"
+    stage = call.get("stage") or "-"
+    section = call.get("section_name") or "-"
+    value = call.get(field_name)
+    return f"{task_id} ({stage}/{section}, {field_name}={value})"
