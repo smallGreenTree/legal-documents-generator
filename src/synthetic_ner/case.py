@@ -117,6 +117,8 @@ def make_person(
     nat: str,
     title: str,
     surface_forms: int,
+    nickname_variants: int,
+    misspelling_variants: int,
     nat_locales: dict[str, str],
     is_defendant: bool = True,
 ) -> dict:
@@ -144,6 +146,15 @@ def make_person(
         forms.append(title_surname)
     if surface_forms >= 4:
         forms.append(short_name)
+    forms.extend(
+        build_person_name_variants(
+            first_name=first_name,
+            last_name=last_name,
+            existing_forms=forms,
+            nickname_variants=nickname_variants,
+            misspelling_variants=misspelling_variants,
+        )
+    )
 
     date_of_birth = fake.date_of_birth(minimum_age=30, maximum_age=65).strftime("%-d %B %Y")
     birthplace = fake.city()
@@ -165,6 +176,131 @@ def make_person(
         "address": f"{street}, {city_postcode}",
         "is_defendant": is_defendant,
     }
+
+
+def build_person_name_variants(
+    *,
+    first_name: str,
+    last_name: str,
+    existing_forms: list[str],
+    nickname_variants: int,
+    misspelling_variants: int,
+) -> list[str]:
+    variants: list[str] = []
+
+    for nickname in _nickname_candidates(first_name):
+        _append_unique_variant(
+            variants,
+            existing_forms,
+            f"{nickname} {last_name}",
+            limit=nickname_variants,
+        )
+        if len(variants) >= nickname_variants:
+            break
+
+    misspellings: list[str] = []
+    for variant_last_name in _misspelled_name_candidates(last_name):
+        misspellings.append(f"{first_name} {variant_last_name}")
+        for nickname in _nickname_candidates(first_name)[:1]:
+            misspellings.append(f"{nickname} {variant_last_name}")
+
+    added_misspellings = 0
+    for misspelling in misspellings:
+        if _append_unique_variant(
+            variants,
+            existing_forms,
+            misspelling,
+            limit=nickname_variants + misspelling_variants,
+        ):
+            added_misspellings += 1
+        if added_misspellings >= misspelling_variants:
+            break
+
+    return variants
+
+
+def _nickname_candidates(first_name: str) -> list[str]:
+    cleaned = first_name.strip()
+    if len(cleaned) <= 4:
+        return []
+    candidates = []
+    for size in (4, 5, 3):
+        if len(cleaned) > size:
+            candidates.append(cleaned[:size])
+    if cleaned.endswith(("as", "os", "us")) and len(cleaned) > 5:
+        candidates.append(cleaned[:-2])
+    if cleaned.endswith("olas") and len(cleaned) > 6:
+        candidates.append(cleaned[:-4])
+    return _unique_strings(candidates)
+
+
+def _misspelled_name_candidates(name: str) -> list[str]:
+    candidates = []
+    replacements = (
+        ("z", "s"),
+        ("s", "z"),
+        ("c", "k"),
+        ("k", "c"),
+        ("i", "y"),
+        ("y", "i"),
+        ("ph", "f"),
+        ("f", "ph"),
+        ("ck", "k"),
+    )
+    lowered = name.lower()
+    if lowered.endswith("rz") and len(name) > 2:
+        candidates.append(f"{name[:-1]}tz")
+
+    for source, replacement in replacements:
+        index = lowered.find(source)
+        if index == -1:
+            continue
+        cased_replacement = _match_replacement_case(name[index:index + len(source)], replacement)
+        candidates.append(name[:index] + cased_replacement + name[index + len(source):])
+
+    for index, char in enumerate(name):
+        if index > 0 and char.lower() in "bcdfghjklmnpqrstvwxyz":
+            candidates.append(name[:index] + char + name[index:])
+            break
+
+    return _unique_strings(candidates)
+
+
+def _append_unique_variant(
+    variants: list[str],
+    existing_forms: list[str],
+    candidate: str,
+    *,
+    limit: int,
+) -> bool:
+    if len(variants) >= limit:
+        return False
+    normalized_candidate = candidate.casefold()
+    known_forms = {form.casefold() for form in [*existing_forms, *variants]}
+    if not candidate.strip() or normalized_candidate in known_forms:
+        return False
+    variants.append(candidate)
+    return True
+
+
+def _match_replacement_case(source: str, replacement: str) -> str:
+    if source.isupper():
+        return replacement.upper()
+    if source[:1].isupper():
+        return replacement.capitalize()
+    return replacement
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen = set()
+    unique = []
+    for value in values:
+        normalized = value.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(value)
+    return unique
 
 
 def make_org(
@@ -320,6 +456,8 @@ def build_people_from_specs(
             nat=spec.nationality,
             title=spec.title,
             surface_forms=spec.surface_forms,
+            nickname_variants=spec.nickname_variants,
+            misspelling_variants=spec.misspelling_variants,
             nat_locales=nat_locales,
             is_defendant=is_defendant,
         )

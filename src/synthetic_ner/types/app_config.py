@@ -108,6 +108,8 @@ class PersonSpecConfig:
     nationality: str
     title: str
     surface_forms: int
+    nickname_variants: int
+    misspelling_variants: int
 
 
 @dataclass(frozen=True)

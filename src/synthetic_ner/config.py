@@ -403,6 +403,14 @@ def _build_person_specs(raw: list[Any], path: str) -> list[PersonSpecConfig]:
                     mapping["surface_forms"],
                     f"{item_path}.surface_forms",
                 ),
+                nickname_variants=_require_non_negative_int(
+                    mapping.get("nickname_variants", 0),
+                    f"{item_path}.nickname_variants",
+                ),
+                misspelling_variants=_require_non_negative_int(
+                    mapping.get("misspelling_variants", 0),
+                    f"{item_path}.misspelling_variants",
+                ),
             )
         )
     return specs

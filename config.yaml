@@ -78,45 +78,71 @@ case:
       - nationality: DE
         title: Dr
         surface_forms: 2        # full name + initials
+        nickname_variants: 1    # e.g. Nickolas Herz -> Nick Herz
+        misspelling_variants: 1 # e.g. Nickolas Herz -> Nickolas Hertz
       - nationality: IT
         title: Mr
         surface_forms: 2        # full name + initials
+        nickname_variants: 1
+        misspelling_variants: 1
       - nationality: FR
         title: Ms
         surface_forms: 1        # full name only
+        nickname_variants: 1
+        misspelling_variants: 1
 
     # 10 witnesses spread across 4 EU countries
     collateral:
       - nationality: DE
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: DE
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: DE
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: IT
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: IT
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: IT
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: FR
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: FR
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: PL
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
       - nationality: PL
         title: ""
         surface_forms: 1
+        nickname_variants: 0
+        misspelling_variants: 0
 
     charged_orgs:    5          # formally listed in Section II
     associated_orgs: 5          # mentioned in prose only — total 10 companies
