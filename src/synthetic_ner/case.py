@@ -248,9 +248,6 @@ def _misspelled_name_candidates(name: str) -> list[str]:
         ("ck", "k"),
     )
     lowered = name.lower()
-    if lowered.endswith("rz") and len(name) > 2:
-        candidates.append(f"{name[:-1]}tz")
-
     for source, replacement in replacements:
         index = lowered.find(source)
         if index == -1:

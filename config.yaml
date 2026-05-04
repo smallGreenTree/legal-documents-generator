@@ -78,8 +78,8 @@ case:
       - nationality: DE
         title: Dr
         surface_forms: 2        # full name + initials
-        nickname_variants: 1    # e.g. Nickolas Herz -> Nick Herz
-        misspelling_variants: 1 # e.g. Nickolas Herz -> Nickolas Hertz
+        nickname_variants: 1
+        misspelling_variants: 1
       - nationality: IT
         title: Mr
         surface_forms: 2        # full name + initials
