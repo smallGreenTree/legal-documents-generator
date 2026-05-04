@@ -13,12 +13,14 @@ from src.synthetic_ner.types.app_config import (
     CaseMetadataConfig,
     CountConfig,
     CriticConfig,
+    EntityVariantsConfig,
     GenerationConfig,
     LangfuseConfig,
     OffencePeriodConfig,
     OllamaConfig,
     PathsConfig,
     PersonSpecConfig,
+    PersonVariantGenerationConfig,
     PlannerConfig,
     ProfileConfig,
     WorkflowConfig,
@@ -47,6 +49,9 @@ def build_app_config(
         langfuse=_build_langfuse_config(_require_mapping(cfg["langfuse"], "langfuse")),
         generation=_build_generation_config(
             _require_mapping(cfg["generation"], "generation")
+        ),
+        entity_variants=_build_entity_variants_config(
+            _require_mapping(cfg["entity_variants"], "entity_variants")
         ),
         workflow=_build_workflow_config(
             _require_mapping(cfg["workflow"], "workflow"),
@@ -121,6 +126,37 @@ def _build_generation_config(raw: dict[str, Any]) -> GenerationConfig:
         "generation.words_per_page",
     )
     return GenerationConfig(words_per_page=words_per_page)
+
+
+def _build_entity_variants_config(raw: dict[str, Any]) -> EntityVariantsConfig:
+    persons = _require_mapping(raw["persons"], "entity_variants.persons")
+    generation = _require_mapping(
+        persons["generation"],
+        "entity_variants.persons.generation",
+    )
+    enabled = _require_bool(persons["enabled"], "entity_variants.persons.enabled")
+    nickname_variants = _require_non_negative_int(
+        generation["nickname_variants"],
+        "entity_variants.persons.generation.nickname_variants",
+    )
+    misspelling_variants = _require_non_negative_int(
+        generation["misspelling_variants"],
+        "entity_variants.persons.generation.misspelling_variants",
+    )
+    if not enabled:
+        nickname_variants = 0
+        misspelling_variants = 0
+    return EntityVariantsConfig(
+        persons=PersonVariantGenerationConfig(
+            enabled=enabled,
+            nickname_variants=nickname_variants,
+            misspelling_variants=misspelling_variants,
+            locale_aware=_require_bool(
+                generation["locale_aware"],
+                "entity_variants.persons.generation.locale_aware",
+            ),
+        )
+    )
 
 
 def _build_workflow_config(
@@ -402,14 +438,6 @@ def _build_person_specs(raw: list[Any], path: str) -> list[PersonSpecConfig]:
                 surface_forms=_require_positive_int(
                     mapping["surface_forms"],
                     f"{item_path}.surface_forms",
-                ),
-                nickname_variants=_require_non_negative_int(
-                    mapping.get("nickname_variants", 0),
-                    f"{item_path}.nickname_variants",
-                ),
-                misspelling_variants=_require_non_negative_int(
-                    mapping.get("misspelling_variants", 0),
-                    f"{item_path}.misspelling_variants",
                 ),
             )
         )

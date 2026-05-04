@@ -32,6 +32,19 @@ class GenerationConfig:
 
 
 @dataclass(frozen=True)
+class PersonVariantGenerationConfig:
+    enabled: bool
+    nickname_variants: int
+    misspelling_variants: int
+    locale_aware: bool
+
+
+@dataclass(frozen=True)
+class EntityVariantsConfig:
+    persons: PersonVariantGenerationConfig
+
+
+@dataclass(frozen=True)
 class PlannerConfig:
     temperature: float
     document_max_output_tokens: int
@@ -108,8 +121,6 @@ class PersonSpecConfig:
     nationality: str
     title: str
     surface_forms: int
-    nickname_variants: int
-    misspelling_variants: int
 
 
 @dataclass(frozen=True)
@@ -146,6 +157,7 @@ class AppConfig:
     ollama: OllamaConfig
     langfuse: LangfuseConfig
     generation: GenerationConfig
+    entity_variants: EntityVariantsConfig
     workflow: WorkflowConfig
     profile: ProfileConfig
     case: CaseConfig

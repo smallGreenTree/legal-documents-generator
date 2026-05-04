@@ -17,6 +17,7 @@ from src.synthetic_ner.types.app_config import (
     CountConfig,
     GenerationConfig,
     PersonSpecConfig,
+    PersonVariantGenerationConfig,
 )
 from src.synthetic_ner.utils import is_auto, make_initials, split_address, strip_titles
 
@@ -447,14 +448,15 @@ def build_people_from_specs(
     specs: list[PersonSpecConfig],
     nat_locales: dict[str, str],
     is_defendant: bool,
+    person_variants: PersonVariantGenerationConfig,
 ) -> list[dict]:
     return [
         make_person(
             nat=spec.nationality,
             title=spec.title,
             surface_forms=spec.surface_forms,
-            nickname_variants=spec.nickname_variants,
-            misspelling_variants=spec.misspelling_variants,
+            nickname_variants=person_variants.nickname_variants,
+            misspelling_variants=person_variants.misspelling_variants,
             nat_locales=nat_locales,
             is_defendant=is_defendant,
         )
@@ -482,6 +484,7 @@ def resolve_case_entities(
     case_cfg: CaseConfig,
     nat_locales: dict[str, str],
     vat_prefixes: dict[str, str],
+    person_variants: PersonVariantGenerationConfig,
 ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     cast_cfg = case_cfg.cast
 
@@ -496,6 +499,7 @@ def resolve_case_entities(
             cast_cfg.defendants,
             nat_locales,
             True,
+            person_variants,
         )
 
     explicit_collateral = case_cfg.collateral
@@ -509,6 +513,7 @@ def resolve_case_entities(
             cast_cfg.collateral,
             nat_locales,
             False,
+            person_variants,
         )
 
     defendant_nationalities = [spec.nationality for spec in cast_cfg.defendants]

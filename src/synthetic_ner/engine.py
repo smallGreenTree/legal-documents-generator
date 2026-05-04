@@ -323,6 +323,7 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
             context.case_cfg,
             context.nat_locales,
             context.vat_prefixes,
+            context.app_config.entity_variants.persons,
         )
         metadata = resolve_case_metadata(context.case_cfg, context.doc_type)
         counts_list = resolve_counts(
