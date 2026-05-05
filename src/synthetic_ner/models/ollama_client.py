@@ -5,12 +5,16 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Any, Callable
 
 import requests
 from src.synthetic_ner.tasks.tracer import TraceStore
 from src.synthetic_ner.types.app_config import OllamaConfig
+
+_MAX_GENERATE_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS = 5
+_CONTROLLED_EMPTY_SECTION = "[section not generated]"
 
 
 @dataclass(slots=True)
@@ -68,6 +72,10 @@ class TracedOllamaClient:
         )
         started = perf_counter()
         partial_text = ""
+        options: dict[str, Any] = {"temperature": temperature}
+        if isinstance(max_output_tokens, int) and max_output_tokens > 0:
+            options["num_predict"] = max_output_tokens
+
         def remember_partial_text(value: str) -> None:
             nonlocal partial_text
             partial_text = value
@@ -75,10 +83,7 @@ class TracedOllamaClient:
                 on_partial_text(value)
 
         try:
-            options: dict[str, Any] = {"temperature": temperature}
-            if isinstance(max_output_tokens, int) and max_output_tokens > 0:
-                options["num_predict"] = max_output_tokens
-            payload, text = self._generate(
+            payload, text = self._generate_with_retries(
                 full_prompt=full_prompt,
                 options=options,
                 on_partial_text=remember_partial_text if on_partial_text is not None else None,
@@ -131,6 +136,32 @@ class TracedOllamaClient:
                     metadata=metadata,
                 )
                 return OllamaCallResult(text=text, metadata=metadata)
+            if stage == "writer":
+                metadata = {
+                    "stage": stage,
+                    "task_id": task_id,
+                    "section_name": _extract_section_name(task_id),
+                    "revision_round": _extract_revision_round(task_id),
+                    "model": self.model,
+                    "temperature": temperature,
+                    "output_budget": options.get("num_predict"),
+                    "latency_ms": latency_ms,
+                    "prompt_chars": len(full_prompt),
+                    "response_chars": len(_CONTROLLED_EMPTY_SECTION),
+                    "response_empty": False,
+                    "tokens_prompt": None,
+                    "tokens_response": None,
+                    "done_reason": "controlled_writer_fallback",
+                    "error": True,
+                    "error_message": str(exc),
+                }
+                self.tracer.record_llm_call(
+                    trace,
+                    prompt=full_prompt,
+                    response=_CONTROLLED_EMPTY_SECTION,
+                    metadata=metadata,
+                )
+                return OllamaCallResult(text=_CONTROLLED_EMPTY_SECTION, metadata=metadata)
             self.tracer.record_error(
                 trace,
                 prompt=full_prompt,
@@ -147,6 +178,30 @@ class TracedOllamaClient:
                 },
             )
             raise
+
+    def _generate_with_retries(
+        self,
+        *,
+        full_prompt: str,
+        options: dict[str, Any],
+        on_partial_text: Callable[[str], None] | None,
+    ) -> tuple[dict[str, Any], str]:
+        last_error: Exception | None = None
+        for attempt in range(1, _MAX_GENERATE_ATTEMPTS + 1):
+            try:
+                return self._generate(
+                    full_prompt=full_prompt,
+                    options=options,
+                    on_partial_text=on_partial_text,
+                )
+            except Exception as exc:
+                last_error = exc
+                if attempt >= _MAX_GENERATE_ATTEMPTS or not _is_retryable_error(exc):
+                    break
+                sleep(_RETRY_BACKOFF_SECONDS * attempt)
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Ollama generation failed without an exception")
 
     def _generate(
         self,
@@ -249,3 +304,12 @@ def _extract_section_name(task_id: str) -> str | None:
 def _extract_revision_round(task_id: str) -> int | None:
     match = re.search(r"_r(\d+)", task_id)
     return int(match.group(1)) if match else None
+
+
+def _is_retryable_error(exc: Exception) -> bool:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        return response is not None and 500 <= response.status_code < 600
+    return False
