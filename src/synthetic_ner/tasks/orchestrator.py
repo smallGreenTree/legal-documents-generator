@@ -119,6 +119,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         min_output_tokens=context.workflow_cfg.writer.min_output_tokens,
         output_token_multiplier=context.workflow_cfg.writer.output_token_multiplier,
         prompt_clients=resolved_prompts.prompt_clients,
+        partial_output_dir=context.output_dir / "_partial",
     )
     critic = SectionCritic(
         client=client,

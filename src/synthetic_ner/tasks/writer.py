@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
@@ -23,6 +25,7 @@ class SectionWriter:
         min_output_tokens: int,
         output_token_multiplier: float,
         prompt_clients: dict[str, Any] | None = None,
+        partial_output_dir: Path | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
@@ -33,6 +36,7 @@ class SectionWriter:
         self.min_output_tokens = min_output_tokens
         self.output_token_multiplier = output_token_multiplier
         self.prompt_clients = prompt_clients or {}
+        self.partial_output_dir = partial_output_dir
 
     def write_section(
         self,
@@ -102,12 +106,74 @@ class SectionWriter:
             if not text:
                 break
             chunks.append(text)
+            self._write_partial_section(
+                doc_id=doc_id,
+                section_name=section_name,
+                revision_round=revision_round,
+                chunk_index=chunk_index,
+                chunk_text=text,
+                combined_text=clean_generated_section_text("\n\n".join(chunks)),
+                task_id=task_id,
+                metadata=result.metadata,
+            )
             words_so_far += len(text.split())
             chunk_index += 1
 
         if not chunks:
             return "[section not generated]"
         return clean_generated_section_text("\n\n".join(chunks))
+
+    def _write_partial_section(
+        self,
+        *,
+        doc_id: str,
+        section_name: str,
+        revision_round: int,
+        chunk_index: int,
+        chunk_text: str,
+        combined_text: str,
+        task_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        if self.partial_output_dir is None:
+            return
+
+        revision_dir = (
+            self.partial_output_dir
+            / doc_id
+            / "sections"
+            / section_name
+            / f"r{revision_round}"
+        )
+        revision_dir.mkdir(parents=True, exist_ok=True)
+        (revision_dir / f"chunk_{chunk_index:02d}.txt").write_text(
+            chunk_text.rstrip() + "\n",
+            encoding="utf-8",
+        )
+        (revision_dir / "combined.txt").write_text(
+            combined_text.rstrip() + "\n",
+            encoding="utf-8",
+        )
+        manifest = {
+            "doc_id": doc_id,
+            "section_name": section_name,
+            "revision_round": revision_round,
+            "latest_chunk_index": chunk_index,
+            "latest_task_id": task_id,
+            "word_count": len(combined_text.split()),
+            "metadata": {
+                "model": metadata.get("model"),
+                "latency_ms": metadata.get("latency_ms"),
+                "tokens_prompt": metadata.get("tokens_prompt"),
+                "tokens_response": metadata.get("tokens_response"),
+                "done_reason": metadata.get("done_reason"),
+                "output_budget": metadata.get("output_budget"),
+            },
+        }
+        (revision_dir / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
 
 
 def _estimate_writer_output_tokens(
