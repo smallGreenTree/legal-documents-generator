@@ -60,6 +60,9 @@ prompts:
     Avoid formulaic openings such as "The defendants identified in this matter are",
     "The organisations materially connected are", "This section is limited to",
     or "The evidence summary is limited to".
+    Write multiple paragraphs for every section. For short identifying sections,
+    write at least 2 paragraphs; for history, charges, evidence and assessment,
+    write at least 3 paragraphs; for facts, write at least 4 paragraphs.
     Prefer paragraphs of 2-5 connected sentences. Vary sentence openings and
     sentence length. Do not use bullet points, numbered lists, headings, markdown,
     explanatory notes, or meta-commentary.
@@ -81,6 +84,9 @@ prompts:
     {{ previous_tail }}
 
     Write the next formal legal passage for this section.
+    Continue in paragraph form. If this is the first chunk of the section, open
+    with a substantive legal paragraph rather than a summary sentence. If this
+    is a later chunk, continue the same section without repeating the opening.
 
     Section prose expectations:
     - persons: identify the defendants as natural legal prose. Include exact

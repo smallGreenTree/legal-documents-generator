@@ -9,6 +9,7 @@ from src.synthetic_ner.types.app_config import (
     CaseConfig,
     GenerationConfig,
     LangfuseConfig,
+    ModelRoutingConfig,
     OllamaConfig,
     PathsConfig,
     ProfileConfig,
@@ -25,6 +26,7 @@ class RuntimeContext:
     case_cfg: CaseConfig
     langfuse_cfg: LangfuseConfig
     ollama_cfg: OllamaConfig
+    model_routing_cfg: ModelRoutingConfig
     workflow_cfg: WorkflowConfig
     nat_locales: dict[str, str]
     vat_prefixes: dict[str, str]

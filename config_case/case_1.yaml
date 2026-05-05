@@ -3,13 +3,13 @@ profile:
   fraud_type: financial_fraud
   documents: 1
   section_words:
-    persons: 220
-    companies: 220
-    history: 200
-    charges: 200
-    facts: 500
-    evidence: 200
-    assessment: 300
+    persons: 450
+    companies: 500
+    history: 550
+    charges: 500
+    facts: 1000
+    evidence: 650
+    assessment: 650
 
 case:
   metadata:

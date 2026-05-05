@@ -16,6 +16,8 @@ from src.synthetic_ner.types.app_config import (
     EntityVariantsConfig,
     GenerationConfig,
     LangfuseConfig,
+    ModelProviderConfig,
+    ModelRoutingConfig,
     OffencePeriodConfig,
     OllamaConfig,
     PathsConfig,
@@ -65,6 +67,10 @@ def build_app_config(
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
         ollama=_build_ollama_config(_require_mapping(cfg["ollama"], "ollama")),
+        model_routing=_build_model_routing_config(
+            cfg.get("model_routing"),
+            _build_ollama_config(_require_mapping(cfg["ollama"], "ollama")),
+        ),
         langfuse=_build_langfuse_config(_require_mapping(cfg["langfuse"], "langfuse")),
         generation=_build_generation_config(
             _require_mapping(cfg["generation"], "generation")
@@ -121,6 +127,80 @@ def _build_ollama_config(raw: dict[str, Any]) -> OllamaConfig:
         base_url=_require_string(raw["base_url"], "ollama.base_url"),
         model=_require_string(raw["model"], "ollama.model"),
         timeout=_require_positive_int(raw["timeout"], "ollama.timeout"),
+    )
+
+
+def _build_model_routing_config(
+    raw: Any,
+    ollama_cfg: OllamaConfig,
+) -> ModelRoutingConfig:
+    fallback_default = ModelProviderConfig(
+        provider="ollama",
+        model=ollama_cfg.model,
+        timeout=ollama_cfg.timeout,
+        base_url=ollama_cfg.base_url,
+        api_key_env=None,
+    )
+    if raw is None:
+        return ModelRoutingConfig(default=fallback_default, stages={})
+
+    mapping = _require_mapping(raw, "model_routing")
+    default = _build_model_provider_config(
+        _require_mapping(mapping.get("default", {}), "model_routing.default"),
+        "model_routing.default",
+        fallback=fallback_default,
+    )
+    stages_raw = _require_mapping(mapping.get("stages", {}), "model_routing.stages")
+    stages = {
+        stage_name: _build_model_provider_config(
+            _require_mapping(stage_raw, f"model_routing.stages.{stage_name}"),
+            f"model_routing.stages.{stage_name}",
+            fallback=default,
+        )
+        for stage_name, stage_raw in stages_raw.items()
+    }
+    return ModelRoutingConfig(default=default, stages=stages)
+
+
+def _build_model_provider_config(
+    raw: dict[str, Any],
+    path: str,
+    *,
+    fallback: ModelProviderConfig,
+) -> ModelProviderConfig:
+    provider = _require_string(raw.get("provider", fallback.provider), f"{path}.provider")
+    model = _require_string(raw.get("model", fallback.model), f"{path}.model")
+    timeout = _require_positive_int(raw.get("timeout", fallback.timeout), f"{path}.timeout")
+    base_url_value = raw.get(
+        "base_url",
+        fallback.base_url if provider == fallback.provider else None,
+    )
+    api_key_env_value = raw.get(
+        "api_key_env",
+        fallback.api_key_env if provider == fallback.provider else None,
+    )
+    base_url = (
+        _require_string(base_url_value, f"{path}.base_url")
+        if base_url_value is not None
+        else None
+    )
+    api_key_env = (
+        _require_string(api_key_env_value, f"{path}.api_key_env")
+        if api_key_env_value is not None
+        else None
+    )
+    if provider not in {"ollama", "gemini"}:
+        raise ValueError(f"{path}.provider must be one of: ollama, gemini")
+    if provider == "ollama" and not base_url:
+        raise ValueError(f"{path}.base_url is required for ollama provider")
+    if provider == "gemini" and not api_key_env:
+        raise ValueError(f"{path}.api_key_env is required for gemini provider")
+    return ModelProviderConfig(
+        provider=provider,
+        model=model,
+        timeout=timeout,
+        base_url=base_url,
+        api_key_env=api_key_env,
     )
 
 

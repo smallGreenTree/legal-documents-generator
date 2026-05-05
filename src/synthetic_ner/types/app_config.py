@@ -19,6 +19,21 @@ class OllamaConfig:
 
 
 @dataclass(frozen=True)
+class ModelProviderConfig:
+    provider: str
+    model: str
+    timeout: int
+    base_url: str | None = None
+    api_key_env: str | None = None
+
+
+@dataclass(frozen=True)
+class ModelRoutingConfig:
+    default: ModelProviderConfig
+    stages: dict[str, ModelProviderConfig]
+
+
+@dataclass(frozen=True)
 class LangfuseConfig:
     enabled: bool
     host: str
@@ -162,6 +177,7 @@ class CaseConfig:
 class AppConfig:
     paths: PathsConfig
     ollama: OllamaConfig
+    model_routing: ModelRoutingConfig
     langfuse: LangfuseConfig
     generation: GenerationConfig
     entity_variants: EntityVariantsConfig

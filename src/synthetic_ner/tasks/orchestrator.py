@@ -18,7 +18,7 @@ from src.synthetic_ner.engine import (
     resolve_schema_for_document,
     save_document_artifacts,
 )
-from src.synthetic_ner.models.ollama_client import TracedOllamaClient
+from src.synthetic_ner.models.factory import build_model_client, describe_stage_route
 from src.synthetic_ner.tasks.critic import SectionCritic
 from src.synthetic_ner.tasks.memory_manager import CaseMemoryManager
 from src.synthetic_ner.tasks.planner import Planner
@@ -92,15 +92,36 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         section_order=list(context.section_word_targets.keys()),
     )
 
-    client = TracedOllamaClient(
-        config=context.ollama_cfg,
+    planner_client = build_model_client(
+        stage="planner",
+        routing=context.model_routing_cfg,
+        fallback_ollama=context.ollama_cfg,
+        tracer=trace_store,
+    )
+    writer_client = build_model_client(
+        stage="writer",
+        routing=context.model_routing_cfg,
+        fallback_ollama=context.ollama_cfg,
+        tracer=trace_store,
+    )
+    critic_client = build_model_client(
+        stage="critic",
+        routing=context.model_routing_cfg,
+        fallback_ollama=context.ollama_cfg,
         tracer=trace_store,
     )
     resolved_prompts = trace_store.resolve_workflow_prompts(context.workflow_cfg.prompts)
     prompts = resolved_prompts.prompts
     print(f"  Prompts : {resolved_prompts.sync_summary}")
+    print(
+        "  Models  : "
+        + ", ".join(
+            describe_stage_route(stage=stage, routing=context.model_routing_cfg)
+            for stage in ("planner", "writer", "critic")
+        )
+    )
     planner = Planner(
-        client=client,
+        client=planner_client,
         prompts=prompts,
         planner_temperature=context.workflow_cfg.planner.temperature,
         document_max_output_tokens=(
@@ -110,7 +131,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         prompt_clients=resolved_prompts.prompt_clients,
     )
     writer = SectionWriter(
-        client=client,
+        client=writer_client,
         prompts=prompts,
         chunk_words=context.workflow_cfg.writer.chunk_words,
         context_tail_chars=context.workflow_cfg.writer.context_tail_chars,
@@ -122,7 +143,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
         partial_output_dir=context.output_dir / "_partial",
     )
     critic = SectionCritic(
-        client=client,
+        client=critic_client,
         prompts=prompts,
         critic_temperature=context.workflow_cfg.critic.temperature,
         max_output_tokens=context.workflow_cfg.critic.max_output_tokens,

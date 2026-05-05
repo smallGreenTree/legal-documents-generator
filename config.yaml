@@ -9,6 +9,29 @@ ollama:
   model: qwen3:8b
   timeout: 900
 
+model_routing:
+  default:
+    provider: ollama
+    base_url: http://localhost:11434
+    model: qwen3:8b
+    timeout: 900
+  stages:
+    planner:
+      provider: ollama
+      base_url: http://localhost:11434
+      model: qwen3:8b
+      timeout: 900
+    writer:
+      provider: ollama
+      base_url: http://localhost:11434
+      model: qwen3:8b
+      timeout: 900
+    critic:
+      provider: gemini
+      model: gemini-2.5-flash
+      api_key_env: GEMINI_API_KEY
+      timeout: 900
+
 langfuse:
   enabled: true
   host: http://localhost:3000

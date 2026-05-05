@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,11 @@ class SectionWriter:
         self.output_token_multiplier = output_token_multiplier
         self.prompt_clients = prompt_clients or {}
         self.partial_output_dir = partial_output_dir
+        self._partial_writer = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="partial-section-writer",
+        )
+        self._partial_write_futures: list[Future] = []
 
     def write_section(
         self,
@@ -86,6 +92,24 @@ class SectionWriter:
             task_id = (
                 f"writer_{section_name}_r{revision_round}_chunk_{chunk_index:02d}"
             )
+            def persist_streamed_chunk(partial_text: str) -> None:
+                partial_chunk_text = clean_generated_section_text(partial_text)
+                if not partial_chunk_text:
+                    return
+                self._write_partial_section(
+                    doc_id=doc_id,
+                    section_name=section_name,
+                    revision_round=revision_round,
+                    chunk_index=chunk_index,
+                    chunk_text=partial_chunk_text,
+                    combined_text=clean_generated_section_text(
+                        "\n\n".join([*chunks, partial_chunk_text])
+                    ),
+                    task_id=task_id,
+                    metadata={"model": None, "streaming": True},
+                    complete=False,
+                )
+
             result = self.client.invoke(
                 doc_id=doc_id,
                 task_id=task_id,
@@ -101,6 +125,7 @@ class SectionWriter:
                     output_token_multiplier=self.output_token_multiplier,
                 ),
                 prompt_object=prompt_client,
+                on_partial_text=persist_streamed_chunk,
             )
             text = clean_generated_section_text(result.text)
             if not text:
@@ -115,10 +140,12 @@ class SectionWriter:
                 combined_text=clean_generated_section_text("\n\n".join(chunks)),
                 task_id=task_id,
                 metadata=result.metadata,
+                complete=True,
             )
             words_so_far += len(text.split())
             chunk_index += 1
 
+        self._flush_partial_writes()
         if not chunks:
             return "[section not generated]"
         return clean_generated_section_text("\n\n".join(chunks))
@@ -134,6 +161,38 @@ class SectionWriter:
         combined_text: str,
         task_id: str,
         metadata: dict[str, Any],
+        complete: bool,
+    ) -> None:
+        if self.partial_output_dir is None:
+            return
+
+        self._partial_write_futures.append(
+            self._partial_writer.submit(
+                self._write_partial_section_sync,
+                doc_id=doc_id,
+                section_name=section_name,
+                revision_round=revision_round,
+                chunk_index=chunk_index,
+                chunk_text=chunk_text,
+                combined_text=combined_text,
+                task_id=task_id,
+                metadata=metadata,
+                complete=complete,
+            )
+        )
+
+    def _write_partial_section_sync(
+        self,
+        *,
+        doc_id: str,
+        section_name: str,
+        revision_round: int,
+        chunk_index: int,
+        chunk_text: str,
+        combined_text: str,
+        task_id: str,
+        metadata: dict[str, Any],
+        complete: bool,
     ) -> None:
         if self.partial_output_dir is None:
             return
@@ -161,8 +220,10 @@ class SectionWriter:
             "latest_chunk_index": chunk_index,
             "latest_task_id": task_id,
             "word_count": len(combined_text.split()),
+            "complete": complete,
             "metadata": {
                 "model": metadata.get("model"),
+                "streaming": metadata.get("streaming", False),
                 "latency_ms": metadata.get("latency_ms"),
                 "tokens_prompt": metadata.get("tokens_prompt"),
                 "tokens_response": metadata.get("tokens_response"),
@@ -174,6 +235,11 @@ class SectionWriter:
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+
+    def _flush_partial_writes(self) -> None:
+        futures, self._partial_write_futures = self._partial_write_futures, []
+        for future in futures:
+            future.result()
 
 
 def _estimate_writer_output_tokens(
