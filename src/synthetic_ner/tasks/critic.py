@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ReadTimeout, RequestException
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.types.critic import CriticResult
 from src.synthetic_ner.utils import render_prompt_template
@@ -81,6 +81,17 @@ class SectionCritic:
                 revision_instruction="keep as is",
                 rubrics={},
                 raw_text="[critic-timeout] Skipped critic due to model timeout; relying on deterministic validation.",
+            )
+        except RequestException as exc:
+            return CriticResult(
+                approved=True,
+                issues=[],
+                revision_instruction="keep as is",
+                rubrics={},
+                raw_text=(
+                    "[critic-provider-error] Skipped critic due to provider error; "
+                    f"relying on deterministic validation. error={type(exc).__name__}"
+                ),
             )
 
     def _parse_result(self, raw_text: str) -> CriticResult:

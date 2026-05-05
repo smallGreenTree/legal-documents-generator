@@ -33,6 +33,10 @@ class ModelProviderConfig:
     timeout: int
     base_url: str | None = None
     api_key_env: str | None = None
+    thinking_budget: int | None = None
+    max_generate_attempts: int = 1
+    retry_backoff_seconds: float = 0.0
+    min_interval_seconds: float = 0.0
 
 
 @dataclass(frozen=True)

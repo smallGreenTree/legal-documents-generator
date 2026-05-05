@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Any, Callable
 
 import requests
@@ -36,6 +36,11 @@ class TracedGeminiClient:
             raise ValueError("Gemini provider requires base_url")
         self.model = config.model
         self.timeout = config.timeout
+        self.thinking_budget = config.thinking_budget
+        self.max_generate_attempts = config.max_generate_attempts
+        self.retry_backoff_seconds = config.retry_backoff_seconds
+        self.min_interval_seconds = config.min_interval_seconds
+        self._last_request_at: float | None = None
         self.tracer = tracer
 
     def invoke(
@@ -79,7 +84,7 @@ class TracedGeminiClient:
         )
         started = perf_counter()
         try:
-            payload = self._generate(
+            payload = self._generate_with_retries(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=temperature,
@@ -112,7 +117,7 @@ class TracedGeminiClient:
             self.tracer.record_error(
                 trace,
                 prompt=full_prompt,
-                error_message=str(exc),
+                error_message=_safe_error_message(exc),
                 metadata={
                     "provider": "gemini",
                     "stage": stage,
@@ -127,6 +132,32 @@ class TracedGeminiClient:
             )
             raise
 
+    def _generate_with_retries(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float,
+        max_output_tokens: int | None,
+    ) -> dict[str, Any]:
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_generate_attempts + 1):
+            try:
+                return self._generate(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=temperature,
+                    max_output_tokens=max_output_tokens,
+                )
+            except Exception as exc:
+                last_error = exc
+                if attempt >= self.max_generate_attempts or not _is_retryable_error(exc):
+                    break
+                sleep(max(self.retry_backoff_seconds * attempt, _retry_after_seconds(exc)))
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Gemini generation failed without an exception")
+
     def _generate(
         self,
         *,
@@ -138,9 +169,14 @@ class TracedGeminiClient:
         generation_config: dict[str, Any] = {"temperature": temperature}
         if isinstance(max_output_tokens, int) and max_output_tokens > 0:
             generation_config["maxOutputTokens"] = max_output_tokens
+        if self.thinking_budget is not None:
+            generation_config["thinkingConfig"] = {
+                "thinkingBudget": self.thinking_budget,
+            }
+        self._respect_min_interval()
         response = requests.post(
             f"{self.base_url}/models/{self.model}:generateContent",
-            params={"key": self.api_key},
+            headers={"x-goog-api-key": self.api_key},
             json={
                 "systemInstruction": {
                     "parts": [{"text": system_prompt.strip()}],
@@ -155,8 +191,17 @@ class TracedGeminiClient:
             },
             timeout=self.timeout,
         )
+        self._last_request_at = perf_counter()
         response.raise_for_status()
         return response.json()
+
+    def _respect_min_interval(self) -> None:
+        if self.min_interval_seconds <= 0 or self._last_request_at is None:
+            return
+        elapsed = perf_counter() - self._last_request_at
+        remaining = self.min_interval_seconds - elapsed
+        if remaining > 0:
+            sleep(remaining)
 
 
 def _extract_text(payload: dict[str, Any]) -> str:
@@ -223,3 +268,32 @@ def _extract_section_name(task_id: str) -> str | None:
 def _extract_revision_round(task_id: str) -> int | None:
     match = re.search(r"_r(\d+)", task_id)
     return int(match.group(1)) if match else None
+
+
+def _is_retryable_error(exc: Exception) -> bool:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        return response is not None and (
+            response.status_code == 429 or 500 <= response.status_code < 600
+        )
+    return False
+
+
+def _safe_error_message(exc: Exception) -> str:
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return f"{exc.response.status_code} {exc.response.reason}".strip()
+    return str(exc)
+
+
+def _retry_after_seconds(exc: Exception) -> float:
+    if not isinstance(exc, requests.HTTPError) or exc.response is None:
+        return 0.0
+    raw_value = exc.response.headers.get("Retry-After")
+    if raw_value is None:
+        return 0.0
+    try:
+        return max(float(raw_value), 0.0)
+    except ValueError:
+        return 0.0
