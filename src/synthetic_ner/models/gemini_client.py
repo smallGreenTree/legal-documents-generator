@@ -31,6 +31,9 @@ class TracedGeminiClient:
                 f"Gemini API key is missing. Expected env var '{config.api_key_env}'."
             )
         self.api_key = api_key
+        self.base_url = (config.base_url or "").rstrip("/")
+        if not self.base_url:
+            raise ValueError("Gemini provider requires base_url")
         self.model = config.model
         self.timeout = config.timeout
         self.tracer = tracer
@@ -49,7 +52,6 @@ class TracedGeminiClient:
         prompt_object: Any | None = None,
         on_partial_text: Callable[[str], None] | None = None,
     ) -> GeminiCallResult:
-        del on_partial_text
         full_prompt = (
             f"[SYSTEM]\n{system_prompt.strip()}\n\n"
             f"[USER]\n{user_prompt.strip()}\n"
@@ -84,6 +86,8 @@ class TracedGeminiClient:
                 max_output_tokens=max_output_tokens,
             )
             text = _extract_text(payload)
+            if on_partial_text is not None and text:
+                on_partial_text(text)
             latency_ms = round((perf_counter() - started) * 1000)
             metadata = _build_metadata(
                 payload,
@@ -135,10 +139,7 @@ class TracedGeminiClient:
         if isinstance(max_output_tokens, int) and max_output_tokens > 0:
             generation_config["maxOutputTokens"] = max_output_tokens
         response = requests.post(
-            (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{self.model}:generateContent"
-            ),
+            f"{self.base_url}/models/{self.model}:generateContent",
             params={"key": self.api_key},
             json={
                 "systemInstruction": {

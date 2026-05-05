@@ -191,8 +191,8 @@ def _build_model_provider_config(
     )
     if provider not in {"ollama", "gemini"}:
         raise ValueError(f"{path}.provider must be one of: ollama, gemini")
-    if provider == "ollama" and not base_url:
-        raise ValueError(f"{path}.base_url is required for ollama provider")
+    if provider in {"ollama", "gemini"} and not base_url:
+        raise ValueError(f"{path}.base_url is required for {provider} provider")
     if provider == "gemini" and not api_key_env:
         raise ValueError(f"{path}.api_key_env is required for gemini provider")
     return ModelProviderConfig(

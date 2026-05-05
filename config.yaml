@@ -28,6 +28,7 @@ model_routing:
       timeout: 900
     critic:
       provider: gemini
+      base_url: https://generativelanguage.googleapis.com/v1beta
       model: gemini-2.5-flash
       api_key_env: GEMINI_API_KEY
       timeout: 900
