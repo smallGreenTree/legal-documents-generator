@@ -8,6 +8,10 @@ ollama:
   base_url: http://localhost:11434
   model: qwen3:8b
   timeout: 900
+  recovery:
+    max_generate_attempts: 3
+    retry_backoff_seconds: 5
+    controlled_empty_section: "[section not generated]"
 
 model_routing:
   default:

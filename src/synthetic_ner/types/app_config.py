@@ -12,10 +12,18 @@ class PathsConfig:
 
 
 @dataclass(frozen=True)
+class OllamaRecoveryConfig:
+    max_generate_attempts: int
+    retry_backoff_seconds: float
+    controlled_empty_section: str
+
+
+@dataclass(frozen=True)
 class OllamaConfig:
     base_url: str
     model: str
     timeout: int
+    recovery: OllamaRecoveryConfig
 
 
 @dataclass(frozen=True)

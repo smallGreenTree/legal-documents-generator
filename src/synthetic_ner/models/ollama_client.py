@@ -12,10 +12,6 @@ import requests
 from src.synthetic_ner.tasks.tracer import TraceStore
 from src.synthetic_ner.types.app_config import OllamaConfig
 
-_MAX_GENERATE_ATTEMPTS = 3
-_RETRY_BACKOFF_SECONDS = 5
-_CONTROLLED_EMPTY_SECTION = "[section not generated]"
-
 
 @dataclass(slots=True)
 class OllamaCallResult:
@@ -30,6 +26,7 @@ class TracedOllamaClient:
         self.base_url = config.base_url.rstrip("/")
         self.model = config.model
         self.timeout = config.timeout
+        self.recovery = config.recovery
         self.tracer = tracer
 
     def invoke(
@@ -147,7 +144,7 @@ class TracedOllamaClient:
                     "output_budget": options.get("num_predict"),
                     "latency_ms": latency_ms,
                     "prompt_chars": len(full_prompt),
-                    "response_chars": len(_CONTROLLED_EMPTY_SECTION),
+                    "response_chars": len(self.recovery.controlled_empty_section),
                     "response_empty": False,
                     "tokens_prompt": None,
                     "tokens_response": None,
@@ -158,10 +155,13 @@ class TracedOllamaClient:
                 self.tracer.record_llm_call(
                     trace,
                     prompt=full_prompt,
-                    response=_CONTROLLED_EMPTY_SECTION,
+                    response=self.recovery.controlled_empty_section,
                     metadata=metadata,
                 )
-                return OllamaCallResult(text=_CONTROLLED_EMPTY_SECTION, metadata=metadata)
+                return OllamaCallResult(
+                    text=self.recovery.controlled_empty_section,
+                    metadata=metadata,
+                )
             self.tracer.record_error(
                 trace,
                 prompt=full_prompt,
@@ -187,7 +187,7 @@ class TracedOllamaClient:
         on_partial_text: Callable[[str], None] | None,
     ) -> tuple[dict[str, Any], str]:
         last_error: Exception | None = None
-        for attempt in range(1, _MAX_GENERATE_ATTEMPTS + 1):
+        for attempt in range(1, self.recovery.max_generate_attempts + 1):
             try:
                 return self._generate(
                     full_prompt=full_prompt,
@@ -196,9 +196,12 @@ class TracedOllamaClient:
                 )
             except Exception as exc:
                 last_error = exc
-                if attempt >= _MAX_GENERATE_ATTEMPTS or not _is_retryable_error(exc):
+                if (
+                    attempt >= self.recovery.max_generate_attempts
+                    or not _is_retryable_error(exc)
+                ):
                     break
-                sleep(_RETRY_BACKOFF_SECONDS * attempt)
+                sleep(self.recovery.retry_backoff_seconds * attempt)
         if last_error is not None:
             raise last_error
         raise RuntimeError("Ollama generation failed without an exception")

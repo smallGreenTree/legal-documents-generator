@@ -20,6 +20,7 @@ from src.synthetic_ner.types.app_config import (
     ModelRoutingConfig,
     OffencePeriodConfig,
     OllamaConfig,
+    OllamaRecoveryConfig,
     PathsConfig,
     PersonSpecConfig,
     PersonVariantEligibilityConfig,
@@ -123,10 +124,25 @@ def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
 
 
 def _build_ollama_config(raw: dict[str, Any]) -> OllamaConfig:
+    recovery = _require_mapping(raw["recovery"], "ollama.recovery")
     return OllamaConfig(
         base_url=_require_string(raw["base_url"], "ollama.base_url"),
         model=_require_string(raw["model"], "ollama.model"),
         timeout=_require_positive_int(raw["timeout"], "ollama.timeout"),
+        recovery=OllamaRecoveryConfig(
+            max_generate_attempts=_require_positive_int(
+                recovery["max_generate_attempts"],
+                "ollama.recovery.max_generate_attempts",
+            ),
+            retry_backoff_seconds=_require_positive_number(
+                recovery["retry_backoff_seconds"],
+                "ollama.recovery.retry_backoff_seconds",
+            ),
+            controlled_empty_section=_require_string(
+                recovery["controlled_empty_section"],
+                "ollama.recovery.controlled_empty_section",
+            ),
+        ),
     )
 
 
