@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
+from src.synthetic_ner.tasks.prompt_context import build_section_context
 from src.synthetic_ner.tasks.validators import clean_generated_section_text
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_prompt_template
@@ -71,6 +72,7 @@ class SectionWriter:
                 self.prompts.writer_user,
                 prompt_client=prompt_client,
                 memory_text=memory_text,
+                section_context=build_section_context(memory_text, section_name),
                 document_plan=document_plan,
                 section_plan=section_plan,
                 section_name=section_name,

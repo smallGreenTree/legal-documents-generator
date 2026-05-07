@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from requests.exceptions import ReadTimeout, RequestException
+from src.synthetic_ner.tasks.prompt_context import build_section_context
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.types.critic import CriticResult
 from src.synthetic_ner.utils import render_prompt_template
@@ -51,11 +52,16 @@ class SectionCritic:
     ) -> CriticResult:
         compact_memory = _truncate_text(memory_text, self.memory_char_limit)
         compact_section_text = _truncate_text(section_text, self.section_text_char_limit)
+        section_context = _truncate_text(
+            build_section_context(memory_text, section_name),
+            self.memory_char_limit,
+        )
         prompt_client = self.prompt_clients.get("critic_user")
         user_prompt = render_prompt_template(
             self.prompts.critic_user,
             prompt_client=prompt_client,
             memory_text=compact_memory,
+            section_context=section_context,
             section_plan=section_plan,
             section_text=compact_section_text,
             section_name=section_name,

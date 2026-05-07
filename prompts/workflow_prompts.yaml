@@ -24,13 +24,14 @@ prompts:
     - Facts that should be introduced once and then referred to naturally
 
   section_planner_system: |
-    You are the section planner. Stick strictly to CASE_MEMORY and the document plan.
-    Turn the available facts into a prose route for the writer. Do not produce
-    a checklist that encourages mechanical writing.
+    You are the section planner. Stick strictly to SECTION_CONTEXT and the document plan.
+    Turn the available facts into a prose route for the writer. The plan must
+    tell the writer what to include, what to leave out, and how to avoid
+    hallucinating missing legal detail. Do not produce a mechanical checklist.
 
   section_planner_user: |
-    CASE_MEMORY:
-    {{ memory_text }}
+    SECTION_CONTEXT:
+    {{ section_context }}
 
     DOCUMENT PLAN:
     {{ document_plan }}
@@ -41,16 +42,18 @@ prompts:
     Return:
     - Opening move: how the section should begin without listing every entity
     - Narrative progression: the order in which facts should be connected
-    - Facts and entities to include, grouped by role rather than copied as a list
+    - Mandatory facts and entities to include, grouped by role rather than copied as a list
+    - Allowed references: exact names, dates, VAT numbers and case references that matter here
     - Facts to omit if CASE_MEMORY does not provide enough detail
+    - Anti-hallucination constraints specific to this section
     - Closing move: how the section should end or transition to the next section
 
   writer_system: |
     You are writing a formal legal document.
-    Use only the information from CASE_MEMORY, the document plan and the section plan.
+    Use only the information from SECTION_CONTEXT, the document plan and the section plan.
     Write in clear, formal, neutral legal language that reads like a continuous
     legal document rather than a generated summary.
-    Do not use any country-specific court names, prosecution agencies, or statutes unless explicitly provided in CASE_MEMORY.
+    Do not use any country-specific court names, prosecution agencies, or statutes unless explicitly provided in SECTION_CONTEXT.
     Transform the listed facts into connected paragraphs. Do not copy CASE_MEMORY
     bullet lines or write sentences whose only purpose is to enumerate all allowed
     names, organisations, VAT numbers, or relationships.
@@ -69,8 +72,8 @@ prompts:
     No headings in the output. No markdown.
 
   writer_user: |
-    CASE_MEMORY:
-    {{ memory_text }}
+    SECTION_CONTEXT:
+    {{ section_context }}
 
     DOCUMENT PLAN:
     {{ document_plan }}
@@ -107,16 +110,19 @@ prompts:
       repeating the whole factual narrative.
 
     If a detail is missing from CASE_MEMORY, omit it rather than writing a placeholder.
+    Use exact allowed names, dates, VAT numbers and case references from SECTION_CONTEXT.
+    Do not introduce any person, organisation, address, statute, amount, invoice,
+    exhibit, search, email or procedural step that is not present in SECTION_CONTEXT.
     Do not restate the section plan. Do not summarize your task.
 
   critic_system: |
-    You are a strict critic. Check the draft ONLY against CASE_MEMORY and the section plan.
+    You are a strict critic. Check the draft ONLY against SECTION_CONTEXT and the section plan.
     Also check whether the section reads like natural formal legal prose rather
     than a mechanical list or memory dump.
 
   critic_user: |
-    CASE_MEMORY:
-    {{ memory_text }}
+    SECTION_CONTEXT:
+    {{ section_context }}
 
     SECTION PLAN:
     {{ section_plan }}
@@ -128,6 +134,7 @@ prompts:
     Flag the draft if it copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
+    Treat any detail outside SECTION_CONTEXT as a hallucination.
 
     Respond exactly in this format:
     APPROVED: yes|no

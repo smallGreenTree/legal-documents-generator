@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
+from src.synthetic_ner.tasks.prompt_context import build_section_context
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_prompt_template
 
@@ -81,6 +82,7 @@ class Planner:
             self.prompts.section_planner_user,
             prompt_client=prompt_client,
             memory_text=memory_text,
+            section_context=build_section_context(memory_text, section_name),
             document_plan=document_plan,
             doc_type=doc_type,
             section_name=section_name,
