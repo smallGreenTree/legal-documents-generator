@@ -8,7 +8,7 @@ from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
 def build_section_context(memory_text: str, section_name: str) -> str:
     """Build a compact evidence packet for one section prompt."""
 
-    parts = [
+    common_parts = [
         "# SECTION_CONTEXT",
         "",
         "## Section",
@@ -21,26 +21,13 @@ def build_section_context(memory_text: str, section_name: str) -> str:
         "## Case Metadata",
         _extract_markdown_block(memory_text, "Document"),
         "",
-        "## People",
-        _extract_markdown_block(memory_text, "Defendants"),
-        "",
-        _extract_markdown_block(memory_text, "Collateral"),
-        "",
-        "## Organisations",
-        _extract_markdown_block(memory_text, "Organisations"),
-        "",
-        "## Counts",
-        _extract_markdown_block(memory_text, "Counts"),
-        "",
-        "## Relationship Facts",
-        _extract_markdown_block(memory_text, "Relationship Graph"),
-        "",
         "## Allowed References",
         _extract_markdown_block(memory_text, "Allowed References"),
         "",
         "## Strict Rules",
         _extract_markdown_block(memory_text, "Strict Rules"),
     ]
+    parts = [*common_parts, *_section_memory_parts(memory_text, section_name)]
     return "\n".join(part for part in parts if part.strip()).strip()
 
 
@@ -89,6 +76,78 @@ def _section_guidance(section_name: str) -> list[str]:
             "- Write section-specific prose rather than a general case summary.",
         ],
     )
+
+
+def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
+    section = section_name.lower()
+    if section == "persons":
+        return [
+            "",
+            "## Defendants",
+            _extract_markdown_block(memory_text, "Defendants"),
+            "",
+            "## Collateral",
+            _extract_markdown_block(memory_text, "Collateral"),
+        ]
+    if section == "companies":
+        return [
+            "",
+            "## Organisations",
+            _extract_markdown_block(memory_text, "Organisations"),
+        ]
+    if section == "history":
+        return [
+            "",
+            "## Counts",
+            _extract_markdown_block(memory_text, "Counts"),
+        ]
+    if section == "charges":
+        return [
+            "",
+            "## Defendants",
+            _extract_markdown_block(memory_text, "Defendants"),
+            "",
+            "## Organisations",
+            _extract_markdown_block(memory_text, "Organisations"),
+            "",
+            "## Counts",
+            _extract_markdown_block(memory_text, "Counts"),
+        ]
+    if section == "facts":
+        return [
+            "",
+            "## Counts",
+            _extract_markdown_block(memory_text, "Counts"),
+            "",
+            "## Relationship Facts",
+            _extract_markdown_block(memory_text, "Relationship Graph"),
+        ]
+    if section == "evidence":
+        return [
+            "",
+            "## Organisations",
+            _extract_markdown_block(memory_text, "Organisations"),
+            "",
+            "## Relationship Facts",
+            _extract_markdown_block(memory_text, "Relationship Graph"),
+        ]
+    if section == "assessment":
+        return [
+            "",
+            "## Counts",
+            _extract_markdown_block(memory_text, "Counts"),
+            "",
+            "## Relationship Facts",
+            _extract_markdown_block(memory_text, "Relationship Graph"),
+        ]
+    return [
+        "",
+        "## Counts",
+        _extract_markdown_block(memory_text, "Counts"),
+        "",
+        "## Relationship Facts",
+        _extract_markdown_block(memory_text, "Relationship Graph"),
+    ]
 
 
 def _extract_markdown_block(memory_text: str, heading: str) -> str:

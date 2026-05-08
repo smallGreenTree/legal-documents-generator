@@ -26,6 +26,8 @@ class TracedOllamaClient:
         self.base_url = config.base_url.rstrip("/")
         self.model = config.model
         self.timeout = config.timeout
+        self.num_ctx = config.num_ctx
+        self.think = config.think
         self.recovery = config.recovery
         self.tracer = tracer
 
@@ -64,12 +66,16 @@ class TracedOllamaClient:
                 "model_parameters": {
                     "temperature": temperature,
                     "num_predict": max_output_tokens,
+                    "num_ctx": self.num_ctx,
+                    "think": self.think,
                 }
             },
         )
         started = perf_counter()
         partial_text = ""
         options: dict[str, Any] = {"temperature": temperature}
+        if self.num_ctx is not None:
+            options["num_ctx"] = self.num_ctx
         if isinstance(max_output_tokens, int) and max_output_tokens > 0:
             options["num_predict"] = max_output_tokens
 
@@ -116,6 +122,7 @@ class TracedOllamaClient:
                     "model": self.model,
                     "temperature": temperature,
                     "output_budget": options.get("num_predict") if "options" in locals() else None,
+                    "context_window": options.get("num_ctx") if "options" in locals() else None,
                     "latency_ms": latency_ms,
                     "prompt_chars": len(full_prompt),
                     "response_chars": len(text),
@@ -142,6 +149,7 @@ class TracedOllamaClient:
                     "model": self.model,
                     "temperature": temperature,
                     "output_budget": options.get("num_predict"),
+                    "context_window": options.get("num_ctx"),
                     "latency_ms": latency_ms,
                     "prompt_chars": len(full_prompt),
                     "response_chars": len(self.recovery.controlled_empty_section),
@@ -214,28 +222,34 @@ class TracedOllamaClient:
         on_partial_text: Callable[[str], None] | None,
     ) -> tuple[dict[str, Any], str]:
         if on_partial_text is None:
+            request_json: dict[str, Any] = {
+                "model": self.model,
+                "prompt": full_prompt,
+                "stream": False,
+                "options": options,
+            }
+            if self.think is not None:
+                request_json["think"] = self.think
             response = requests.post(
                 f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": full_prompt,
-                    "stream": False,
-                    "options": options,
-                },
+                json=request_json,
                 timeout=self.timeout,
             )
             response.raise_for_status()
             payload = response.json()
             return payload, payload.get("response", "").strip()
 
+        request_json = {
+            "model": self.model,
+            "prompt": full_prompt,
+            "stream": True,
+            "options": options,
+        }
+        if self.think is not None:
+            request_json["think"] = self.think
         response = requests.post(
             f"{self.base_url}/api/generate",
-            json={
-                "model": self.model,
-                "prompt": full_prompt,
-                "stream": True,
-                "options": options,
-            },
+            json=request_json,
             timeout=self.timeout,
             stream=True,
         )
@@ -246,11 +260,17 @@ class TracedOllamaClient:
             if not raw_line:
                 continue
             payload = json.loads(raw_line)
+            if payload.get("thinking"):
+                final_payload["thinking"] = (
+                    final_payload.get("thinking", "") + payload["thinking"]
+                )
             piece = payload.get("response", "")
             if piece:
                 chunks.append(piece)
                 on_partial_text("".join(chunks))
             if payload.get("done") is True:
+                if final_payload.get("thinking") and not payload.get("thinking"):
+                    payload["thinking"] = final_payload["thinking"]
                 final_payload = payload
                 break
         text = "".join(chunks).strip()
@@ -282,10 +302,12 @@ class TracedOllamaClient:
             "model": model,
             "temperature": temperature,
             "output_budget": options.get("num_predict"),
+            "context_window": options.get("num_ctx"),
             "latency_ms": latency_ms,
             "prompt_chars": len(prompt),
             "response_chars": len(response),
             "response_empty": not bool(response.strip()),
+            "thinking_chars": len(str(payload.get("thinking") or "")),
             "tokens_prompt": payload.get("prompt_eval_count"),
             "tokens_response": payload.get("eval_count"),
             "done_reason": payload.get("done_reason"),

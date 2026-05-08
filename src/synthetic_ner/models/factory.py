@@ -26,6 +26,8 @@ def build_model_client(
                 base_url=provider_cfg.base_url or fallback_ollama.base_url,
                 model=provider_cfg.model,
                 timeout=provider_cfg.timeout,
+                num_ctx=provider_cfg.num_ctx,
+                think=provider_cfg.think,
                 recovery=fallback_ollama.recovery,
             ),
             tracer=tracer,

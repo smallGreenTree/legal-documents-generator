@@ -24,6 +24,8 @@ class OllamaConfig:
     model: str
     timeout: int
     recovery: OllamaRecoveryConfig
+    num_ctx: int | None = None
+    think: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,8 @@ class ModelProviderConfig:
     base_url: str | None = None
     api_key_env: str | None = None
     thinking_budget: int | None = None
+    num_ctx: int | None = None
+    think: bool | None = None
     max_generate_attempts: int = 1
     retry_backoff_seconds: float = 0.0
     min_interval_seconds: float = 0.0

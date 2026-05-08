@@ -129,6 +129,16 @@ def _build_ollama_config(raw: dict[str, Any]) -> OllamaConfig:
         base_url=_require_string(raw["base_url"], "ollama.base_url"),
         model=_require_string(raw["model"], "ollama.model"),
         timeout=_require_positive_int(raw["timeout"], "ollama.timeout"),
+        num_ctx=(
+            _require_positive_int(raw["num_ctx"], "ollama.num_ctx")
+            if raw.get("num_ctx") is not None
+            else None
+        ),
+        think=(
+            _require_bool(raw["think"], "ollama.think")
+            if raw.get("think") is not None
+            else None
+        ),
         recovery=OllamaRecoveryConfig(
             max_generate_attempts=_require_positive_int(
                 recovery["max_generate_attempts"],
@@ -156,6 +166,8 @@ def _build_model_routing_config(
         timeout=ollama_cfg.timeout,
         base_url=ollama_cfg.base_url,
         api_key_env=None,
+        num_ctx=ollama_cfg.num_ctx,
+        think=ollama_cfg.think,
         max_generate_attempts=ollama_cfg.recovery.max_generate_attempts,
         retry_backoff_seconds=ollama_cfg.recovery.retry_backoff_seconds,
         min_interval_seconds=0.0,
@@ -214,6 +226,18 @@ def _build_model_provider_config(
         if thinking_budget_value is not None
         else None
     )
+    num_ctx_value = raw.get("num_ctx", fallback.num_ctx)
+    num_ctx = (
+        _require_positive_int(num_ctx_value, f"{path}.num_ctx")
+        if num_ctx_value is not None
+        else None
+    )
+    think_value = raw.get("think", fallback.think)
+    think = (
+        _require_bool(think_value, f"{path}.think")
+        if think_value is not None
+        else None
+    )
     recovery_raw = raw.get("recovery")
     if recovery_raw is None:
         max_generate_attempts = fallback.max_generate_attempts
@@ -246,6 +270,8 @@ def _build_model_provider_config(
         base_url=base_url,
         api_key_env=api_key_env,
         thinking_budget=thinking_budget,
+        num_ctx=num_ctx,
+        think=think,
         max_generate_attempts=max_generate_attempts,
         retry_backoff_seconds=retry_backoff_seconds,
         min_interval_seconds=min_interval_seconds,
