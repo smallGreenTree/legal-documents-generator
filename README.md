@@ -57,6 +57,48 @@ That workflow adds:
 The active workflow mode is controlled by `workflow.mode` in `config.yaml`,
 and can be overridden on the CLI with `--workflow-mode classic|langgraph`.
 
+## Prefect Orchestration
+
+Prefect can be used as the outer, user-friendly orchestration layer for the
+whole generation run. The Prefect flow keeps the existing LangGraph and
+Langfuse internals, but exposes these higher-level stages in the Prefect UI:
+
+- `configs-ingestion`
+- `faker-entities`
+- `case-schema`
+- `langgraph-langfuse-generation`
+- `end-of-pipeline-file-audit`
+
+Each generated document gets a `file_audit.json` manifest in its output folder.
+The manifest lists the document output files, schema file, memory files,
+partial generation artifacts, file sizes, modification timestamps, and SHA-256
+checksums.
+
+Install/setup Prefect dependencies:
+
+```bash
+make prefect-setup
+```
+
+For a manager-friendly local setup, an engineer can start the whole Prefect
+control plane:
+
+```bash
+make prefect-up
+```
+
+This starts the Prefect server, registers the deployment, and starts a local
+worker in the background. Managers can then use only the Prefect UI.
+
+To stop Prefect:
+
+```bash
+make prefect-down
+```
+
+Now open `http://localhost:4200`, go to **Deployments**, select
+`synthetic-ner-generation/document-generation`, and click **Run**.
+
 When Langfuse is enabled, the workflow tries to fetch these managed text prompts:
 
 - `synthetic_ner.document_planner_system`

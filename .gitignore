@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 .ruff_cache/
+.prefect/
 .env
 .env.langfuse
 output/
