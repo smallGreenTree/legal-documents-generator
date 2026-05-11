@@ -6,7 +6,10 @@ import re
 from typing import Any
 
 from requests.exceptions import ReadTimeout, RequestException
-from src.synthetic_ner.tasks.prompt_context import build_section_context
+from src.synthetic_ner.tasks.prompt_context import (
+    build_section_context,
+    build_section_contract,
+)
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.types.critic import CriticResult
 from src.synthetic_ner.utils import render_prompt_template
@@ -56,12 +59,14 @@ class SectionCritic:
             build_section_context(memory_text, section_name),
             self.memory_char_limit,
         )
+        section_contract = build_section_contract(section_name)
         prompt_client = self.prompt_clients.get("critic_user")
         user_prompt = render_prompt_template(
             self.prompts.critic_user,
             prompt_client=prompt_client,
             memory_text=compact_memory,
             section_context=section_context,
+            section_contract=section_contract,
             section_plan=section_plan,
             section_text=compact_section_text,
             section_name=section_name,
@@ -86,7 +91,10 @@ class SectionCritic:
                 issues=[],
                 revision_instruction="keep as is",
                 rubrics={},
-                raw_text="[critic-timeout] Skipped critic due to model timeout; relying on deterministic validation.",
+                raw_text=(
+                    "[critic-timeout] Skipped critic due to model timeout; "
+                    "relying on deterministic validation."
+                ),
             )
         except RequestException as exc:
             return CriticResult(
@@ -131,6 +139,9 @@ class SectionCritic:
             ]
         if revision_marker != -1:
             revision_instruction = normalized[revision_marker + len("REVISION:"):].strip()
+        for rubric_issue in _blocking_rubric_issues(rubrics):
+            if rubric_issue not in issues:
+                issues.append(rubric_issue)
         if not revision_instruction:
             revision_instruction = "Fix the inconsistencies flagged by the critic."
         if not approved and not issues:
@@ -157,6 +168,14 @@ def _parse_rubrics(rubric_block: str) -> dict[str, int]:
         if key and 1 <= score <= 5:
             rubrics[key] = score
     return rubrics
+
+
+def _blocking_rubric_issues(rubrics: dict[str, int]) -> list[str]:
+    return [
+        f"Critic rubric '{metric}' is blocking with score {score}/5."
+        for metric, score in rubrics.items()
+        if score <= 2
+    ]
 
 
 def _truncate_text(value: str, max_chars: int) -> str:

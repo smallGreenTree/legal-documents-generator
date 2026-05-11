@@ -28,10 +28,17 @@ prompts:
     Turn the available facts into a prose route for the writer. The plan must
     tell the writer what to include, what to leave out, and how to avoid
     hallucinating missing legal detail. Do not produce a mechanical checklist.
+    Produce structure and sequencing only; do not write section prose.
+    Do not add allegations, facts, entities, dates, or legal conclusions beyond
+    SECTION_CONTEXT. If the document plan conflicts with SECTION_CONTRACT,
+    follow SECTION_CONTRACT.
 
   section_planner_user: |
     SECTION_CONTEXT:
     {{ section_context }}
+
+    SECTION_CONTRACT:
+    {{ section_contract }}
 
     DOCUMENT PLAN:
     {{ document_plan }}
@@ -50,7 +57,10 @@ prompts:
 
   writer_system: |
     You are writing a formal legal document.
-    Use only the information from SECTION_CONTEXT, the document plan and the section plan.
+    Use only the information from SECTION_CONTEXT, SECTION_CONTRACT, the
+    document plan and the section plan.
+    SECTION_CONTRACT is stricter than the section plan. If they conflict,
+    follow SECTION_CONTRACT.
     Write in clear, formal, neutral legal language that reads like a continuous
     legal document rather than a generated summary.
     Do not use any country-specific court names, prosecution agencies, or statutes unless explicitly provided in SECTION_CONTEXT.
@@ -75,6 +85,9 @@ prompts:
     SECTION_CONTEXT:
     {{ section_context }}
 
+    SECTION_CONTRACT:
+    {{ section_contract }}
+
     DOCUMENT PLAN:
     {{ document_plan }}
 
@@ -85,6 +98,17 @@ prompts:
     Target words this chunk: {{ word_target }}
     Previous text tail:
     {{ previous_tail }}
+
+    {% if revision_instruction and revision_instruction != "none" -%}
+    REVISION REQUIREMENTS:
+    {{ revision_instruction }}
+
+    The prior draft was rejected by the critic or validator. Rewrite from
+    SECTION_CONTEXT and SECTION_CONTRACT rather than lightly patching or
+    preserving rejected structure. Resolve every blocking issue. Use only
+    entities, dates, case references, and VAT/reference numbers present in
+    SECTION_CONTEXT. Remove unknown identifiers instead of inventing replacements.
+    {% endif -%}
 
     Write the next formal legal passage for this section.
     Continue in paragraph form. If this is the first chunk of the section, open
@@ -116,13 +140,19 @@ prompts:
     Do not restate the section plan. Do not summarize your task.
 
   critic_system: |
-    You are a strict critic. Check the draft ONLY against SECTION_CONTEXT and the section plan.
+    You are a strict critic. Check the draft ONLY against SECTION_CONTEXT,
+    SECTION_CONTRACT and the section plan.
+    APPROVED must be no if the draft violates SECTION_CONTRACT.
+    APPROVED must be no if any rubric score is 1 or 2.
     Also check whether the section reads like natural formal legal prose rather
     than a mechanical list or memory dump.
 
   critic_user: |
     SECTION_CONTEXT:
     {{ section_context }}
+
+    SECTION_CONTRACT:
+    {{ section_contract }}
 
     SECTION PLAN:
     {{ section_plan }}
@@ -134,6 +164,8 @@ prompts:
     Flag the draft if it copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
+    Treat out-of-scope allegations, fabricated identifiers, chronology conflicts,
+    mechanical memory-dump style, and repeated entity inventories as blocking issues.
     Treat any detail outside SECTION_CONTEXT as a hallucination.
 
     Respond exactly in this format:

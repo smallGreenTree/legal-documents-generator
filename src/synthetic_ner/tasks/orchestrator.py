@@ -22,6 +22,7 @@ from src.synthetic_ner.models.factory import build_model_client, describe_stage_
 from src.synthetic_ner.tasks.critic import SectionCritic
 from src.synthetic_ner.tasks.memory_manager import CaseMemoryManager
 from src.synthetic_ner.tasks.planner import Planner
+from src.synthetic_ner.tasks.prompt_context import build_section_contract
 from src.synthetic_ner.tasks.tracer import TraceStore
 from src.synthetic_ner.tasks.validators import (
     build_deterministic_fallback_section,
@@ -40,6 +41,7 @@ class WorkflowState(TypedDict, total=False):
     section_order: list[str]
     section_index: int
     current_section: str
+    current_section_contract: str
     current_section_plan: str
     current_section_text: str
     current_section_issues: list[str]
@@ -48,6 +50,7 @@ class WorkflowState(TypedDict, total=False):
     repair_attempts: int
     section_outputs: dict[str, str]
     section_plans: dict[str, str]
+    section_contracts: dict[str, str]
     section_reviews: dict[str, list[str]]
     instruction_channel: dict[str, Any]
     review_channel: dict[str, Any]
@@ -196,6 +199,7 @@ def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
                 "section_index": 0,
                 "section_outputs": {},
                 "section_plans": {},
+                "section_contracts": {},
                 "section_reviews": {},
                 "instruction_channel": {},
                 "review_channel": {},
@@ -335,7 +339,7 @@ class DocumentWorkflow:
             self._trace_node(
                 "repair_section",
                 self.repair_section_node,
-                next_node="validate_section",
+                next_node="critique_section",
             ),
         )
         builder.add_node(
@@ -406,7 +410,7 @@ class DocumentWorkflow:
             },
         )
         builder.add_edge("revise_section", "critique_section")
-        builder.add_edge("repair_section", "validate_section")
+        builder.add_edge("repair_section", "critique_section")
         builder.add_edge("store_section", "prepare_section")
         builder.add_edge("render_document", END)
 
@@ -434,6 +438,7 @@ class DocumentWorkflow:
             return {"current_section": ""}
         instruction_channel = dict(state.get("instruction_channel", {}))
         instruction_channel["current_revision_instruction"] = ""
+        instruction_channel["current_section_contract"] = ""
         review_channel = dict(state.get("review_channel", {}))
         review_channel["current_section_issues"] = []
         review_channel["critic_rubrics"] = {}
@@ -443,6 +448,7 @@ class DocumentWorkflow:
         return {
             "current_section": state["section_order"][section_index],
             "current_section_plan": "",
+            "current_section_contract": "",
             "current_section_text": "",
             "current_section_issues": [],
             "current_revision_instruction": "",
@@ -455,6 +461,7 @@ class DocumentWorkflow:
 
     def plan_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
+        section_contract = build_section_contract(section_name)
         section_plan = self.planner.plan_section(
             doc_id=self.doc_id,
             parent_task_id="planner_document",
@@ -466,9 +473,16 @@ class DocumentWorkflow:
         )
         section_plans = dict(state.get("section_plans", {}))
         section_plans[section_name] = section_plan
+        section_contracts = dict(state.get("section_contracts", {}))
+        section_contracts[section_name] = section_contract
+        instruction_channel = dict(state.get("instruction_channel", {}))
+        instruction_channel["current_section_contract"] = section_contract
         return {
             "current_section_plan": section_plan,
+            "current_section_contract": section_contract,
             "section_plans": section_plans,
+            "section_contracts": section_contracts,
+            "instruction_channel": instruction_channel,
         }
 
     def write_section_node(self, state: WorkflowState) -> WorkflowState:
@@ -507,6 +521,7 @@ class DocumentWorkflow:
         review_channel["current_section_issues"] = list(review.issues)
         review_channel["critic_rubrics"] = dict(review.rubrics)
         review_channel["critic_approved"] = bool(review.approved)
+        review_channel["critic_verdict"] = "approved" if review.approved else "rejected"
         instruction_channel = dict(state.get("instruction_channel", {}))
         instruction_channel["current_revision_instruction"] = review.revision_instruction
         return {
@@ -520,6 +535,11 @@ class DocumentWorkflow:
         section_name = state["current_section"]
         current_text = clean_generated_section_text(_current_section_text(state))
         issues = list(_current_section_issues(state))
+        critic_approved = _critic_approved(state)
+        if not critic_approved:
+            verdict_issue = "Critic verdict rejected this section."
+            if verdict_issue not in issues:
+                issues.append(verdict_issue)
         validator_issues = validate_section_text(
             section_name=section_name,
             section_text=current_text,
@@ -568,7 +588,7 @@ class DocumentWorkflow:
             section_plan=state["current_section_plan"],
             case_number=self.document.metadata["case_number"],
             word_target=self.context.section_word_targets[section_name],
-            revision_instruction=_current_revision_instruction(state),
+            revision_instruction=_build_revision_instruction(state),
             revision_round=revision_count,
         )
         clean_text = clean_generated_section_text(revised_text)
@@ -735,6 +755,7 @@ class DocumentWorkflow:
             doc_id=self.doc_id,
             memory_path=self.memory_path,
             document_plan=state.get("document_plan", ""),
+            section_contracts=state.get("section_contracts", {}),
             section_plans=state.get("section_plans", {}),
             section_reviews=state.get("section_reviews", {}),
             trace_store=self.trace_store,
@@ -756,11 +777,12 @@ def route_after_prepare(state: WorkflowState) -> str:
 
 def route_after_validation(state: WorkflowState, max_revisions: int) -> str:
     issues = _current_section_issues(state)
+    critic_rejected = not _critic_approved(state)
     revision_count = state.get("revision_count", 0)
     repair_attempts = state.get("repair_attempts", 0)
-    if issues and revision_count < max_revisions:
+    if (issues or critic_rejected) and revision_count < max_revisions:
         return "revise_section"
-    if issues and repair_attempts < 1:
+    if (issues or critic_rejected) and repair_attempts < 1:
         return "repair_section"
     return "store_section"
 
@@ -797,12 +819,32 @@ def _current_revision_instruction(state: Mapping[str, Any]) -> str:
     return fallback if isinstance(fallback, str) else ""
 
 
+def _critic_approved(state: Mapping[str, Any]) -> bool:
+    review_channel = state.get("review_channel")
+    if isinstance(review_channel, Mapping):
+        value = review_channel.get("critic_approved")
+        if isinstance(value, bool):
+            return value
+    return False
+
+
+def _build_revision_instruction(state: Mapping[str, Any]) -> str:
+    issues = _current_section_issues(state)
+    issue_lines = "\n".join(f"- {issue}" for issue in issues) or "- none"
+    base_instruction = _current_revision_instruction(state).strip()
+    parts = ["ISSUES:", issue_lines]
+    if base_instruction and base_instruction.lower() != "keep as is":
+        parts.extend(["", "REVISION:", base_instruction])
+    return "\n".join(parts).strip()
+
+
 def write_generation_report(
     *,
     context,
     doc_id: str,
     memory_path: Path,
     document_plan: str,
+    section_contracts: dict[str, str],
     section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
     trace_store: TraceStore,
@@ -835,6 +877,9 @@ def write_generation_report(
         lines.extend(
             [
                 f"### {section_name}",
+                "",
+                "Contract:",
+                section_contracts.get(section_name, "- none"),
                 "",
                 "Plan:",
                 section_plans[section_name],
@@ -882,7 +927,10 @@ def _format_llm_analytics(
         "",
         "### Stage Totals",
         "",
-        "| Stage | Calls | Total ms | Avg ms | Prompt Tokens | Response Tokens | Empty | Truncated | Errors |",
+        (
+            "| Stage | Calls | Total ms | Avg ms | Prompt Tokens | Response Tokens | "
+            "Empty | Truncated | Errors |"
+        ),
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in llm_summary["by_stage"]:
@@ -906,14 +954,23 @@ def _format_llm_analytics(
             "### Bottleneck Candidates",
             "",
             f"- Slowest call: {_format_call_summary(llm_summary['slowest_call'], 'latency_ms')}",
-            f"- Largest prompt: {_format_call_summary(llm_summary['largest_prompt'], 'prompt_chars')}",
-            f"- Largest response: {_format_call_summary(llm_summary['largest_response'], 'response_chars')}",
+            (
+                "- Largest prompt: "
+                f"{_format_call_summary(llm_summary['largest_prompt'], 'prompt_chars')}"
+            ),
+            (
+                "- Largest response: "
+                f"{_format_call_summary(llm_summary['largest_response'], 'response_chars')}"
+            ),
             "- Sections with revisions: "
             + (", ".join(revised_sections) if revised_sections else "none"),
             "",
             "### LLM Calls",
             "",
-            "| Task | Stage | Section | Rev | Prompt chars | Response chars | Prompt tokens | Response tokens | Budget | ms | Done | Empty |",
+            (
+                "| Task | Stage | Section | Rev | Prompt chars | Response chars | "
+                "Prompt tokens | Response tokens | Budget | ms | Done | Empty |"
+            ),
             "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
         ]
     )

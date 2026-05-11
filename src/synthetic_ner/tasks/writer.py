@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
-from src.synthetic_ner.tasks.prompt_context import build_section_context
+from src.synthetic_ner.tasks.prompt_context import (
+    build_section_context,
+    build_section_contract,
+)
 from src.synthetic_ner.tasks.validators import clean_generated_section_text
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 from src.synthetic_ner.utils import render_prompt_template
@@ -68,11 +71,13 @@ class SectionWriter:
             chunk_target = min(self.chunk_words, remaining)
             previous_tail = chunks[-1][-self.context_tail_chars:] if chunks else "n/a"
             prompt_client = self.prompt_clients.get("writer_user")
+            section_contract = build_section_contract(section_name)
             user_prompt = render_prompt_template(
                 self.prompts.writer_user,
                 prompt_client=prompt_client,
                 memory_text=memory_text,
                 section_context=build_section_context(memory_text, section_name),
+                section_contract=section_contract,
                 document_plan=document_plan,
                 section_plan=section_plan,
                 section_name=section_name,
@@ -82,15 +87,6 @@ class SectionWriter:
                 previous_tail=previous_tail,
                 revision_instruction=revision_instruction or "none",
             )
-            if revision_instruction.strip():
-                user_prompt = (
-                    f"{user_prompt}\n\n"
-                    "REVISION REQUIREMENTS:\n"
-                    f"{revision_instruction.strip()}\n"
-                    "- Use only entities, dates, case references, and VAT/reference numbers "
-                    "present in CASE_MEMORY.\n"
-                    "- Remove any unknown identifiers instead of inventing replacements.\n"
-                )
             task_id = (
                 f"writer_{section_name}_r{revision_round}_chunk_{chunk_index:02d}"
             )

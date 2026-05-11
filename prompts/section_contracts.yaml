@@ -1,0 +1,118 @@
+section_contracts:
+  persons: |
+    # SECTION_CONTRACT
+
+    - Section: persons
+    - Purpose: Identify the defendants in natural legal prose, preserving exact names, dates of birth, birthplaces, nationalities, roles and addresses.
+    - Allowed scope: Identity and procedural role only.
+    - Required facts: Defendant names, dates of birth, nationalities, roles, and addresses when listed; collateral persons only where section context requires them.
+    - Forbidden content: Allegations, scheme mechanics, culpability language, false documents, fund flows, investigative conclusions, or characterisations such as central figure, architect, instrumental, coordinated, or deliberate.
+    - Style: Concise formal legal prose; no bullet list, memory dump, or repetitive inventory of every relationship.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  companies: |
+    # SECTION_CONTRACT
+
+    - Section: companies
+    - Purpose: Identify the charged organisations in natural legal prose, preserving exact company names, addresses and VAT numbers.
+    - Allowed scope: Charged organisation identity only.
+    - Required facts: Company names, VAT numbers, addresses, and charged status when listed.
+    - Forbidden content: Inferred directors, trading history, registration dates, business activity, fund-flow conclusions, or unlisted relationships.
+    - Style: Concise formal legal prose; no registry-style inventory.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  history: |
+    # SECTION_CONTRACT
+
+    - Section: history
+    - Purpose: Build a procedural and chronological bridge into the charges.
+    - Allowed scope: Procedural and chronological bridge into the charges.
+    - Required facts: Case references, filing date, offence period, and listed counts.
+    - Forbidden content: Searches, warrants, exhibits, hearings, arrests, or procedural steps that are not listed in SECTION_CONTEXT.
+    - Style: Chronological legal prose with minimal entity relisting.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  charges: |
+    # SECTION_CONTRACT
+
+    - Section: charges
+    - Purpose: State precise allegations against each defendant and each company.
+    - Allowed scope: Charge language tied to listed counts and parties.
+    - Required facts: Defendants, charged organisations, count particulars, statutes, and charged period when listed.
+    - Forbidden content: Invented count numbers, statutory wording, exhibits, procedural steps, or facts outside the listed particulars.
+    - Style: Precise charge prose; compact and non-speculative.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  facts: |
+    # SECTION_CONTRACT
+
+    - Section: facts
+    - Purpose: Build the main chronological narrative from listed relationship facts and count particulars.
+    - Allowed scope: Main chronological narrative from listed relationship facts.
+    - Required facts: Recorded control, instruction, conspiracy, and fund-flow facts.
+    - Forbidden content: Unlisted dates, invoices, amounts, accounts, witnesses, documents, or inferred motives.
+    - Style: Natural chronological legal narrative, not a relationship dump.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  evidence: |
+    # SECTION_CONTRACT
+
+    - Section: evidence
+    - Purpose: Describe evidence categories only from recorded relationships and references.
+    - Allowed scope: Evidence categories grounded in recorded references.
+    - Required facts: Listed relationships, organisations, references, and evidence categories.
+    - Forbidden content: Invented exhibit labels, emails, searches, bank records, invoices, or witness statements.
+    - Style: Evidential prose explaining relevance without argument.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  assessment: |
+    # SECTION_CONTRACT
+
+    - Section: assessment
+    - Purpose: Draw legal characterisation from already recorded facts.
+    - Allowed scope: Legal characterisation of already recorded facts.
+    - Required facts: Listed counts, relationships, and facts already established.
+    - Forbidden content: New factual allegations, expanded chronology, unlisted authorities, or unsupported conclusions.
+    - Style: Measured legal assessment without repeating the full facts section.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.
+
+  default: |
+    # SECTION_CONTRACT
+
+    - Allowed scope: Only the section-specific facts listed in SECTION_CONTEXT.
+    - Required facts: Facts explicitly listed for this section.
+    - Forbidden content: Any fact, entity, date, reference, or conclusion not listed.
+    - Style: Formal legal prose appropriate to the section.
+
+    ## Contract Rules
+    - Treat this contract as stricter than any narrative plan.
+    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
+    - If a plan conflicts with this contract, follow this contract.

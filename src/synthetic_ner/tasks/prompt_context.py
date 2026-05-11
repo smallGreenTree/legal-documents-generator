@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+from pathlib import Path
+
 from src.synthetic_ner.constants import SECTION_DESCRIPTIONS
+from src.synthetic_ner.utils import load_config
+
+_CONTRACTS_PATH = Path(__file__).resolve().parents[3] / "prompts" / "section_contracts.yaml"
 
 
 def build_section_context(memory_text: str, section_name: str) -> str:
@@ -31,6 +37,12 @@ def build_section_context(memory_text: str, section_name: str) -> str:
     return "\n".join(part for part in parts if part.strip()).strip()
 
 
+def build_section_contract(section_name: str) -> str:
+    contracts = _load_section_contracts()
+    contract = contracts.get(section_name) or contracts.get("default") or ""
+    return contract.strip() if isinstance(contract, str) else ""
+
+
 def _section_guidance(section_name: str) -> list[str]:
     guidance = {
         "persons": [
@@ -50,11 +62,17 @@ def _section_guidance(section_name: str) -> list[str]:
         ],
         "charges": [
             "- Use compact charge language tied to counts and charged period.",
-            "- Connect only defendants, organisations, statutes and particulars present in context.",
+            (
+                "- Connect only defendants, organisations, statutes and particulars "
+                "present in context."
+            ),
             "- Do not invent count numbers, exhibits or statutory wording.",
         ],
         "facts": [
-            "- Build the main chronological narrative from relationship facts and count particulars.",
+            (
+                "- Build the main chronological narrative from relationship facts "
+                "and count particulars."
+            ),
             "- Connect control, instruction, conspiracy and fund-flow facts only when recorded.",
             "- Prefer concrete allowed references over generic accusations.",
         ],
@@ -76,6 +94,17 @@ def _section_guidance(section_name: str) -> list[str]:
             "- Write section-specific prose rather than a general case summary.",
         ],
     )
+
+
+@lru_cache(maxsize=1)
+def _load_section_contracts() -> dict[str, str]:
+    raw = load_config(_CONTRACTS_PATH)
+    if not isinstance(raw, dict):
+        return {}
+    contracts = raw.get("section_contracts", raw)
+    if not isinstance(contracts, dict):
+        return {}
+    return {key: value for key, value in contracts.items() if isinstance(value, str)}
 
 
 def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
