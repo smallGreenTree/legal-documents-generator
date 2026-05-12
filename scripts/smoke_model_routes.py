@@ -66,7 +66,6 @@ def main() -> None:
         )
         print(f"\n[{stage}] {describe_stage_route(stage=stage, routing=app_config.model_routing)}")
         print(f"base_url: {route.base_url or app_config.ollama.base_url}")
-        print(f"api_key_env: {route.api_key_env or 'n/a'}")
 
         client = build_model_client(
             stage=stage,

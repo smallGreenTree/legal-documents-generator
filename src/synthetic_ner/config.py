@@ -165,12 +165,10 @@ def _build_model_routing_config(
         model=ollama_cfg.model,
         timeout=ollama_cfg.timeout,
         base_url=ollama_cfg.base_url,
-        api_key_env=None,
         num_ctx=ollama_cfg.num_ctx,
         think=ollama_cfg.think,
         max_generate_attempts=ollama_cfg.recovery.max_generate_attempts,
         retry_backoff_seconds=ollama_cfg.recovery.retry_backoff_seconds,
-        min_interval_seconds=0.0,
     )
     if raw is None:
         return ModelRoutingConfig(default=fallback_default, stages={})
@@ -206,24 +204,9 @@ def _build_model_provider_config(
         "base_url",
         fallback.base_url if provider == fallback.provider else None,
     )
-    api_key_env_value = raw.get(
-        "api_key_env",
-        fallback.api_key_env if provider == fallback.provider else None,
-    )
     base_url = (
         _require_string(base_url_value, f"{path}.base_url")
         if base_url_value is not None
-        else None
-    )
-    api_key_env = (
-        _require_string(api_key_env_value, f"{path}.api_key_env")
-        if api_key_env_value is not None
-        else None
-    )
-    thinking_budget_value = raw.get("thinking_budget", fallback.thinking_budget)
-    thinking_budget = (
-        _require_int(thinking_budget_value, f"{path}.thinking_budget")
-        if thinking_budget_value is not None
         else None
     )
     num_ctx_value = raw.get("num_ctx", fallback.num_ctx)
@@ -242,7 +225,6 @@ def _build_model_provider_config(
     if recovery_raw is None:
         max_generate_attempts = fallback.max_generate_attempts
         retry_backoff_seconds = fallback.retry_backoff_seconds
-        min_interval_seconds = fallback.min_interval_seconds
     else:
         recovery = _require_mapping(recovery_raw, f"{path}.recovery")
         max_generate_attempts = _require_positive_int(
@@ -253,28 +235,19 @@ def _build_model_provider_config(
             recovery.get("retry_backoff_seconds", fallback.retry_backoff_seconds),
             f"{path}.recovery.retry_backoff_seconds",
         )
-        min_interval_seconds = _require_non_negative_number(
-            recovery.get("min_interval_seconds", fallback.min_interval_seconds),
-            f"{path}.recovery.min_interval_seconds",
-        )
-    if provider not in {"ollama", "gemini"}:
-        raise ValueError(f"{path}.provider must be one of: ollama, gemini")
-    if provider in {"ollama", "gemini"} and not base_url:
-        raise ValueError(f"{path}.base_url is required for {provider} provider")
-    if provider == "gemini" and not api_key_env:
-        raise ValueError(f"{path}.api_key_env is required for gemini provider")
+    if provider != "ollama":
+        raise ValueError(f"{path}.provider must be ollama")
+    if not base_url:
+        raise ValueError(f"{path}.base_url is required for ollama provider")
     return ModelProviderConfig(
         provider=provider,
         model=model,
         timeout=timeout,
         base_url=base_url,
-        api_key_env=api_key_env,
-        thinking_budget=thinking_budget,
         num_ctx=num_ctx,
         think=think,
         max_generate_attempts=max_generate_attempts,
         retry_backoff_seconds=retry_backoff_seconds,
-        min_interval_seconds=min_interval_seconds,
     )
 
 

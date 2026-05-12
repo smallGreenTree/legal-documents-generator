@@ -39,16 +39,15 @@ model_routing:
       think: false
       timeout: 900
     critic:
-      provider: gemini
-      base_url: https://generativelanguage.googleapis.com/v1beta
-      model: gemini-2.5-flash
-      api_key_env: GEMINI_API_KEY
-      thinking_budget: 0
+      provider: ollama
+      base_url: http://localhost:11434
+      model: qwen3.6:27b
+      num_ctx: 8192
+      think: false
       timeout: 900
       recovery:
-        max_generate_attempts: 4
-        retry_backoff_seconds: 30
-        min_interval_seconds: 20
+        max_generate_attempts: 3
+        retry_backoff_seconds: 5
 
 langfuse:
   enabled: true

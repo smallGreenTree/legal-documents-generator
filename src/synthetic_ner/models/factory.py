@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from src.synthetic_ner.models.gemini_client import TracedGeminiClient
 from src.synthetic_ner.models.ollama_client import TracedOllamaClient
 from src.synthetic_ner.tasks.tracer import TraceStore
 from src.synthetic_ner.types.app_config import (
@@ -32,8 +31,6 @@ def build_model_client(
             ),
             tracer=tracer,
         )
-    if provider_cfg.provider == "gemini":
-        return TracedGeminiClient(config=provider_cfg, tracer=tracer)
     raise ValueError(f"Unsupported model provider: {provider_cfg.provider}")
 
 
