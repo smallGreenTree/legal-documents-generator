@@ -12,12 +12,13 @@ PREFECT_DEPLOYMENT ?= document-generation
 .PHONY: langfuse-up langfuse-down langfuse-ps
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
 .PHONY: ollama-health ollama-pull sync-langfuse
-.PHONY: generate generate-classic check
+.PHONY: generate generate-classic smoke-model-routes check
 
 help:
 	@echo "Common targets:"
 	@echo "  make setup          Install deps, prepare Prefect, start Langfuse, pull model, sync prompts"
 	@echo "  make generate       Generate documents with LangGraph workflow"
+	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
 	@echo "  make langfuse-up    Start local Langfuse Docker stack"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
 	@echo "  make prefect-up     Start Prefect, deploy the flow, and run worker in background"
@@ -97,6 +98,9 @@ generate:
 
 generate-classic:
 	$(PYTHON) main.py --case-config $(CASE_CONFIG) --documents $(DOCS) --workflow-mode classic
+
+smoke-model-routes:
+	$(PYTHON) scripts/smoke_model_routes.py --case-config $(CASE_CONFIG)
 
 check:
 	poetry run ruff check .
