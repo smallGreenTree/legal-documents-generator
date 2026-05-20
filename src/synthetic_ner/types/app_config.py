@@ -112,6 +112,8 @@ class WorkflowPromptsConfig:
     section_planner_user: str
     writer_system: str
     writer_user: str
+    polisher_system: str
+    polisher_user: str
     critic_system: str
     critic_user: str
 

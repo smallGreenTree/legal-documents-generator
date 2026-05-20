@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from argparse import Namespace
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
 from typing import Any, TypedDict
@@ -52,10 +54,21 @@ class WorkflowState(TypedDict, total=False):
     section_plans: dict[str, str]
     section_contracts: dict[str, str]
     section_reviews: dict[str, list[str]]
+    revision_counts: dict[str, int]
     instruction_channel: dict[str, Any]
     review_channel: dict[str, Any]
     content_channel: dict[str, Any]
     final_text: str
+
+
+@dataclass(slots=True)
+class SectionWorkflowResult:
+    section_name: str
+    section_plan: str
+    section_contract: str
+    section_text: str
+    issues: list[str]
+    revisions: int
 
 
 def run_langgraph_workflow(args: Namespace, project_root: Path) -> None:
@@ -283,7 +296,15 @@ class DocumentWorkflow:
             self._trace_node(
                 "document_planner",
                 self.document_planner_node,
-                next_node="prepare_section",
+                next_node="process_sections",
+            ),
+        )
+        builder.add_node(
+            "process_sections",
+            self._trace_node(
+                "process_sections",
+                self.process_sections_node,
+                next_node="render_document",
             ),
         )
         builder.add_node(
@@ -388,7 +409,8 @@ class DocumentWorkflow:
 
     def _register_edges(self, builder: StateGraph) -> None:
         builder.add_edge(START, "document_planner")
-        builder.add_edge("document_planner", "prepare_section")
+        builder.add_edge("document_planner", "process_sections")
+        builder.add_edge("process_sections", "render_document")
         builder.add_conditional_edges(
             "prepare_section",
             route_after_prepare,
@@ -431,6 +453,206 @@ class DocumentWorkflow:
             "document_plan": document_plan,
             "instruction_channel": instruction_channel,
         }
+
+    def process_sections_node(self, state: WorkflowState) -> WorkflowState:
+        section_order = state["section_order"]
+        section_outputs = dict(state.get("section_outputs", {}))
+        section_plans = dict(state.get("section_plans", {}))
+        section_contracts = dict(state.get("section_contracts", {}))
+        section_reviews = dict(state.get("section_reviews", {}))
+        revision_counts: dict[str, int] = {}
+
+        for group in _parallel_section_groups(section_order):
+            if len(group) == 1:
+                results = [self._run_section_workflow(state, group[0])]
+            else:
+                results_by_section: dict[str, SectionWorkflowResult] = {}
+                with ThreadPoolExecutor(
+                    max_workers=len(group),
+                    thread_name_prefix="section-workflow",
+                ) as executor:
+                    futures = {
+                        executor.submit(
+                            self._run_section_workflow,
+                            state,
+                            section_name,
+                        ): section_name
+                        for section_name in group
+                    }
+                    for future in as_completed(futures):
+                        result = future.result()
+                        results_by_section[result.section_name] = result
+                results = [results_by_section[section_name] for section_name in group]
+
+            for result in results:
+                section_outputs[result.section_name] = result.section_text
+                section_plans[result.section_name] = result.section_plan
+                section_contracts[result.section_name] = result.section_contract
+                section_reviews[result.section_name] = result.issues
+                revision_counts[result.section_name] = result.revisions
+                self.memory_manager.append_section_result(
+                    self.memory_path,
+                    section_name=result.section_name,
+                    section_plan=result.section_plan,
+                    section_text=result.section_text,
+                    issues=result.issues,
+                )
+
+        return {
+            "section_outputs": section_outputs,
+            "section_plans": section_plans,
+            "section_contracts": section_contracts,
+            "section_reviews": section_reviews,
+            "section_index": len(section_order),
+            "revision_counts": revision_counts,
+        }
+
+    def _run_section_workflow(
+        self,
+        state: WorkflowState,
+        section_name: str,
+    ) -> SectionWorkflowResult:
+        section_contract = build_section_contract(section_name)
+        section_plan = self.planner.plan_section(
+            doc_id=self.doc_id,
+            parent_task_id="planner_document",
+            memory_text=state["memory_text"],
+            document_plan=state["document_plan"],
+            doc_type=self.context.doc_type,
+            section_name=section_name,
+            word_target=self.context.section_word_targets[section_name],
+        )
+        section_text = self.writer.write_section(
+            doc_id=self.doc_id,
+            parent_task_id=f"planner_{section_name}",
+            memory_text=state["memory_text"],
+            document_plan=state["document_plan"],
+            section_name=section_name,
+            section_plan=section_plan,
+            case_number=self.document.metadata["case_number"],
+            word_target=self.context.section_word_targets[section_name],
+        )
+        section_text = clean_generated_section_text(section_text)
+        issues: list[str] = []
+        revision_instruction = ""
+        revision_count = 0
+
+        while True:
+            review = self.critic.review_section(
+                doc_id=self.doc_id,
+                parent_task_id=f"writer_{section_name}",
+                memory_text=state["memory_text"],
+                section_name=section_name,
+                section_plan=section_plan,
+                section_text=section_text,
+                revision_round=revision_count,
+            )
+            issues = list(review.issues)
+            if review.blocking and not issues:
+                issues.append("Critic marked the section as blocking.")
+            validator_issues = validate_section_text(
+                section_name=section_name,
+                section_text=section_text,
+                memory_text=state["memory_text"],
+                word_target=self.context.section_word_targets[section_name],
+            )
+            for issue in validator_issues:
+                if issue not in issues:
+                    issues.append(issue)
+            revision_instruction = _combine_revision_instruction(
+                critic_instruction=review.revision_instruction,
+                issues=issues,
+                validator_issues=validator_issues,
+            )
+            if not issues:
+                break
+            if revision_count >= self.context.workflow_cfg.max_revisions:
+                break
+
+            revision_count += 1
+            revision_temperature = (
+                0.0
+                if revision_count >= self.context.workflow_cfg.max_revisions
+                else self.context.workflow_cfg.writer.temperature
+            )
+            section_text = self.writer.write_section(
+                doc_id=self.doc_id,
+                parent_task_id=f"critic_{section_name}",
+                memory_text=state["memory_text"],
+                document_plan=state["document_plan"],
+                section_name=section_name,
+                section_plan=section_plan,
+                case_number=self.document.metadata["case_number"],
+                word_target=self.context.section_word_targets[section_name],
+                revision_instruction=revision_instruction,
+                revision_round=revision_count,
+                temperature=revision_temperature,
+            )
+            section_text = clean_generated_section_text(section_text)
+
+        final_text, final_issues = self._finalize_section_text(
+            section_name=section_name,
+            section_plan=section_plan,
+            section_text=section_text,
+            issues=issues,
+        )
+        return SectionWorkflowResult(
+            section_name=section_name,
+            section_plan=section_plan,
+            section_contract=section_contract,
+            section_text=final_text,
+            issues=final_issues,
+            revisions=revision_count,
+        )
+
+    def _finalize_section_text(
+        self,
+        *,
+        section_name: str,
+        section_plan: str,
+        section_text: str,
+        issues: list[str],
+    ) -> tuple[str, list[str]]:
+        del section_plan
+        word_target = self.context.section_word_targets[section_name]
+        memory_text = self.memory_manager.read_memory(self.memory_path)
+        final_text = clean_generated_section_text(section_text)
+        if issues:
+            repaired_text = repair_section_text(
+                section_text=final_text,
+                issues=issues,
+                memory_text=memory_text,
+            )
+            final_text = clean_generated_section_text(repaired_text) or final_text
+
+        final_issues = validate_section_text(
+            section_name=section_name,
+            section_text=final_text,
+            memory_text=memory_text,
+            word_target=word_target,
+        )
+        if final_issues:
+            fallback_text = build_deterministic_fallback_section(
+                section_name=section_name,
+                memory_text=memory_text,
+                word_target=word_target,
+            )
+            fallback_text = clean_generated_section_text(fallback_text)
+            fallback_issues = validate_section_text(
+                section_name=section_name,
+                section_text=fallback_text,
+                memory_text=memory_text,
+                word_target=word_target,
+            )
+            if fallback_text:
+                final_text = fallback_text
+                final_issues = fallback_issues
+            print(
+                "  Warning : replaced invalid section output with deterministic fallback "
+                f"({section_name}). Remaining issues: "
+                f"{'; '.join(final_issues) if final_issues else 'none'}"
+            )
+        return final_text, final_issues
 
     def prepare_section_node(self, state: WorkflowState) -> WorkflowState:
         section_index = state.get("section_index", 0)
@@ -522,6 +744,16 @@ class DocumentWorkflow:
         review_channel["critic_rubrics"] = dict(review.rubrics)
         review_channel["critic_approved"] = bool(review.approved)
         review_channel["critic_verdict"] = "approved" if review.approved else "rejected"
+        review_channel["critic_edits"] = [
+            {
+                "target": edit.target,
+                "action": edit.action,
+                "reason": edit.reason,
+                "replacement": edit.replacement,
+            }
+            for edit in review.edits
+        ]
+        review_channel["critic_risk_level"] = review.risk_level
         instruction_channel = dict(state.get("instruction_channel", {}))
         instruction_channel["current_revision_instruction"] = review.revision_instruction
         return {
@@ -579,6 +811,11 @@ class DocumentWorkflow:
     def revise_section_node(self, state: WorkflowState) -> WorkflowState:
         section_name = state["current_section"]
         revision_count = state.get("revision_count", 0) + 1
+        revision_temperature = (
+            0.0
+            if revision_count >= self.context.workflow_cfg.max_revisions
+            else self.context.workflow_cfg.writer.temperature
+        )
         revised_text = self.writer.write_section(
             doc_id=self.doc_id,
             parent_task_id=f"critic_{section_name}",
@@ -590,6 +827,7 @@ class DocumentWorkflow:
             word_target=self.context.section_word_targets[section_name],
             revision_instruction=_build_revision_instruction(state),
             revision_round=revision_count,
+            temperature=revision_temperature,
         )
         clean_text = clean_generated_section_text(revised_text)
         content_channel = dict(state.get("content_channel", {}))
@@ -638,6 +876,7 @@ class DocumentWorkflow:
             word_target=self.context.section_word_targets[section_name],
             revision_instruction=forced_instruction,
             revision_round=revision_count,
+            temperature=0.0,
         )
         clean_rewritten_text = clean_generated_section_text(rewritten_text)
         content_channel = dict(state.get("content_channel", {}))
@@ -758,6 +997,7 @@ class DocumentWorkflow:
             section_contracts=state.get("section_contracts", {}),
             section_plans=state.get("section_plans", {}),
             section_reviews=state.get("section_reviews", {}),
+            revision_counts=state.get("revision_counts", {}),
             trace_store=self.trace_store,
         )
         return {"final_text": rendered_text}
@@ -773,6 +1013,48 @@ def route_after_prepare(state: WorkflowState) -> str:
     if state.get("current_section"):
         return "plan_section"
     return "render_document"
+
+
+def _parallel_section_groups(section_order: list[str]) -> list[list[str]]:
+    dependencies = {
+        "facts": {"history", "charges"},
+        "evidence": {"facts"},
+        "assessment": {"facts"},
+    }
+    remaining = list(section_order)
+    completed: set[str] = set()
+    groups: list[list[str]] = []
+
+    while remaining:
+        ready = [
+            section_name
+            for section_name in remaining
+            if dependencies.get(section_name, set()).issubset(completed)
+        ]
+        if not ready:
+            ready = [remaining[0]]
+        groups.append(ready)
+        completed.update(ready)
+        remaining = [section_name for section_name in remaining if section_name not in ready]
+
+    return groups
+
+
+def _combine_revision_instruction(
+    *,
+    critic_instruction: str,
+    issues: list[str],
+    validator_issues: list[str],
+) -> str:
+    issue_lines = "\n".join(f"- {issue}" for issue in issues) or "- none"
+    parts = ["ISSUES:", issue_lines]
+    critic_instruction = critic_instruction.strip()
+    if critic_instruction and critic_instruction.lower() != "keep as is":
+        parts.extend(["", "SPECIFIC CRITIC EDITS:", critic_instruction])
+    if validator_issues:
+        validator_lines = "\n".join(f"- {issue}" for issue in validator_issues)
+        parts.extend(["", "DETERMINISTIC VALIDATION FIXES:", validator_lines])
+    return "\n".join(parts).strip()
 
 
 def route_after_validation(state: WorkflowState, max_revisions: int) -> str:
@@ -847,6 +1129,7 @@ def write_generation_report(
     section_contracts: dict[str, str],
     section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
+    revision_counts: dict[str, int],
     trace_store: TraceStore,
 ) -> Path:
     trace_info = trace_store.get_trace_info()
@@ -858,6 +1141,7 @@ def write_generation_report(
         f"# Generation Report: {doc_id}",
         "",
         f"- Workflow mode: {context.workflow_cfg.mode}",
+        f"- Max revision rounds: {context.workflow_cfg.max_revisions}",
         f"- Memory file: {memory_path}",
         f"- Langfuse enabled: {str(trace_info.enabled).lower()}",
         f"- Langfuse trace id: {trace_info.trace_id or 'n/a'}",
@@ -886,6 +1170,8 @@ def write_generation_report(
                 "",
                 "Issues:",
                 *([f"- {issue}" for issue in issues] or ["- none"]),
+                "",
+                f"Revisions: {revision_counts.get(section_name, 0)}",
                 "",
             ]
         )

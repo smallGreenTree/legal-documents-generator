@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -11,7 +12,7 @@ from src.synthetic_ner.tasks.prompt_context import (
     build_section_contract,
 )
 from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
-from src.synthetic_ner.types.critic import CriticResult
+from src.synthetic_ner.types.critic import CriticEdit, CriticResult
 from src.synthetic_ner.utils import render_prompt_template
 
 _RUBRIC_LINE_RE = re.compile(
@@ -95,6 +96,9 @@ class SectionCritic:
                     "[critic-timeout] Skipped critic due to model timeout; "
                     "relying on deterministic validation."
                 ),
+                edits=[],
+                blocking=False,
+                risk_level="low",
             )
         except RequestException as exc:
             return CriticResult(
@@ -106,58 +110,161 @@ class SectionCritic:
                     "[critic-provider-error] Skipped critic due to provider error; "
                     f"relying on deterministic validation. error={type(exc).__name__}"
                 ),
+                edits=[],
+                blocking=False,
+                risk_level="low",
             )
 
     def _parse_result(self, raw_text: str) -> CriticResult:
-        normalized = raw_text.replace("\r", "")
-        lowered = normalized.lower()
-        approved = "approved: yes" in lowered
+        try:
+            payload = json.loads(_extract_json_object(raw_text))
+        except (json.JSONDecodeError, ValueError):
+            return _parse_legacy_result(raw_text)
 
-        issues = []
-        revision_instruction = "keep as is"
-        rubrics: dict[str, int] = {}
-
-        rubrics_marker = normalized.find("RUBRICS:")
-        issues_marker = normalized.find("ISSUES:")
-        revision_marker = normalized.find("REVISION:")
-        if rubrics_marker != -1:
-            rubric_block_end = (
-                issues_marker
-                if issues_marker != -1
-                else (revision_marker if revision_marker != -1 else len(normalized))
-            )
-            rubric_block = normalized[rubrics_marker + len("RUBRICS:"):rubric_block_end]
-            rubrics = _parse_rubrics(rubric_block)
-        if issues_marker != -1:
-            issues_block_end = revision_marker if revision_marker != -1 else len(normalized)
-            issues_block = normalized[issues_marker + len("ISSUES:"):issues_block_end]
-            issues = [
-                line.removeprefix("-").strip()
-                for line in issues_block.splitlines()
-                if line.strip().startswith("-")
-                and line.removeprefix("-").strip().lower() != "none"
-            ]
-        if revision_marker != -1:
-            revision_instruction = normalized[revision_marker + len("REVISION:"):].strip()
-        for rubric_issue in _blocking_rubric_issues(rubrics):
-            if rubric_issue not in issues:
-                issues.append(rubric_issue)
-        if not revision_instruction:
-            revision_instruction = "Fix the inconsistencies flagged by the critic."
-        if not approved and not issues:
-            issues = ["Critic rejected the section without specific issues."]
-        if not approved and revision_instruction.lower() == "keep as is":
-            revision_instruction = (
-                "Revise the section to resolve consistency issues and remove any invented facts."
-            )
-
+        edits = _parse_edits(payload.get("edits"))
+        blocking = bool(payload.get("blocking")) or bool(edits)
+        risk_level = payload.get("risk_level")
+        if risk_level not in {"low", "medium", "high"}:
+            risk_level = "medium" if blocking else "low"
+        issues = [_edit_issue(edit) for edit in edits]
+        revision_instruction = _format_revision_edits(edits)
+        if blocking and not edits:
+            issues = ["Critic marked the section as blocking without specific edits."]
+            revision_instruction = "Revise the section to resolve the blocking critic finding."
         return CriticResult(
-            approved=approved and not issues,
+            approved=not blocking and not edits,
             issues=issues,
             revision_instruction=revision_instruction,
-            rubrics=rubrics,
+            rubrics={},
             raw_text=raw_text,
+            edits=edits,
+            blocking=blocking,
+            risk_level=risk_level,
         )
+
+
+def _parse_legacy_result(raw_text: str) -> CriticResult:
+    normalized = raw_text.replace("\r", "")
+    lowered = normalized.lower()
+    approved = "approved: yes" in lowered
+
+    issues = []
+    revision_instruction = "keep as is"
+    rubrics: dict[str, int] = {}
+
+    rubrics_marker = normalized.find("RUBRICS:")
+    issues_marker = normalized.find("ISSUES:")
+    revision_marker = normalized.find("REVISION:")
+    if rubrics_marker != -1:
+        rubric_block_end = (
+            issues_marker
+            if issues_marker != -1
+            else (revision_marker if revision_marker != -1 else len(normalized))
+        )
+        rubric_block = normalized[rubrics_marker + len("RUBRICS:"):rubric_block_end]
+        rubrics = _parse_rubrics(rubric_block)
+    if issues_marker != -1:
+        issues_block_end = revision_marker if revision_marker != -1 else len(normalized)
+        issues_block = normalized[issues_marker + len("ISSUES:"):issues_block_end]
+        issues = [
+            line.removeprefix("-").strip()
+            for line in issues_block.splitlines()
+            if line.strip().startswith("-")
+            and line.removeprefix("-").strip().lower() != "none"
+        ]
+    if revision_marker != -1:
+        revision_instruction = normalized[revision_marker + len("REVISION:"):].strip()
+    for rubric_issue in _blocking_rubric_issues(rubrics):
+        if rubric_issue not in issues:
+            issues.append(rubric_issue)
+    if not revision_instruction:
+        revision_instruction = "Fix the inconsistencies flagged by the critic."
+    if not approved and not issues:
+        issues = ["Critic rejected the section without specific issues."]
+    if not approved and revision_instruction.lower() == "keep as is":
+        revision_instruction = (
+            "Revise the section to resolve consistency issues and remove any invented facts."
+        )
+
+    return CriticResult(
+        approved=approved and not issues,
+        issues=issues,
+        revision_instruction=revision_instruction,
+        rubrics=rubrics,
+        raw_text=raw_text,
+        edits=[
+            CriticEdit(
+                target="section",
+                action="revise",
+                reason=issue,
+                replacement="",
+            )
+            for issue in issues
+        ],
+        blocking=not approved or bool(issues),
+        risk_level="medium" if issues else "low",
+    )
+
+
+def _parse_edits(value: Any) -> list[CriticEdit]:
+    if not isinstance(value, list):
+        return []
+    edits = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        target = _string_field(item.get("target"), "section")
+        action = _string_field(item.get("action"), "revise")
+        reason = _string_field(item.get("reason"), "Critic requested a specific edit.")
+        replacement = _string_field(item.get("replacement"), "")
+        edits.append(
+            CriticEdit(
+                target=target,
+                action=action,
+                reason=reason,
+                replacement=replacement,
+            )
+        )
+    return edits
+
+
+def _format_revision_edits(edits: list[CriticEdit]) -> str:
+    if not edits:
+        return "keep as is"
+    lines = ["Apply these specific critic edits:"]
+    for index, edit in enumerate(edits, start=1):
+        lines.append(
+            f"{index}. Target: {edit.target}; action: {edit.action}; reason: {edit.reason}"
+        )
+        if edit.replacement:
+            lines.append(f"   Replacement: {edit.replacement}")
+    return "\n".join(lines)
+
+
+def _edit_issue(edit: CriticEdit) -> str:
+    return f"{edit.action} '{edit.target}': {edit.reason}"
+
+
+def _extract_json_object(raw_text: str) -> str:
+    text = raw_text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("No JSON object found in critic response.")
+    return text[start:end + 1]
+
+
+def _string_field(value: Any, fallback: str) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return fallback
 
 
 def _parse_rubrics(rubric_block: str) -> dict[str, int]:

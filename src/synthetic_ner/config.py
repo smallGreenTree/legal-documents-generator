@@ -387,6 +387,14 @@ def _build_workflow_config(
                 prompts["writer_user"],
                 "workflow.prompts.writer_user",
             ),
+            polisher_system=_require_string(
+                prompts["polisher_system"],
+                "workflow.prompts.polisher_system",
+            ),
+            polisher_user=_require_string(
+                prompts["polisher_user"],
+                "workflow.prompts.polisher_user",
+            ),
             critic_system=_require_string(
                 prompts["critic_system"],
                 "workflow.prompts.critic_system",
