@@ -12,13 +12,14 @@ PREFECT_DEPLOYMENT ?= document-generation
 .PHONY: langfuse-up langfuse-down langfuse-ps
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
 .PHONY: ollama-health ollama-pull sync-langfuse
-.PHONY: generate generate-classic smoke-model-routes check
+.PHONY: generate generate-classic smoke-model-routes check mi
 
 help:
 	@echo "Common targets:"
 	@echo "  make setup          Install deps, prepare Prefect, start Langfuse, pull model, sync prompts"
 	@echo "  make generate       Generate documents with LangGraph workflow"
 	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
+	@echo "  make mi             Show radon maintainability index for src and tests"
 	@echo "  make langfuse-up    Start local Langfuse Docker stack"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
 	@echo "  make prefect-up     Start Prefect, deploy the flow, and run worker in background"
@@ -104,3 +105,6 @@ smoke-model-routes:
 
 check:
 	poetry run ruff check .
+
+mi:
+	poetry run radon mi src tests

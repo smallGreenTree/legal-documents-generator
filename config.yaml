@@ -4,25 +4,7 @@ paths:
   schema_dir: schemas
   memory_dir: memory
 
-ollama:
-  base_url: http://localhost:11434
-  model: apertus:8B
-  num_ctx: 8192
-  think: false
-  timeout: 900
-  recovery:
-    max_generate_attempts: 3
-    retry_backoff_seconds: 5
-    controlled_empty_section: "[section not generated]"
-
 model_routing:
-  default:
-    provider: ollama
-    base_url: http://localhost:11434
-    model: qwen3.6:27b
-    num_ctx: 8192
-    think: false
-    timeout: 900
   stages:
     planner:
       provider: ollama
@@ -31,6 +13,10 @@ model_routing:
       num_ctx: 8192
       think: false
       timeout: 900
+      recovery:
+        max_generate_attempts: 3
+        retry_backoff_seconds: 5
+        controlled_empty_section: "[section not generated]"
     writer:
       provider: ollama
       base_url: http://localhost:11434
@@ -38,6 +24,10 @@ model_routing:
       num_ctx: 8192
       think: false
       timeout: 900
+      recovery:
+        max_generate_attempts: 3
+        retry_backoff_seconds: 5
+        controlled_empty_section: "[section not generated]"
     critic:
       provider: ollama
       base_url: http://localhost:11434
@@ -48,6 +38,7 @@ model_routing:
       recovery:
         max_generate_attempts: 3
         retry_backoff_seconds: 5
+        controlled_empty_section: "[section not generated]"
 
 langfuse:
   enabled: true

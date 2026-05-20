@@ -15,6 +15,15 @@ from src.synthetic_ner.tasks.facts import (
     normalize_phrase,
     normalize_title_phrase,
 )
+from src.synthetic_ner.tasks.validation_contracts import validate_facts_contract
+from src.synthetic_ner.tasks.validation_fallback import (
+    build_deterministic_fallback_section as build_deterministic_fallback_section,
+)
+from src.synthetic_ner.tasks.validation_repetition import (
+    dedupe_repeated_content,
+    has_repeated_long_sentences,
+    has_repeated_sentence_fragments,
+)
 
 _UNKNOWN_VALUE_ISSUE_RE = re.compile(r"Section mentions unknown [^']+ '([^']+)'\.")
 _THINK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
@@ -39,8 +48,6 @@ _TRUNCATED_END_RE = re.compile(
     r"(?i)\b(?:and|or|to|of|with|through|including|by|for|from|in|on|at|between)\.?$"
 )
 _VAT_LABEL_RE = re.compile(r"(?i)\bVAT(?:\s+Registration\s+No\.)?\s*:\s*([A-Z0-9]+)\b")
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9']+")
 _META_SUMMARY_OPENING_RE = re.compile(
     r"(?i)\bthis\s+(?:history|charges|facts|evidence|assessment)\s+section\s+is\s+"
     r"(?:drawn|prepared)\s+strictly\s+from\s+case_memory\b"
@@ -105,66 +112,18 @@ def validate_section_text(
     if not text:
         return ["Section is empty."]
 
-    issues = []
-    lowered = text.lower()
-
-    if text == "[section not generated]":
-        issues.append("Section contains placeholder text.")
-    if "<think>" in lowered:
-        issues.append("Section still contains hidden reasoning markup.")
-    if _PLACEHOLDER_STARS_RE.search(text):
-        issues.append("Section contains unresolved placeholder markers (****).")
-    if _META_TOKEN_RE.search(text):
-        issues.append("Section contains review/instruction metadata instead of prose.")
-    if _contains_meta_summary_style(text):
-        issues.append("Section contains template/meta summary wording instead of legal prose.")
-    if (
-        _MARKDOWN_HEADING_RE.search(text)
-        or _MARKDOWN_BULLET_RE.search(text)
-        or _MARKDOWN_NUMBERED_RE.search(text)
-        or _MARKDOWN_RULE_RE.search(text)
-        or _MARKDOWN_BOLD_RE.search(text)
-    ):
-        issues.append("Section contains markdown/list formatting; output must be plain prose.")
-    if _INCOMPLETE_RANGE_RE.search(text):
-        issues.append("Section contains an incomplete date range ('between ... and ...').")
-    if _has_dangling_between(text):
-        issues.append("Section contains a dangling 'between' phrase.")
-    if _BROKEN_TIMELINE_RE.search(text):
-        issues.append("Section contains unresolved timeline placeholders.")
-    if _has_partial_vat_identifier(text):
-        issues.append("Section contains a truncated VAT/reference identifier.")
-    if _has_repeated_long_sentences(text):
-        issues.append("Section contains repeated long sentences/paragraphs.")
-    if _has_repeated_sentence_fragments(text):
-        issues.append("Section contains repeated sentence fragments.")
-    if len(text) > 120 and _TRUNCATED_END_RE.search(text.strip()):
-        issues.append("Section appears truncated or ends mid-sentence.")
-    if len(text.split()) < max(60, word_target // 4):
-        issues.append("Section is significantly shorter than the requested target.")
-
+    issues = _basic_section_issues(text, word_target)
     allowed = collect_allowed_facts_from_memory(memory_text)
-    known_entities = sorted(
-        [
-            entity
-            for entity in (allowed.person_surface_forms | allowed.org_names)
-            if len(entity) >= 4
-        ],
-        key=len,
-        reverse=True,
-    )
-    if section_name in _SECTION_ENTITY_CHECK:
-        if known_entities and not any(entity in text for entity in known_entities):
-            issues.append("Section does not mention any known case entity.")
-
-    issues.extend(_find_unknown_case_refs(text, allowed.case_refs))
-    issues.extend(_find_unknown_dates(text, allowed.dates))
-    issues.extend(_find_unknown_vats(text, allowed.vat_numbers))
-    issues.extend(_find_unknown_orgs(text, allowed.org_names))
-    issues.extend(_find_unknown_titled_people(text, allowed.titled_people))
-    issues.extend(_find_unknown_initials(text, allowed.initials))
+    issues.extend(_entity_presence_issues(section_name, text, allowed))
+    issues.extend(_unknown_value_issues(text, allowed))
     if section_name.lower() == "facts":
-        issues.extend(_validate_facts_contract(text, memory_text))
+        issues.extend(
+            validate_facts_contract(
+                text,
+                memory_text,
+                has_meta_summary_style=_contains_meta_summary_style(text),
+            )
+        )
 
     return list(dict.fromkeys(issues))
 
@@ -180,50 +139,7 @@ def repair_section_text(
         return text
 
     for issue in issues:
-        if issue == "Section contains placeholder text.":
-            text = text.replace("[section not generated]", "").strip()
-            continue
-        if issue == "Section still contains hidden reasoning markup.":
-            text = _THINK_RE.sub("", text).strip()
-            continue
-        if issue == "Section contains unresolved placeholder markers (****).":
-            text = _PLACEHOLDER_STARS_RE.sub("", text).strip()
-            continue
-        if issue == "Section contains review/instruction metadata instead of prose.":
-            text = clean_generated_section_text(text)
-            continue
-        if issue == "Section contains template/meta summary wording instead of legal prose.":
-            text = _remove_meta_summary_sentences(text)
-            continue
-        if issue == "Section contains markdown/list formatting; output must be plain prose.":
-            text = clean_generated_section_text(text)
-            continue
-        if issue == "Section contains an incomplete date range ('between ... and ...').":
-            text = _INCOMPLETE_RANGE_RE.sub("during the charged period", text).strip()
-            continue
-        if issue == "Section contains a dangling 'between' phrase.":
-            text = _normalize_between_phrases(text)
-            continue
-        if issue == "Section contains unresolved timeline placeholders.":
-            text = _BROKEN_TIMELINE_RE.sub("occurred during the charged period", text)
-            continue
-        if issue == "Section contains a truncated VAT/reference identifier.":
-            text = _drop_partial_vat_fragments(text)
-            continue
-        if issue == "Section contains repeated long sentences/paragraphs.":
-            text = _dedupe_repeated_content(text)
-            continue
-        if issue == "Section contains repeated sentence fragments.":
-            text = _dedupe_repeated_content(text)
-            continue
-        if issue == "Section appears truncated or ends mid-sentence.":
-            if text and text[-1] not in ".!?;":
-                text = text.rstrip(",;: ") + "."
-            continue
-
-        match = _UNKNOWN_VALUE_ISSUE_RE.match(issue)
-        if match:
-            text = _remove_unknown_value(text, match.group(1))
+        text = _repair_issue(text, issue)
 
     allowed = collect_allowed_facts_from_memory(memory_text)
     if (
@@ -236,6 +152,155 @@ def repair_section_text(
             text = f"{text}\n\nThe facts above concern {anchor_entity}."
 
     return _normalize_repaired_text(text)
+
+
+def _basic_section_issues(text: str, word_target: int) -> list[str]:
+    checks = (
+        (text == "[section not generated]", "Section contains placeholder text."),
+        ("<think>" in text.lower(), "Section still contains hidden reasoning markup."),
+        (
+            bool(_PLACEHOLDER_STARS_RE.search(text)),
+            "Section contains unresolved placeholder markers (****).",
+        ),
+        (
+            bool(_META_TOKEN_RE.search(text)),
+            "Section contains review/instruction metadata instead of prose.",
+        ),
+        (
+            _contains_meta_summary_style(text),
+            "Section contains template/meta summary wording instead of legal prose.",
+        ),
+        (
+            _contains_markdown_formatting(text),
+            "Section contains markdown/list formatting; output must be plain prose.",
+        ),
+        (
+            bool(_INCOMPLETE_RANGE_RE.search(text)),
+            "Section contains an incomplete date range ('between ... and ...').",
+        ),
+        (_has_dangling_between(text), "Section contains a dangling 'between' phrase."),
+        (
+            bool(_BROKEN_TIMELINE_RE.search(text)),
+            "Section contains unresolved timeline placeholders.",
+        ),
+        (
+            _has_partial_vat_identifier(text),
+            "Section contains a truncated VAT/reference identifier.",
+        ),
+        (
+            has_repeated_long_sentences(text),
+            "Section contains repeated long sentences/paragraphs.",
+        ),
+        (
+            has_repeated_sentence_fragments(text),
+            "Section contains repeated sentence fragments.",
+        ),
+        (
+            len(text) > 120 and bool(_TRUNCATED_END_RE.search(text.strip())),
+            "Section appears truncated or ends mid-sentence.",
+        ),
+        (
+            len(text.split()) < max(60, word_target // 4),
+            "Section is significantly shorter than the requested target.",
+        ),
+    )
+    return [issue for failed, issue in checks if failed]
+
+
+def _contains_markdown_formatting(text: str) -> bool:
+    return any(
+        pattern.search(text)
+        for pattern in (
+            _MARKDOWN_HEADING_RE,
+            _MARKDOWN_BULLET_RE,
+            _MARKDOWN_NUMBERED_RE,
+            _MARKDOWN_RULE_RE,
+            _MARKDOWN_BOLD_RE,
+        )
+    )
+
+
+def _entity_presence_issues(section_name: str, text: str, allowed) -> list[str]:
+    if section_name not in _SECTION_ENTITY_CHECK:
+        return []
+    known_entities = [
+        entity
+        for entity in (allowed.person_surface_forms | allowed.org_names)
+        if len(entity) >= 4
+    ]
+    if known_entities and not any(entity in text for entity in known_entities):
+        return ["Section does not mention any known case entity."]
+    return []
+
+
+def _unknown_value_issues(text: str, allowed) -> list[str]:
+    return [
+        *_find_unknown_case_refs(text, allowed.case_refs),
+        *_find_unknown_dates(text, allowed.dates),
+        *_find_unknown_vats(text, allowed.vat_numbers),
+        *_find_unknown_orgs(text, allowed.org_names),
+        *_find_unknown_titled_people(text, allowed.titled_people),
+        *_find_unknown_initials(text, allowed.initials),
+    ]
+
+
+def _repair_issue(text: str, issue: str) -> str:
+    repairer = _EXACT_ISSUE_REPAIRERS.get(issue)
+    if repairer is not None:
+        return repairer(text)
+
+    match = _UNKNOWN_VALUE_ISSUE_RE.match(issue)
+    if match:
+        return _remove_unknown_value(text, match.group(1))
+    return text
+
+
+def _finish_truncated_sentence(text: str) -> str:
+    if text and text[-1] not in ".!?;":
+        return text.rstrip(",;: ") + "."
+    return text
+
+
+_EXACT_ISSUE_REPAIRERS = {
+    "Section contains placeholder text.": lambda text: text.replace(
+        "[section not generated]",
+        "",
+    ).strip(),
+    "Section still contains hidden reasoning markup.": lambda text: _THINK_RE.sub(
+        "",
+        text,
+    ).strip(),
+    "Section contains unresolved placeholder markers (****).": lambda text: (
+        _PLACEHOLDER_STARS_RE.sub("", text).strip()
+    ),
+    "Section contains review/instruction metadata instead of prose.": (
+        lambda text: clean_generated_section_text(text)
+    ),
+    "Section contains template/meta summary wording instead of legal prose.": (
+        lambda text: _remove_meta_summary_sentences(text)
+    ),
+    "Section contains markdown/list formatting; output must be plain prose.": (
+        lambda text: clean_generated_section_text(text)
+    ),
+    "Section contains an incomplete date range ('between ... and ...').": (
+        lambda text: _INCOMPLETE_RANGE_RE.sub(
+            "during the charged period",
+            text,
+        ).strip()
+    ),
+    "Section contains a dangling 'between' phrase.": (
+        lambda text: _normalize_between_phrases(text)
+    ),
+    "Section contains unresolved timeline placeholders.": lambda text: (
+        _BROKEN_TIMELINE_RE.sub("occurred during the charged period", text)
+    ),
+    "Section contains a truncated VAT/reference identifier.": (
+        lambda text: _drop_partial_vat_fragments(text)
+    ),
+    "Section contains repeated long sentences/paragraphs.": dedupe_repeated_content,
+    "Section contains repeated sentence fragments.": dedupe_repeated_content,
+    "Section appears truncated or ends mid-sentence.": _finish_truncated_sentence,
+}
 
 
 def clean_generated_section_text(section_text: str) -> str:
@@ -266,75 +331,12 @@ def clean_generated_section_text(section_text: str) -> str:
     cleaned = _BROKEN_TIMELINE_RE.sub("occurred during the charged period", cleaned)
     cleaned = _remove_meta_summary_sentences(cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    cleaned = _dedupe_repeated_content(cleaned)
+    cleaned = dedupe_repeated_content(cleaned)
     cleaned = _normalize_between_phrases(cleaned)
     cleaned = _drop_partial_vat_fragments(cleaned)
     if cleaned and cleaned[-1] not in ".!?;":
         cleaned = cleaned.rstrip(",;: ") + "."
     return _normalize_repaired_text(cleaned)
-
-
-def build_deterministic_fallback_section(
-    *,
-    section_name: str,
-    memory_text: str,
-    word_target: int,
-) -> str:
-    allowed = collect_allowed_facts_from_memory(memory_text)
-    defendants = _extract_people_from_block(memory_text, "Defendants", limit=3)
-    organisations = _extract_organisations_from_memory(memory_text, limit=5)
-    case_refs, key_dates = _extract_case_refs_and_dates(memory_text)
-    offences = _extract_offences(memory_text, limit=2)
-    charged_period = _extract_charged_period(memory_text)
-    document_fields = _extract_document_fields(memory_text)
-    count_entries = _extract_count_entries(memory_text, limit=2)
-    relationship_facts = _extract_relationship_facts(memory_text, limit=6)
-
-    if not defendants:
-        defendants = _choose_values(allowed.person_surface_forms, limit=3)
-    if not organisations:
-        organisations = _choose_values(allowed.org_names, limit=5)
-    if not case_refs:
-        case_refs = _choose_values(allowed.case_refs, limit=2)
-    if not key_dates:
-        key_dates = _choose_values(allowed.dates, limit=2)
-
-    people_text = ", ".join(defendants) if defendants else "the identified defendants"
-    org_text = (
-        ", ".join(organisations)
-        if organisations
-        else "the principal organisations listed in the case file"
-    )
-    ref_text = ", ".join(case_refs) if case_refs else "the stated case references"
-    date_text = ", ".join(key_dates) if key_dates else "the listed case dates"
-    offence_text = ", ".join(offences) if offences else "the charged offences"
-    period_text = charged_period or "the charged period recorded in the indictment"
-
-    sentence_bank = _fallback_sentence_bank(
-        section_name=section_name,
-        people_text=people_text,
-        org_text=org_text,
-        ref_text=ref_text,
-        date_text=date_text,
-        offence_text=offence_text,
-        period_text=period_text,
-        filing_date=document_fields.get("filing date", ""),
-        court=document_fields.get("court", ""),
-        count_entries=count_entries,
-        relationship_facts=relationship_facts,
-    )
-    minimum_words = max(60, word_target // 4)
-    selected: list[str] = []
-    word_count = 0
-    sentence_index = 0
-    while word_count < minimum_words:
-        sentence = sentence_bank[sentence_index % len(sentence_bank)]
-        selected.append(sentence)
-        word_count += len(sentence.split())
-        sentence_index += 1
-        if sentence_index > len(sentence_bank) * 4:
-            break
-    return _normalize_repaired_text(" ".join(selected))
 
 
 def _remove_unknown_value(text: str, value: str) -> str:
@@ -428,261 +430,6 @@ def _find_unknown_initials(text: str, allowed_initials: set[str]) -> list[str]:
     return issues
 
 
-def _fallback_sentence_bank(
-    *,
-    section_name: str,
-    people_text: str,
-    org_text: str,
-    ref_text: str,
-    date_text: str,
-    offence_text: str,
-    period_text: str,
-    filing_date: str,
-    court: str,
-    count_entries: list[tuple[str, str, str]],
-    relationship_facts: list[str],
-) -> list[str]:
-    court_clause = f" before {court}" if court else ""
-    common = [
-        f"The defendants identified in this matter are {people_text}.",
-        f"The organisations materially connected to the allegations are {org_text}.",
-        f"The operative case references are {ref_text}.",
-        f"The charged period reflected in the case record is {period_text}.",
-    ]
-    if date_text:
-        common.append(f"The recorded dates include {date_text}.")
-    if filing_date:
-        common.append(f"The indictment was filed on {filing_date}{court_clause}.")
-    for offence, statute, particulars in count_entries:
-        if offence and statute:
-            common.append(f"One count alleges {offence} contrary to {statute}.")
-        if particulars:
-            common.append(
-                f"The recorded particulars state that {_ensure_terminal_punctuation(particulars)}"
-            )
-    if relationship_facts:
-        common.append(f"CASE_MEMORY records that {_ensure_terminal_punctuation(relationship_facts[0])}")
-    if len(relationship_facts) > 1:
-        common.append(
-            f"It further records that {_ensure_terminal_punctuation(relationship_facts[1])}"
-        )
-    section_specific: dict[str, list[str]] = {
-        "persons": [
-            (
-                f"The persons section identifies {people_text} using only the "
-                "biographical and address details recorded in CASE_MEMORY."
-            ),
-            "No additional personal history or allegation is added in this identifying section.",
-        ],
-        "companies": [
-            (
-                f"The companies section identifies {org_text} using only the "
-                "registered address and VAT details recorded in CASE_MEMORY."
-            ),
-            (
-                "No additional corporate history or transaction detail is added "
-                "in this identifying section."
-            ),
-        ],
-        "history": [
-            (
-                "The procedural sequence runs from alleged conduct in the charged period "
-                "to the formal filing of the indictment."
-            ),
-            "The chronology remains limited to people, organisations, references, and dates explicitly present in CASE_MEMORY.",
-        ],
-        "charges": [
-            (
-                f"The charges correspond to {offence_text} and are tied to the named defendants and organisations."
-            ),
-            "Each allegation follows the recorded count particulars without adding new accusations.",
-        ],
-        "facts": [
-            (
-                f"The factual narrative describes the alleged scheme during {period_text} and identifies the entities used in the recorded transactions."
-            ),
-            "The description remains neutral and includes only relationships documented in CASE_MEMORY.",
-        ],
-        "evidence": [
-            (
-                "The evidence summary is limited to documented links, recorded references, and named entities from CASE_MEMORY."
-            ),
-            "No evidential detail is introduced beyond the case record.",
-        ],
-        "assessment": [
-            (
-                f"The legal assessment maps the documented conduct to {offence_text} using only recorded facts."
-            ),
-            "Any legal conclusion is confined to what the existing case material supports.",
-        ],
-    }
-    specific = section_specific.get(section_name.lower(), [])
-    return (specific + common) if specific else common
-
-
-def _choose_values(values: set[str], *, limit: int) -> list[str]:
-    normalized_values = {normalize_phrase(value) for value in values if normalize_phrase(value)}
-    ordered = sorted(normalized_values, key=lambda item: (-len(item), item))
-    return ordered[:limit]
-
-
-def _extract_people_from_block(memory_text: str, heading: str, *, limit: int) -> list[str]:
-    block = _extract_markdown_block(memory_text, heading)
-    people: list[str] = []
-    for line in block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
-            continue
-        base = normalize_phrase(stripped[2:].split("|", 1)[0])
-        if base and base.lower() != "none" and base not in people:
-            people.append(base)
-        if len(people) >= limit:
-            break
-    return people
-
-
-def _extract_organisations_from_memory(memory_text: str, *, limit: int) -> list[str]:
-    block = _extract_markdown_block(memory_text, "Organisations")
-    organisations: list[str] = []
-    for line in block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
-            continue
-        base = normalize_phrase(stripped[2:].split("|", 1)[0])
-        if base and base.lower() != "none" and base not in organisations:
-            organisations.append(base)
-        if len(organisations) >= limit:
-            break
-    return organisations
-
-
-def _extract_case_refs_and_dates(memory_text: str) -> tuple[list[str], list[str]]:
-    refs_block = _extract_markdown_sub_block(
-        memory_text,
-        heading="Allowed References",
-        subheading="Case References and Dates",
-    )
-    case_ref_values = [normalize_phrase(value) for value in CASE_REF_RE.findall(refs_block)]
-    date_values = [normalize_phrase(value) for value in DATE_RE.findall(refs_block)]
-    return _unique_preserve_order(case_ref_values), _unique_preserve_order(date_values)
-
-
-def _extract_offences(memory_text: str, *, limit: int) -> list[str]:
-    counts_block = _extract_markdown_block(memory_text, "Counts")
-    offences: list[str] = []
-    for line in counts_block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
-            continue
-        offence = normalize_phrase(stripped[2:].split("|", 1)[0])
-        if offence and offence.lower() != "none" and offence not in offences:
-            offences.append(offence)
-        if len(offences) >= limit:
-            break
-    return offences
-
-
-def _extract_charged_period(memory_text: str) -> str:
-    counts_block = _extract_markdown_block(memory_text, "Counts")
-    match = re.search(
-        r"between\s+(\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4})\s+and\s+(\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4})",
-        counts_block,
-    )
-    if not match:
-        return ""
-    return f"{normalize_phrase(match.group(1))} and {normalize_phrase(match.group(2))}"
-
-
-def _extract_document_fields(memory_text: str) -> dict[str, str]:
-    block = _extract_markdown_block(memory_text, "Document")
-    fields: dict[str, str] = {}
-    for line in block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
-            continue
-        payload = stripped[2:]
-        if ":" not in payload:
-            continue
-        key, raw_value = payload.split(":", 1)
-        normalized_key = normalize_phrase(key).lower()
-        normalized_value = normalize_phrase(raw_value)
-        if normalized_key and normalized_value:
-            fields[normalized_key] = normalized_value
-    return fields
-
-
-def _extract_count_entries(memory_text: str, *, limit: int) -> list[tuple[str, str, str]]:
-    block = _extract_markdown_block(memory_text, "Counts")
-    entries: list[tuple[str, str, str]] = []
-    for line in block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
-            continue
-        parts = [normalize_phrase(part) for part in stripped[2:].split("|")]
-        offence = parts[0] if parts else ""
-        statute = parts[1] if len(parts) > 1 else ""
-        particulars = parts[2] if len(parts) > 2 else ""
-        if offence:
-            entries.append((offence, statute, particulars))
-        if len(entries) >= limit:
-            break
-    return entries
-
-
-def _extract_relationship_facts(memory_text: str, *, limit: int) -> list[str]:
-    block = _extract_markdown_block(memory_text, "Relationship Graph")
-    relationships: list[str] = []
-    for line in block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
-            continue
-        fact = normalize_phrase(stripped[2:])
-        if fact and fact.lower() != "none" and fact not in relationships:
-            relationships.append(fact)
-        if len(relationships) >= limit:
-            break
-    return relationships
-
-
-def _extract_markdown_block(memory_text: str, heading: str) -> str:
-    marker = f"## {heading}\n"
-    start = memory_text.find(marker)
-    if start == -1:
-        return ""
-    start_index = start + len(marker)
-    tail = memory_text[start_index:]
-    end = tail.find("\n## ")
-    return tail[:end] if end != -1 else tail
-
-
-def _extract_markdown_sub_block(memory_text: str, *, heading: str, subheading: str) -> str:
-    parent = _extract_markdown_block(memory_text, heading)
-    if not parent:
-        return ""
-    marker = f"### {subheading}\n"
-    start = parent.find(marker)
-    if start == -1:
-        return ""
-    start_index = start + len(marker)
-    tail = parent[start_index:]
-    end = tail.find("\n### ")
-    return tail[:end] if end != -1 else tail
-
-
-def _unique_preserve_order(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for value in values:
-        if not value:
-            continue
-        key = value.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        ordered.append(value)
-    return ordered
-
-
 def _is_meta_line(line: str) -> bool:
     stripped = line.strip()
     lowered = stripped.lower()
@@ -740,89 +487,6 @@ def _drop_partial_vat_fragments(text: str) -> str:
     return cleaned
 
 
-def _has_repeated_long_sentences(text: str) -> bool:
-    normalized_sentences = []
-    for sentence in _SENTENCE_SPLIT_RE.split(" ".join(text.split())):
-        normalized = sentence.strip().lower()
-        if len(normalized) < 80:
-            continue
-        normalized = re.sub(r"\s+", " ", normalized)
-        normalized_sentences.append(normalized)
-    if len(normalized_sentences) < 2:
-        return False
-    seen: set[str] = set()
-    for sentence in normalized_sentences:
-        if sentence in seen:
-            return True
-        seen.add(sentence)
-    return False
-
-
-def _dedupe_repeated_content(text: str) -> str:
-    lines = [line.rstrip() for line in text.splitlines()]
-    if not lines:
-        return text
-
-    deduped_lines: list[str] = []
-    seen_sentence_keys: set[str] = set()
-    for line in lines:
-        normalized_line = " ".join(line.split()).strip()
-        if not normalized_line:
-            if deduped_lines and deduped_lines[-1] == "":
-                continue
-            deduped_lines.append("")
-            continue
-
-        key = normalized_line.casefold()
-        if len(key) >= 80 and key in seen_sentence_keys:
-            continue
-
-        if (
-            deduped_lines
-            and deduped_lines[-1]
-            and deduped_lines[-1].casefold() == key
-        ):
-            continue
-
-        deduped_lines.append(line)
-        if len(key) >= 80:
-            seen_sentence_keys.add(key)
-
-    cleaned = "\n".join(deduped_lines).strip()
-    if not cleaned:
-        return cleaned
-
-    sentence_parts: list[str] = []
-    seen_sentences: set[str] = set()
-    for sentence in _SENTENCE_SPLIT_RE.split(" ".join(cleaned.split())):
-        part = sentence.strip()
-        if not part:
-            continue
-        key = re.sub(r"\s+", " ", part).casefold()
-        if len(key) >= 90 and key in seen_sentences:
-            continue
-        sentence_parts.append(part)
-        if len(key) >= 90:
-            seen_sentences.add(key)
-    return " ".join(sentence_parts).strip()
-
-
-def _has_repeated_sentence_fragments(text: str) -> bool:
-    normalized_text = " ".join(text.split())
-    if not normalized_text:
-        return False
-    fragment_counts: dict[str, int] = {}
-    for sentence in _SENTENCE_SPLIT_RE.split(normalized_text):
-        tokens = [token.lower() for token in _TOKEN_RE.findall(sentence)]
-        if len(tokens) < 8:
-            continue
-        fragment_key = " ".join(tokens[:10])
-        fragment_counts[fragment_key] = fragment_counts.get(fragment_key, 0) + 1
-        if fragment_counts[fragment_key] >= 2:
-            return True
-    return False
-
-
 def _contains_meta_summary_style(text: str) -> bool:
     return bool(_META_SUMMARY_OPENING_RE.search(text))
 
@@ -833,37 +497,3 @@ def _remove_meta_summary_sentences(text: str) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
-
-def _validate_facts_contract(text: str, memory_text: str) -> list[str]:
-    issues: list[str] = []
-    defendants = _extract_people_from_block(memory_text, "Defendants", limit=3)
-    organisations = _extract_organisations_from_memory(memory_text, limit=5)
-    charged_period = _extract_charged_period(memory_text)
-    _, key_dates = _extract_case_refs_and_dates(memory_text)
-
-    if defendants:
-        defendant_mentions = sum(1 for defendant in defendants if defendant in text)
-        if defendant_mentions < min(2, len(defendants)):
-            issues.append("Facts section omits key defendants listed in CASE_MEMORY.")
-    if organisations:
-        organisation_mentions = sum(1 for organisation in organisations if organisation in text)
-        if organisation_mentions < min(3, len(organisations)):
-            issues.append("Facts section omits key organisations listed in CASE_MEMORY.")
-    if charged_period:
-        start_date, _, end_date = charged_period.partition(" and ")
-        if start_date and end_date and (start_date not in text or end_date not in text):
-            issues.append("Facts section omits one or both charged-period dates from CASE_MEMORY.")
-    elif key_dates and not any(date in text for date in key_dates[:2]):
-        issues.append("Facts section omits key case dates from CASE_MEMORY.")
-    if _contains_meta_summary_style(text):
-        issues.append("Facts section uses template wording instead of factual narrative.")
-    return issues
-
-
-def _ensure_terminal_punctuation(value: str) -> str:
-    cleaned = normalize_phrase(value)
-    if not cleaned:
-        return ""
-    if cleaned[-1] in ".!?;":
-        return cleaned
-    return f"{cleaned}."

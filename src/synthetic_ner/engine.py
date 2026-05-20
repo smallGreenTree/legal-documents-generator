@@ -22,6 +22,7 @@ from src.synthetic_ner.constants import (
     PROSECUTION,
     SECTION_DESCRIPTIONS,
 )
+from src.synthetic_ner.models.factory import ollama_config_from_provider
 from src.synthetic_ner.schema import (
     counter_from_doc_id,
     load_case_schema,
@@ -296,7 +297,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         profile=profile,
         case_cfg=app_config.case,
         langfuse_cfg=app_config.langfuse,
-        ollama_cfg=app_config.ollama,
         model_routing_cfg=app_config.model_routing,
         workflow_cfg=app_config.workflow,
         nat_locales=app_config.nationality_locales,
@@ -441,7 +441,9 @@ def build_llm_sections(
                 f"{entity_mentions} mention(s)/entity"
             )
             text = generate_section(
-                ollama_cfg=context.ollama_cfg,
+                ollama_cfg=ollama_config_from_provider(
+                    context.model_routing_cfg.stages["writer"]
+                ),
                 writer_cfg=context.workflow_cfg.writer,
                 section_name=section_name,
                 doc_type=context.doc_type,
