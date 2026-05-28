@@ -61,8 +61,12 @@ def test_quality_report_scores_existing_document_artifacts(tmp_path):
     assert report["sections"][1]["section"] == "history"
     assert report["sections"][0]["score"] > report["sections"][1]["score"]
     assert report["sections"][1]["revision"] == 2
+    assert report["sections"][1]["score_breakdown"]["issue_penalty"] > 0
+    assert report["sections"][1]["score_breakdown"]["revision_penalty"] == 12
     assert "Section mentions unknown date '1 January 2026'." in report["sections"][1]["issues"]
     assert "Overall score" in markdown
+    assert "## Quality Score Explanation" in markdown
+    assert "Validator issues" in markdown
 
 
 def test_quality_report_uses_configured_scoring_weights(tmp_path):

@@ -89,7 +89,16 @@ def _score_section(
             "verdict": "missing",
             "revision": None,
             "word_count": 0,
+            "expected_words": word_target,
             "issues": ["Section artifact is missing."],
+            "score_breakdown": {
+                "base": 100,
+                "issue_count": 1,
+                "issue_penalty": 100,
+                "revision_penalty": 0,
+                "short_section_penalty": 0,
+                "score": 0,
+            },
             "path": None,
         }
 
@@ -101,7 +110,7 @@ def _score_section(
         memory_text=memory_text,
         word_target=word_target,
     )
-    score = _section_score(
+    score_breakdown = _section_score_breakdown(
         issues=issues,
         revision=revision,
         word_count=len(section_text.split()),
@@ -109,11 +118,13 @@ def _score_section(
     )
     return {
         "section": section_name,
-        "score": score,
-        "verdict": _verdict(score),
+        "score": score_breakdown["score"],
+        "verdict": _verdict(score_breakdown["score"]),
         "revision": revision,
         "word_count": len(section_text.split()),
+        "expected_words": word_target,
         "issues": issues,
+        "score_breakdown": score_breakdown,
         "path": str(section_path),
     }
 
@@ -147,18 +158,46 @@ def _section_score(
     word_count: int,
     scoring_config: dict[str, int],
 ) -> int:
-    score = 100
-    score -= min(
+    return _section_score_breakdown(
+        issues=issues,
+        revision=revision,
+        word_count=word_count,
+        scoring_config=scoring_config,
+    )["score"]
+
+
+def _section_score_breakdown(
+    *,
+    issues: list[str],
+    revision: int,
+    word_count: int,
+    scoring_config: dict[str, int],
+) -> dict[str, int]:
+    issue_penalty = min(
         scoring_config["validator_issue_penalty_cap"],
         len(issues) * scoring_config["validator_issue_penalty"],
     )
-    score -= min(
+    revision_penalty = min(
         scoring_config["revision_penalty_cap"],
         revision * scoring_config["revision_penalty"],
     )
-    if word_count < scoring_config["short_section_word_threshold"]:
-        score -= scoring_config["short_section_penalty"]
-    return max(0, score)
+    short_section_penalty = (
+        scoring_config["short_section_penalty"]
+        if word_count < scoring_config["short_section_word_threshold"]
+        else 0
+    )
+    score = 100
+    score -= issue_penalty
+    score -= revision_penalty
+    score -= short_section_penalty
+    return {
+        "base": 100,
+        "issue_count": len(issues),
+        "issue_penalty": issue_penalty,
+        "revision_penalty": revision_penalty,
+        "short_section_penalty": short_section_penalty,
+        "score": max(0, score),
+    }
 
 
 def _positive_int(value: Any, key: str) -> int:
@@ -204,15 +243,18 @@ def format_markdown_report(report: dict[str, Any]) -> str:
     if include_langfuse:
         lines.extend(
             [
-                "| Section | Score | Verdict | Revision | Words | Issues | Langfuse |",
-                "| --- | ---: | --- | ---: | ---: | ---: | --- |",
+                (
+                    "| Section | Score | Verdict | Revision | Words | "
+                    "Expected words | Issues | Langfuse |"
+                ),
+                "| --- | ---: | --- | ---: | ---: | ---: | ---: | --- |",
             ]
         )
     else:
         lines.extend(
             [
-                "| Section | Score | Verdict | Revision | Words | Issues |",
-                "| --- | ---: | --- | ---: | ---: | ---: |",
+                "| Section | Score | Verdict | Revision | Words | Expected words | Issues |",
+                "| --- | ---: | --- | ---: | ---: | ---: | ---: |",
             ]
         )
     for section in report["sections"]:
@@ -224,11 +266,14 @@ def format_markdown_report(report: dict[str, Any]) -> str:
             f"{section['verdict']} | "
             f"{revision} | "
             f"{section['word_count']} | "
+            f"{section.get('expected_words', 'n/a')} | "
             f"{len(section['issues'])} |"
         )
         if include_langfuse:
             row += f" {_quality_link_or_na(section.get('langfuse_url'))} |"
         lines.append(row)
+
+    lines.extend(_score_explanation_lines(report))
 
     lines.extend(["", "## Top Failures", ""])
     if report["top_failures"]:
@@ -251,3 +296,57 @@ def _quality_link_or_na(url: Any) -> str:
     if isinstance(url, str) and url.strip():
         return f"[prompt/response]({url.strip()})"
     return "n/a"
+
+
+def _score_explanation_lines(report: dict[str, Any]) -> list[str]:
+    scoring = report.get("scoring_config") or DEFAULT_SCORING_CONFIG
+    lines = [
+        "",
+        "## Quality Score Explanation",
+        "",
+        (
+            "The quality score is deterministic. Each section starts at `100` and "
+            "loses points for validator issues, revision rounds, and very short "
+            "section text. It is separate from the LLM critic rubric, which scores "
+            "semantic legal quality on a `1-5` scale."
+        ),
+        "",
+        "| Rule | Current setting |",
+        "| --- | --- |",
+        (
+            "| Validator issues | "
+            f"-{scoring['validator_issue_penalty']} each, capped at "
+            f"{scoring['validator_issue_penalty_cap']} |"
+        ),
+        (
+            "| Revision rounds | "
+            f"-{scoring['revision_penalty']} each, capped at "
+            f"{scoring['revision_penalty_cap']} |"
+        ),
+        (
+            "| Short section | "
+            f"-{scoring['short_section_penalty']} if under "
+            f"{scoring['short_section_word_threshold']} words |"
+        ),
+        "| Overall score | Average of section scores |",
+        "| Verdict bands | good `85+`, acceptable `70-84`, risky `50-69`, bad `<50` |",
+        "",
+        "| Section | Base | Issue penalty | Revision penalty | Short penalty | Score |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for section in report.get("sections", []):
+        breakdown = section.get("score_breakdown") or {}
+        lines.append(
+            "| "
+            f"{section.get('section') or 'unknown'} | "
+            f"{_int_display(breakdown.get('base'), 100)} | "
+            f"-{_int_display(breakdown.get('issue_penalty'), 0)} | "
+            f"-{_int_display(breakdown.get('revision_penalty'), 0)} | "
+            f"-{_int_display(breakdown.get('short_section_penalty'), 0)} | "
+            f"{_int_display(section.get('score'), 0)} |"
+        )
+    return lines
+
+
+def _int_display(value: Any, fallback: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else fallback

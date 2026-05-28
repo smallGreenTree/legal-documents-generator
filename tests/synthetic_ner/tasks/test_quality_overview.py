@@ -93,11 +93,11 @@ def test_quality_overview_uses_existing_report_and_quality_score(tmp_path):
     assert "Text generation prompts/responses" in model_workflow
     assert "obs-persons-polish" in model_workflow
     assert (
-        "| persons | 90 | 4.25 | 4 | 5 | 4 | 4 | 0 | "
+        "| persons | 90 | 120 | 120 | 4.25 | 4 | 5 | 4 | 4 | 0 | "
         "[trace](http://localhost:3000/project/x/traces/trace-1) | none |"
     ) in model_workflow
     assert (
-        "| history | 66 | 2.75 | 2 | 3 | 3 | 3 | 2 | "
+        "| history | 66 | 220 | 120 | 2.75 | 2 | 3 | 3 | 3 | 2 | "
         "[trace](http://localhost:3000/project/x/traces/trace-1) | "
         "Section contains repeated sentence fragments. |"
     ) in model_workflow
@@ -326,6 +326,7 @@ def _quality_report(doc_id):
                 "verdict": "good",
                 "revision": 0,
                 "word_count": 120,
+                "expected_words": 120,
                 "issues": [],
             },
             {
@@ -334,6 +335,7 @@ def _quality_report(doc_id):
                 "verdict": "risky",
                 "revision": 2,
                 "word_count": 220,
+                "expected_words": 120,
                 "issues": ["Section contains repeated sentence fragments."],
             },
         ],

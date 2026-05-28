@@ -212,10 +212,13 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
             _section_rubric_note(workflow),
             "",
             (
-                "| Section | Quality | Rubric avg | Grounding | Completeness | "
-                "Legal style | Chronology | Revision | Langfuse | Main issue |"
+                "| Section | Quality | Words | Expected words | Rubric avg | Grounding | "
+                "Completeness | Legal style | Chronology | Revision | Langfuse | Main issue |"
             ),
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+            (
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+                "---: | ---: | --- | --- |"
+            ),
         ]
     )
     for row in workflow.get("section_rubrics", []):
@@ -223,6 +226,8 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
             "| "
             f"{row['section']} | "
             f"{_score_display(row.get('quality_score'))} | "
+            f"{_int_display(row.get('word_count'))} | "
+            f"{_int_display(row.get('expected_words'))} | "
             f"{_rubric_number_display(row.get('overall'))} | "
             f"{_rubric_number_display(row.get('grounding'))} | "
             f"{_rubric_number_display(row.get('completeness'))} | "
@@ -754,6 +759,8 @@ def _section_rubric_rows(
             {
                 "section": section_name,
                 "quality_score": section.get("score"),
+                "word_count": section.get("word_count"),
+                "expected_words": section.get("expected_words"),
                 "overall": rubric.get("overall"),
                 "grounding": rubric.get("grounding"),
                 "completeness": rubric.get("completeness"),
