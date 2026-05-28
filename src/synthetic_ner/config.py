@@ -96,11 +96,6 @@ def build_app_config(
     )
 
 
-def resolve_doc_types(generation_cfg: GenerationConfig) -> tuple[str, ...]:
-    del generation_cfg
-    return tuple(PROSE_SECTION_ORDER.keys())
-
-
 def resolve_section_order(doc_type: str) -> list[str]:
     section_order = PROSE_SECTION_ORDER.get(doc_type)
     if section_order is None:
@@ -676,23 +671,12 @@ def _require_non_negative_int(value: Any, path: str) -> int:
     return value
 
 
-def _require_int(value: Any, path: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"{path} must be an integer")
-    return value
 
 
 def _require_number(value: Any, path: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{path} must be a number")
     return float(value)
-
-
-def _require_non_negative_number(value: Any, path: str) -> float:
-    number = _require_number(value, path)
-    if number < 0:
-        raise ValueError(f"{path} must be non-negative")
-    return number
 
 
 def _require_positive_number(value: Any, path: str) -> float:

@@ -189,6 +189,9 @@ def _top_failures(sections: list[dict[str, Any]]) -> list[str]:
 
 
 def format_markdown_report(report: dict[str, Any]) -> str:
+    include_langfuse = any(
+        section.get("langfuse_url") for section in report["sections"]
+    )
     lines = [
         f"# Quality Report: {report['doc_id']}",
         "",
@@ -197,12 +200,24 @@ def format_markdown_report(report: dict[str, Any]) -> str:
         "",
         "## Section Scores",
         "",
-        "| Section | Score | Verdict | Revision | Words | Issues |",
-        "| --- | ---: | --- | ---: | ---: | ---: |",
     ]
+    if include_langfuse:
+        lines.extend(
+            [
+                "| Section | Score | Verdict | Revision | Words | Issues | Langfuse |",
+                "| --- | ---: | --- | ---: | ---: | ---: | --- |",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "| Section | Score | Verdict | Revision | Words | Issues |",
+                "| --- | ---: | --- | ---: | ---: | ---: |",
+            ]
+        )
     for section in report["sections"]:
         revision = section["revision"] if section["revision"] is not None else "-"
-        lines.append(
+        row = (
             "| "
             f"{section['section']} | "
             f"{section['score']} | "
@@ -211,6 +226,9 @@ def format_markdown_report(report: dict[str, Any]) -> str:
             f"{section['word_count']} | "
             f"{len(section['issues'])} |"
         )
+        if include_langfuse:
+            row += f" {_quality_link_or_na(section.get('langfuse_url'))} |"
+        lines.append(row)
 
     lines.extend(["", "## Top Failures", ""])
     if report["top_failures"]:
@@ -227,3 +245,9 @@ def format_markdown_report(report: dict[str, Any]) -> str:
             lines.append("- none")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _quality_link_or_na(url: Any) -> str:
+    if isinstance(url, str) and url.strip():
+        return f"[prompt/response]({url.strip()})"
+    return "n/a"

@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_financial_fraud_004",
+  "fraud_type": "financial_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Natalie Rädel",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Mauro Viola",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Franck Lebreton",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Slavko Höfig",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Arne Kroker",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "FUSELI LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "LABBÉ LIMITED",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "TOUSSAINT INTERNATIONAL LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Natalie Rädel controlled FUSELI LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Mauro Viola controlled LABBÉ LIMITED"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Franck Lebreton controlled TOUSSAINT INTERNATIONAL LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Natalie Rädel instructed Slavko Höfig"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Natalie Rädel instructed Arne Kroker"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Natalie Rädel conspired with Mauro Viola"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Mauro Viola conspired with Franck Lebreton"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "TOUSSAINT INTERNATIONAL LTD received funds from FUSELI LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "TOUSSAINT INTERNATIONAL LTD received funds from LABBÉ LIMITED"
+    }
+  ]
+}

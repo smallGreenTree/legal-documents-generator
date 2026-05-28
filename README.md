@@ -80,7 +80,7 @@ template, optional source schema, optional quality config, and present env files
 To add human stop points before generation, run with:
 
 ```bash
-poetry run python -m src.synthetic_ner.prefect_pipeline --review-scenario --review-entities
+poetry run python prefect_pipeline.py --review-scenario --review-entities
 ```
 
 The scenario review pause lets a user approve, reload, or cancel the selected
@@ -109,8 +109,9 @@ control plane:
 make prefect-up
 ```
 
-This starts the Prefect server, registers the deployment, and starts a local
-worker in the background. Managers can then use only the Prefect UI.
+This starts the Prefect server, registers the generation and quality deployments,
+and starts a local worker in the background. Managers can then use only the
+Prefect UI.
 
 To stop Prefect:
 
@@ -118,8 +119,13 @@ To stop Prefect:
 make prefect-down
 ```
 
-Now open `http://localhost:4200`, go to **Deployments**, select
-`synthetic-ner-generation/document-generation`, and click **Run**.
+Now open `http://localhost:4200`, go to **Deployments**, and run either:
+
+- `synthetic-ner-generation/document-generation`
+- `synthetic-ner-document-quality/document-quality`
+
+The quality deployment pauses before scoring so the reviewer can select the
+document id to analyze.
 
 When Langfuse is enabled, the workflow tries to fetch these managed text prompts:
 

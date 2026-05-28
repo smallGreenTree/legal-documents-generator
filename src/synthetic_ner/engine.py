@@ -1,6 +1,5 @@
 """Core document generation engine."""
 
-import math
 import re
 from argparse import Namespace
 from dataclasses import replace
@@ -8,6 +7,7 @@ from pathlib import Path
 
 import requests
 from jinja2 import Environment, FileSystemLoader
+
 from src.synthetic_ner.case import (
     resolve_case_entities,
     resolve_case_metadata,
@@ -20,9 +20,7 @@ from src.synthetic_ner.constants import (
     EN_SECTIONS,
     INCOMPLETE_SECTION_MARKERS,
     PROSECUTION,
-    SECTION_DESCRIPTIONS,
 )
-from src.synthetic_ner.models.factory import ollama_config_from_provider
 from src.synthetic_ner.schema import (
     counter_from_doc_id,
     load_case_schema,
@@ -30,13 +28,11 @@ from src.synthetic_ner.schema import (
     make_doc_id,
     next_counter,
     normalize_schema,
-    schema_to_context,
     write_case_schema,
 )
 from src.synthetic_ner.types.app_config import (
     OllamaConfig,
     ProfileConfig,
-    WriterConfig,
 )
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
@@ -51,30 +47,6 @@ _AMOUNT_RE = re.compile(
     r"(?:£|€|\b(?:GBP|EUR)\s*)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|m|thousand|k))?",
     re.IGNORECASE,
 )
-
-
-def call_ollama(
-    ollama_cfg: OllamaConfig,
-    prompt: str,
-    temperature: float,
-) -> str | None:
-    try:
-        response = requests.post(
-            f"{ollama_cfg.base_url}/api/generate",
-            json={
-                "model": ollama_cfg.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": temperature},
-            },
-            timeout=ollama_cfg.timeout,
-        )
-        response.raise_for_status()
-        return response.json()["response"].strip()
-    except Exception as exc:
-        print(f"  [Ollama error] {exc}")
-        return None
-
 
 
 

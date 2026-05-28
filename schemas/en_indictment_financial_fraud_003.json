@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_financial_fraud_003",
+  "fraud_type": "financial_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Margot Mälzer",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Giosuè Federici",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Émilie Fernandes",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Kurt Lehmann",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Luisa Gute",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "ROSIELLO BODONI HOLDINGS LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "GEISSLER KARGE SERVICES LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "BACOSI GROUP LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Margot Mälzer controlled ROSIELLO BODONI HOLDINGS LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Giosuè Federici controlled GEISSLER KARGE SERVICES LTD"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Émilie Fernandes controlled BACOSI GROUP LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Margot Mälzer instructed Kurt Lehmann"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Margot Mälzer instructed Luisa Gute"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Margot Mälzer conspired with Giosuè Federici"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Giosuè Federici conspired with Émilie Fernandes"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "BACOSI GROUP LTD received funds from ROSIELLO BODONI HOLDINGS LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "BACOSI GROUP LTD received funds from GEISSLER KARGE SERVICES LTD"
+    }
+  ]
+}

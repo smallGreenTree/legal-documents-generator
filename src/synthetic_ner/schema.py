@@ -105,13 +105,6 @@ def make_case_schema(
     }
 
 
-def schema_to_context(schema: dict) -> str:
-    lines = ["Established facts for this case (use these relationships throughout):"]
-    for edge in schema["edges"]:
-        lines.append(f"  - {edge['label'].rstrip('.')}.")
-    return "\n".join(lines)
-
-
 def write_case_schema(path: Path, schema: dict) -> None:
     path.write_text(json.dumps(schema, indent=2, ensure_ascii=False), encoding="utf-8")
 
