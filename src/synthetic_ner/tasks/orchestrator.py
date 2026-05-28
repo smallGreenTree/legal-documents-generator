@@ -94,8 +94,23 @@ def run_langgraph_workflow(args: Namespace, project_root: Path) -> None:
     print("\nDone.")
 
 
-def run_document_graph(*, context, document, schema: dict, doc_id: str) -> None:
-    trace_store = TraceStore(context.langfuse_cfg)
+def run_document_graph(
+    *,
+    context,
+    document,
+    schema: dict,
+    doc_id: str,
+    workflow_run_id: str | None = None,
+    prefect_flow_run_id: str | None = None,
+) -> None:
+    trace_store = TraceStore(
+        context.langfuse_cfg,
+        run_metadata={
+            "doc_id": doc_id,
+            "workflow_run_id": workflow_run_id or doc_id,
+            "prefect_flow_run_id": prefect_flow_run_id,
+        },
+    )
     memory_manager = CaseMemoryManager(
         context.memory_dir,
         summary_chars=context.workflow_cfg.memory_summary_chars,
@@ -641,4 +656,3 @@ def _combine_revision_instruction(
         validator_lines = "\n".join(f"- {issue}" for issue in validator_issues)
         parts.extend(["", "DETERMINISTIC VALIDATION FIXES:", validator_lines])
     return "\n".join(parts).strip()
-

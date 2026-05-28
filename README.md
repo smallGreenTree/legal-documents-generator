@@ -54,8 +54,8 @@ That workflow adds:
 - node-level Langfuse spans for every LangGraph node, including section, revision, next-node, and latency metadata
 - Langfuse Prompt Management integration (prompts fetched by name with config fallback)
 
-The active workflow mode is controlled by `workflow.mode` in `config.yaml`,
-and can be overridden on the CLI with `--workflow-mode classic|langgraph`.
+The active workflow mode is `langgraph`. The CLI and Prefect deployment both
+use the same LangGraph generation path.
 
 ## Prefect Orchestration
 
@@ -63,16 +63,38 @@ Prefect can be used as the outer, user-friendly orchestration layer for the
 whole generation run. The Prefect flow keeps the existing LangGraph and
 Langfuse internals, but exposes these higher-level stages in the Prefect UI:
 
+- `scenario-selection`
+- `human-scenario-review` (optional)
 - `configs-ingestion`
 - `faker-entities`
+- `human-entity-review` (optional)
+- `select-doc-id`
 - `case-schema`
 - `langgraph-langfuse-generation`
 - `end-of-pipeline-file-audit`
+
+The first stage publishes a scenario summary and an input-file table artifact
+listing the root config, selected scenario config, prompt config, document
+template, optional source schema, optional quality config, and present env files.
+
+To add human stop points before generation, run with:
+
+```bash
+poetry run python -m src.synthetic_ner.prefect_pipeline --review-scenario --review-entities
+```
+
+The scenario review pause lets a user approve, reload, or cancel the selected
+scenario before config ingestion. The entity review pause publishes editable
+document input JSON so a user can approve the generated cast, cancel the run,
+or paste edited JSON to delete or alter people and organisations before schema
+and document creation.
 
 Each generated document gets a `file_audit.json` manifest in its output folder.
 The manifest lists the document output files, schema file, memory files,
 partial generation artifacts, file sizes, modification timestamps, and SHA-256
 checksums.
+
+For a stage-by-stage code map, see `docs/prefect_end_to_end_map.md`.
 
 Install/setup Prefect dependencies:
 
@@ -235,12 +257,6 @@ Generate multiple documents:
 
 ```bash
 poetry run python generator.py --documents 3
-```
-
-Generate with the classic non-graph flow:
-
-```bash
-poetry run python generator.py --workflow-mode classic
 ```
 
 Visualize entity coverage:

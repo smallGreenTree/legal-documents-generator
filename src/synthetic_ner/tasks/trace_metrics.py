@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Mapping
@@ -150,6 +151,15 @@ def optional_env(key: str) -> str | None:
 
 
 def extract_rubric_scores(raw_text: str) -> dict[str, int]:
+    try:
+        payload = json.loads(_extract_json_object(raw_text))
+    except (json.JSONDecodeError, ValueError):
+        payload = None
+    if isinstance(payload, dict):
+        rubrics = _rubrics_from_mapping(payload.get("rubrics"))
+        if rubrics:
+            return rubrics
+
     rubrics_marker = raw_text.find("RUBRICS:")
     if rubrics_marker == -1:
         return {}
@@ -169,6 +179,35 @@ def extract_rubric_scores(raw_text: str) -> dict[str, int]:
         score = int(raw_score)
         if key and 1 <= score <= 5:
             rubrics[key] = score
+    return rubrics
+
+
+def _extract_json_object(raw_text: str) -> str:
+    text = raw_text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("No JSON object found.")
+    return text[start : end + 1]
+
+
+def _rubrics_from_mapping(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    rubrics: dict[str, int] = {}
+    for metric, raw_score in value.items():
+        if isinstance(raw_score, bool) or not isinstance(raw_score, int):
+            continue
+        key = str(metric).strip().lower().replace(" ", "_").replace("-", "_")
+        if key and 1 <= raw_score <= 5:
+            rubrics[key] = raw_score
     return rubrics
 
 

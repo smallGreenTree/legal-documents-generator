@@ -173,6 +173,8 @@ prompts:
     - blocking: boolean
     - edits: array of specific edits
     - risk_level: "low", "medium", or "high"
+    - rubrics: object with integer 1-5 scores for grounding, completeness,
+      legal_style, and chronology
     Each edit must contain target, action, reason, and replacement fields.
     Use replacement as an empty string when no exact replacement is needed.
 
@@ -201,4 +203,4 @@ prompts:
     {{ critic_rubrics }}
 
     If no edits are needed, return:
-    {"blocking": false, "edits": [], "risk_level": "low"}
+    {"blocking": false, "edits": [], "risk_level": "low", "rubrics": {"grounding": 5, "completeness": 5, "legal_style": 5, "chronology": 5}}

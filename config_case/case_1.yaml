@@ -40,33 +40,9 @@ case:
       - nationality: DE
         title: ""
         surface_forms: 1
-      - nationality: DE
-        title: ""
-        surface_forms: 1
-      - nationality: IT
-        title: ""
-        surface_forms: 1
-      - nationality: IT
-        title: ""
-        surface_forms: 1
-      - nationality: IT
-        title: ""
-        surface_forms: 1
-      - nationality: FR
-        title: ""
-        surface_forms: 1
-      - nationality: FR
-        title: ""
-        surface_forms: 1
-      - nationality: PL
-        title: ""
-        surface_forms: 1
-      - nationality: PL
-        title: ""
-        surface_forms: 1
 
-    charged_orgs: 5
-    associated_orgs: 5
+    charged_orgs: 2
+    associated_orgs: 1
 
   defendants: auto
   collateral: auto

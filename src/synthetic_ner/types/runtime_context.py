@@ -18,6 +18,7 @@ from src.synthetic_ner.types.app_config import (
 
 @dataclass
 class RuntimeContext:
+    project_root: Path
     app_config: AppConfig
     paths: PathsConfig
     generation_cfg: GenerationConfig

@@ -30,11 +30,18 @@ from src.synthetic_ner.types.trace import (
 
 
 class TraceStore:
-    def __init__(self, cfg: LangfuseConfig) -> None:
+    def __init__(
+        self,
+        cfg: LangfuseConfig,
+        *,
+        run_metadata: dict[str, Any] | None = None,
+    ) -> None:
         self.cfg = cfg
         self.enabled = cfg.enabled
+        self.run_metadata = dict(run_metadata or {})
         self._document_context = None
         self._document_observation = None
+        self._document_trace_context: dict[str, str] | None = None
         self._node_runs: list[NodeExecutionRecord] = []
         self._llm_calls: list[dict[str, Any]] = []
         self._prompt_sync_summary = "Langfuse prompts: not resolved"
@@ -70,18 +77,23 @@ class TraceStore:
         input_payload: dict[str, Any],
         metadata: dict[str, Any],
     ) -> DocumentTraceSession:
-        del doc_id
+        self.run_metadata.setdefault("doc_id", doc_id)
+        self.run_metadata.setdefault("langfuse_group_id", doc_id)
+        self.run_metadata.setdefault("langfuse_trace_seed", doc_id)
+        self.run_metadata.setdefault("workflow_run_id", doc_id)
         if not self.enabled or self.client is None:
             return self._current_session
 
+        trace_id = self.client.create_trace_id(seed=doc_id)
+        self._document_trace_context = {"trace_id": trace_id}
         self._document_context = self.client.start_as_current_observation(
+            trace_context=self._document_trace_context,
             as_type="span",
-            name=name,
+            name=f"{name}:{doc_id}",
             input=input_payload,
-            metadata=metadata,
+            metadata=self._metadata(metadata),
         )
         self._document_observation = self._document_context.__enter__()
-        trace_id = self.client.get_current_trace_id()
         trace_url = self.client.get_trace_url(trace_id=trace_id) if trace_id else None
         self._current_session = DocumentTraceSession(
             enabled=True,
@@ -126,14 +138,17 @@ class TraceStore:
             )
 
         with self.client.start_as_current_observation(
+            trace_context=self._trace_context(doc_id),
             name=node_name,
             as_type="span",
             input=input_summary,
-            metadata=build_langgraph_node_metadata(
-                doc_id=doc_id,
-                node_name=node_name,
-                state=state,
-                status="running",
+            metadata=self._metadata(
+                build_langgraph_node_metadata(
+                    doc_id=doc_id,
+                    node_name=node_name,
+                    state=state,
+                    status="running",
+                )
             ),
         ) as observation:
             try:
@@ -143,12 +158,14 @@ class TraceStore:
                 error_message = str(exc)
                 observation.update(
                     output={"error": error_message},
-                    metadata=build_langgraph_node_metadata(
-                        doc_id=doc_id,
-                        node_name=node_name,
-                        state=state,
-                        latency_ms=latency_ms,
-                        status="error",
+                    metadata=self._metadata(
+                        build_langgraph_node_metadata(
+                            doc_id=doc_id,
+                            node_name=node_name,
+                            state=state,
+                            latency_ms=latency_ms,
+                            status="error",
+                        )
                     ),
                     level="ERROR",
                     status_message=error_message,
@@ -169,13 +186,15 @@ class TraceStore:
             latency_ms = round((perf_counter() - started) * 1000)
             observation.update(
                 output=summarize_state(result),
-                metadata=build_langgraph_node_metadata(
-                    doc_id=doc_id,
-                    node_name=node_name,
-                    state=combined_state,
-                    latency_ms=latency_ms,
-                    next_node=next_node,
-                    status="completed",
+                metadata=self._metadata(
+                    build_langgraph_node_metadata(
+                        doc_id=doc_id,
+                        node_name=node_name,
+                        state=combined_state,
+                        latency_ms=latency_ms,
+                        next_node=next_node,
+                        status="completed",
+                    )
                 ),
             )
             self._record_node_run(
@@ -200,26 +219,30 @@ class TraceStore:
         prompt_object: Any | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> TraceHandle:
-        del doc_id
+        trace_metadata = self._metadata(
+            {
+                "doc_id": doc_id,
+                "stage": stage,
+                "task_id": task_id,
+                "parent_task_id": parent_task_id,
+                **build_prompt_metadata(prompt_object),
+                **(metadata or {}),
+            }
+        )
         if not self.enabled or self.client is None:
-            return TraceHandle(observation=None)
+            return TraceHandle(observation=None, metadata=trace_metadata)
 
-        prompt_metadata = build_prompt_metadata(prompt_object)
         observation = self.client.start_observation(
+            trace_context=self._trace_context(doc_id),
             name=task_id,
             as_type="generation",
             model=model,
             input=prompt_payload if prompt_payload is not None else prompt,
-            metadata={
-                "stage": stage,
-                "parent_task_id": parent_task_id,
-                **prompt_metadata,
-                **(metadata or {}),
-            },
+            metadata=trace_metadata,
             prompt=None,
             model_parameters=(metadata or {}).get("model_parameters"),
         )
-        return TraceHandle(observation=observation)
+        return TraceHandle(observation=observation, metadata=trace_metadata)
 
     def record_llm_call(
         self,
@@ -229,10 +252,11 @@ class TraceStore:
         response: str,
         metadata: dict[str, Any],
     ) -> None:
-        enriched_metadata = dict(metadata)
+        enriched_metadata = self._metadata({**handle.metadata, **metadata})
         rubrics = extract_rubric_scores(response) if metadata.get("stage") == "critic" else {}
         if rubrics:
             enriched_metadata["critic_rubrics"] = rubrics
+            enriched_metadata.update(_flatten_rubrics(rubrics))
         self._record_llm_call_metadata(enriched_metadata)
         if handle.observation is None:
             return
@@ -254,11 +278,12 @@ class TraceStore:
         error_message: str,
         metadata: dict[str, Any],
     ) -> None:
-        enriched_metadata = {
+        enriched_metadata = self._metadata({
+            **handle.metadata,
             **metadata,
             "error": True,
             "error_message": error_message,
-        }
+        })
         self._record_llm_call_metadata(enriched_metadata)
         if handle.observation is None:
             return
@@ -410,6 +435,16 @@ class TraceStore:
                 "response_empty": metadata.get("response_empty"),
                 "error": metadata.get("error", False),
                 "error_message": metadata.get("error_message"),
+                "workflow_run_id": metadata.get("workflow_run_id"),
+                "prefect_flow_run_id": metadata.get("prefect_flow_run_id"),
+                "doc_id": metadata.get("doc_id"),
+                "langfuse_group_id": metadata.get("langfuse_group_id"),
+                "critic_rubrics": metadata.get("critic_rubrics"),
+                **{
+                    key: value
+                    for key, value in metadata.items()
+                    if key.startswith("rubric_")
+                },
             }
         )
 
@@ -491,3 +526,25 @@ class TraceStore:
                 data_type="NUMERIC",
                 comment="Average rubric score (1-5)",
             )
+
+    def _metadata(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in {**self.run_metadata, **(metadata or {})}.items()
+            if value is not None
+        }
+
+    def _trace_context(self, doc_id: str) -> dict[str, str] | None:
+        if not self.enabled or self.client is None:
+            return None
+        if self._document_trace_context is not None:
+            return self._document_trace_context
+        return {"trace_id": self.client.create_trace_id(seed=doc_id)}
+
+
+def _flatten_rubrics(rubrics: dict[str, int]) -> dict[str, int | float]:
+    flattened = {f"rubric_{metric}": score for metric, score in rubrics.items()}
+    valid_scores = [score for score in rubrics.values() if 1 <= score <= 5]
+    if valid_scores:
+        flattened["rubric_overall"] = round(sum(valid_scores) / len(valid_scores), 2)
+    return flattened

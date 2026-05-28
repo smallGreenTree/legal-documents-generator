@@ -126,6 +126,7 @@ class SectionCritic:
         risk_level = payload.get("risk_level")
         if risk_level not in {"low", "medium", "high"}:
             risk_level = "medium" if blocking else "low"
+        rubrics = _parse_rubrics(payload.get("rubrics"))
         issues = [_edit_issue(edit) for edit in edits]
         revision_instruction = _format_revision_edits(edits)
         if blocking and not edits:
@@ -135,7 +136,7 @@ class SectionCritic:
             approved=not blocking and not edits,
             issues=issues,
             revision_instruction=revision_instruction,
-            rubrics={},
+            rubrics=rubrics,
             raw_text=raw_text,
             edits=edits,
             blocking=blocking,
@@ -267,7 +268,21 @@ def _string_field(value: Any, fallback: str) -> str:
     return fallback
 
 
-def _parse_rubrics(rubric_block: str) -> dict[str, int]:
+def _parse_rubrics(rubric_block: Any) -> dict[str, int]:
+    if isinstance(rubric_block, dict):
+        rubrics: dict[str, int] = {}
+        for metric, raw_score in rubric_block.items():
+            if isinstance(raw_score, bool):
+                continue
+            if not isinstance(raw_score, int):
+                continue
+            key = str(metric).strip().lower().replace(" ", "_").replace("-", "_")
+            if key and 1 <= raw_score <= 5:
+                rubrics[key] = raw_score
+        return rubrics
+    if not isinstance(rubric_block, str):
+        return {}
+
     rubrics: dict[str, int] = {}
     for metric, raw_score in _RUBRIC_LINE_RE.findall(rubric_block):
         key = metric.strip().lower().replace(" ", "_").replace("-", "_")

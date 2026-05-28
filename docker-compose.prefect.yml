@@ -8,6 +8,7 @@ services:
       - prefect-data:/root/.prefect
     environment:
       PREFECT_UI_API_URL: http://localhost:4200/api
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/prefect
 
 volumes:
   prefect-data:

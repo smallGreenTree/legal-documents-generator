@@ -43,7 +43,7 @@ def load_app_config(
     resolved_case_config_path = (
         Path(case_config_path)
         if case_config_path is not None
-        else config_path.resolve().parent / "config_case" / "case_1.yaml"
+        else config_path.parent / "config_case" / "case_1.yaml"
     )
     case_raw = load_config(resolved_case_config_path)
     if not isinstance(case_raw, dict):

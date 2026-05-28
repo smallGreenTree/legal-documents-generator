@@ -42,8 +42,14 @@ from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 from src.synthetic_ner.utils import (
     is_auto,
+    make_initials,
     resolve_project_path,
     write_groundtruth,
+)
+
+_AMOUNT_RE = re.compile(
+    r"(?:£|€|\b(?:GBP|EUR)\s*)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|m|thousand|k))?",
+    re.IGNORECASE,
 )
 
 
@@ -206,29 +212,190 @@ def build_groundtruth_rows(
     collateral: list,
     charged_orgs: list,
     associated_orgs: list,
-    court: str,
+    metadata: dict,
+    counts_list: list[dict],
 ) -> list[tuple[str, str, str, str, str]]:
-    rows = []
+    rows: list[tuple[str, str, str, str, str]] = []
+    all_people = defendants + collateral
+    all_orgs = charged_orgs + associated_orgs
 
-    for person in defendants:
-        for form in person["surface_forms_list"]:
-            rows.append((doc_id, form, "PERSON", "yes", "defendant surface form"))
-        rows.append((doc_id, person["address"], "LOCATION", "yes", "defendant address"))
-
-    for person in collateral:
-        rows.append((doc_id, person["name"], "PERSON", "yes", "collateral person"))
-
-    for org in charged_orgs:
-        rows.append((doc_id, org["name"], "ORG", "yes", "charged org"))
-        rows.append((doc_id, org["street"], "LOCATION", "yes", "org street"))
-        rows.append((doc_id, org["city_postcode"], "LOCATION", "yes", "org city/postcode"))
-
-    for org in associated_orgs:
-        rows.append((doc_id, org["name"], "ORG", "yes", "associated org"))
-
-    rows.append((doc_id, PROSECUTION, "NEGATIVE_CONTROL", "no", "prosecution"))
-    rows.append((doc_id, court, "NEGATIVE_CONTROL", "no", "court"))
+    _append_person_rows(rows, doc_id, all_people)
+    _append_org_rows(rows, doc_id, all_orgs, charged_orgs)
+    _append_reference_rows(rows, doc_id, metadata)
+    _append_date_rows(rows, doc_id, metadata, all_people)
+    _append_amount_rows(rows, doc_id, counts_list)
+    _append_initial_rows(rows, doc_id, all_people)
+    _append_title_rows(rows, doc_id, all_people)
+    _append_all_address_rows(rows, doc_id, defendants, all_orgs)
+    _append_vat_rows(rows, doc_id, all_orgs)
+    _append_row(rows, doc_id, PROSECUTION, "NEGATIVE_CONTROL", "no", "prosecution")
+    _append_row(rows, doc_id, metadata["court"], "NEGATIVE_CONTROL", "no", "court")
     return rows
+
+
+def _append_person_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    people: list[dict],
+) -> None:
+    for person in people:
+        _append_row(rows, doc_id, person["name"], "PERSON", "yes", _person_note(person))
+
+
+def _append_org_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    orgs: list[dict],
+    charged_orgs: list[dict],
+) -> None:
+    for org in orgs:
+        _append_row(rows, doc_id, org["name"], "ORG", "yes", _org_note(org, charged_orgs))
+
+
+def _append_reference_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    metadata: dict,
+) -> None:
+    _append_row(rows, doc_id, metadata["case_number"], "CASE_REFERENCE", "yes", "case number")
+    _append_row(rows, doc_id, metadata["cross_ref"], "CASE_REFERENCE", "yes", "cross reference")
+
+
+def _append_date_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    metadata: dict,
+    people: list[dict],
+) -> None:
+    _append_row(rows, doc_id, metadata["filing_date"], "DATE", "yes", "filing date")
+    offence_period = metadata.get("offence_period")
+    if offence_period:
+        _append_row(rows, doc_id, offence_period[0], "DATE", "yes", "offence period start")
+        _append_row(rows, doc_id, offence_period[1], "DATE", "yes", "offence period end")
+    for person in people:
+        _append_row(
+            rows,
+            doc_id,
+            person.get("dob"),
+            "DATE",
+            "yes",
+            f"{person['name']} date of birth",
+        )
+
+
+def _append_amount_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    counts_list: list[dict],
+) -> None:
+    for amount in _extract_count_values(counts_list, _AMOUNT_RE):
+        _append_row(rows, doc_id, amount, "AMOUNT", "yes", "amount in count particulars")
+
+
+def _append_initial_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    people: list[dict],
+) -> None:
+    for person in people:
+        _append_row(
+            rows,
+            doc_id,
+            person.get("initials") or make_initials(person["name"]),
+            "INITIAL",
+            "yes",
+            f"{person['name']} initials",
+        )
+
+
+def _append_title_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    people: list[dict],
+) -> None:
+    for person in people:
+        title_surname = person.get("title_surname")
+        if title_surname and title_surname != person["name"].split()[-1]:
+            _append_row(rows, doc_id, title_surname, "TITLE", "yes", f"{person['name']} title")
+
+
+def _append_all_address_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    defendants: list[dict],
+    orgs: list[dict],
+) -> None:
+    for person in defendants:
+        _append_address_rows(rows, doc_id, person, "defendant")
+    for org in orgs:
+        _append_address_rows(rows, doc_id, org, "organisation")
+
+
+def _append_vat_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    orgs: list[dict],
+) -> None:
+    for org in orgs:
+        _append_row(rows, doc_id, org["vat"], "VAT", "yes", f"{org['name']} VAT number")
+
+
+def _append_row(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    value: str | None,
+    label: str,
+    should_propose: str,
+    notes: str,
+) -> None:
+    if value:
+        rows.append((doc_id, value, label, should_propose, notes))
+
+
+def _person_note(person: dict) -> str:
+    return "defendant person" if person.get("is_defendant") else "collateral person"
+
+
+def _org_note(org: dict, charged_orgs: list[dict]) -> str:
+    return "charged organisation" if org in charged_orgs else "associated organisation"
+
+
+def _extract_count_values(counts_list: list[dict], pattern: re.Pattern[str]) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for count in counts_list:
+        for match in pattern.findall(count.get("particulars", "")):
+            normalized = str(match).strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                values.append(normalized)
+    return values
+
+
+def _append_address_rows(
+    rows: list[tuple[str, str, str, str, str]],
+    doc_id: str,
+    record: dict,
+    owner_type: str,
+) -> None:
+    owner = record["name"]
+    _append_row(rows, doc_id, record.get("address"), "ADDRESS", "yes", f"{owner} full address")
+    _append_row(
+        rows,
+        doc_id,
+        record.get("street"),
+        "ADDRESS",
+        "yes",
+        f"{owner_type} building/street identifier for {owner}",
+    )
+    _append_row(
+        rows,
+        doc_id,
+        record.get("city_postcode"),
+        "ADDRESS",
+        "yes",
+        f"{owner_type} city/postcode for {owner}",
+    )
 
 
 def build_template_environment(project_root: Path) -> Environment:
@@ -291,6 +458,7 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     )
 
     return RuntimeContext(
+        project_root=project_root,
         app_config=app_config,
         paths=app_config.paths,
         generation_cfg=app_config.generation,
@@ -356,20 +524,29 @@ def resolve_schema_for_document(
     context: RuntimeContext,
     document: DocumentInputs,
     document_index: int,
+    doc_id_override: str | None = None,
 ) -> tuple[str, dict]:
     if context.schema_source_path:
         loaded_schema = load_case_schema(context.schema_source_path)
         try:
-            source_counter = counter_from_doc_id(
-                loaded_schema.get("doc_id"),
-                context.doc_type,
-                context.fraud_type,
-            )
-            doc_id = make_doc_id(
-                context.doc_type,
-                context.fraud_type,
-                source_counter + document_index + 1,
-            )
+            if doc_id_override is None:
+                source_counter = counter_from_doc_id(
+                    loaded_schema.get("doc_id"),
+                    context.doc_type,
+                    context.fraud_type,
+                )
+                doc_id = make_doc_id(
+                    context.doc_type,
+                    context.fraud_type,
+                    source_counter + document_index + 1,
+                )
+            else:
+                counter_from_doc_id(
+                    doc_id_override,
+                    context.doc_type,
+                    context.fraud_type,
+                )
+                doc_id = doc_id_override
             schema = normalize_schema(
                 loaded_schema,
                 doc_id,
@@ -384,8 +561,15 @@ def resolve_schema_for_document(
         print(f"  Schema  : loaded from {context.schema_source_path} → {doc_id}")
         return doc_id, schema
 
-    counter = next_counter(context.output_dir, context.doc_type, context.fraud_type)
-    doc_id = make_doc_id(context.doc_type, context.fraud_type, counter)
+    if doc_id_override is None:
+        counter = next_counter(context.output_dir, context.doc_type, context.fraud_type)
+        doc_id = make_doc_id(context.doc_type, context.fraud_type, counter)
+    else:
+        try:
+            counter_from_doc_id(doc_id_override, context.doc_type, context.fraud_type)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        doc_id = doc_id_override
     try:
         if is_auto(context.case_cfg.schema):
             schema = make_case_schema(
@@ -558,7 +742,8 @@ def save_document_artifacts(
         document.collateral,
         document.charged_orgs,
         document.associated_orgs,
-        document.metadata["court"],
+        document.metadata,
+        document.counts_list,
     )
     gt_path = doc_dir / "groundtruth.tsv"
     write_groundtruth(gt_path, gt_rows)

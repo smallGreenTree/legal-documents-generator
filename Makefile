@@ -12,7 +12,7 @@ PREFECT_DEPLOYMENT ?= document-generation
 .PHONY: langfuse-up langfuse-down langfuse-ps
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
 .PHONY: ollama-health ollama-pull sync-langfuse
-.PHONY: generate generate-classic smoke-model-routes check mi
+.PHONY: generate smoke-model-routes check mi
 
 help:
 	@echo "Common targets:"
@@ -46,7 +46,7 @@ prefect-setup:
 	poetry install
 
 prefect-up:
-	docker compose -f docker-compose.prefect.yml up -d
+	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml up -d
 	$(MAKE) _prefect-deploy
 	$(MAKE) _prefect-worker-bg
 
@@ -58,10 +58,10 @@ prefect-down:
 	else \
 		echo "No Prefect worker pid file found."; \
 	fi
-	docker compose -f docker-compose.prefect.yml down
+	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml down
 
 prefect-status:
-	docker compose -f docker-compose.prefect.yml ps
+	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml ps
 	@if [ -f "$(PREFECT_HOME)/run/worker.pid" ]; then \
 		echo "Prefect worker pid: `cat $(PREFECT_HOME)/run/worker.pid`"; \
 	else \
@@ -76,8 +76,7 @@ _prefect-deploy:
 		src/synthetic_ner/prefect_pipeline.py:generate_dataset \
 		--name $(PREFECT_DEPLOYMENT) \
 		--pool $(PREFECT_POOL) \
-		--param case_config=$(CASE_CONFIG) \
-		--param documents=$(DOCS)
+		--params '{"case_config":"$(CASE_CONFIG)","documents":$(DOCS),"review_scenario":true,"review_entities":true}'
 
 _prefect-worker-bg:
 	mkdir -p $(PREFECT_HOME)/logs $(PREFECT_HOME)/run
@@ -96,9 +95,6 @@ sync-langfuse:
 
 generate:
 	$(PYTHON) main.py --case-config $(CASE_CONFIG) --documents $(DOCS) --workflow-mode langgraph
-
-generate-classic:
-	$(PYTHON) main.py --case-config $(CASE_CONFIG) --documents $(DOCS) --workflow-mode classic
 
 smoke-model-routes:
 	$(PYTHON) scripts/smoke_model_routes.py --case-config $(CASE_CONFIG)

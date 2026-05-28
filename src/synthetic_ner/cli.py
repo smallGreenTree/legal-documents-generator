@@ -4,12 +4,13 @@ import argparse
 import os
 from pathlib import Path
 
-from src.synthetic_ner.config import load_app_config, resolve_doc_types
+from src.synthetic_ner.config import load_app_config
+from src.synthetic_ner.constants import PROSE_SECTION_ORDER
 
 
 def build_parser(project_root: Path) -> argparse.ArgumentParser:
-    app_config = load_app_config(project_root / "config.yaml")
-    doc_type_choices = sorted(resolve_doc_types(app_config.generation))
+    del project_root
+    doc_type_choices = sorted(PROSE_SECTION_ORDER)
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -44,9 +45,9 @@ def build_parser(project_root: Path) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--workflow-mode",
-        choices=("classic", "langgraph"),
+        choices=("langgraph",),
         default=None,
-        help="Override workflow.mode",
+        help="Workflow mode. Only langgraph is supported for CLI/Prefect parity.",
     )
     return parser
 
@@ -96,13 +97,12 @@ def main(project_root: Path | None = None) -> None:
     load_env_files(resolved_project_root)
     args = build_parser(resolved_project_root).parse_args()
     workflow_mode = resolve_workflow_mode(resolved_project_root, args)
+    if workflow_mode != "langgraph":
+        raise SystemExit(
+            "Only workflow.mode=langgraph is supported. The classic generator path "
+            "is legacy and is not used by the Prefect deployment."
+        )
 
-    if workflow_mode == "langgraph":
-        from src.synthetic_ner.tasks.orchestrator import run_langgraph_workflow
+    from src.synthetic_ner.tasks.orchestrator import run_langgraph_workflow
 
-        run_langgraph_workflow(args, resolved_project_root)
-        return
-
-    from src.synthetic_ner.engine import run_generation
-
-    run_generation(args, resolved_project_root)
+    run_langgraph_workflow(args, resolved_project_root)
