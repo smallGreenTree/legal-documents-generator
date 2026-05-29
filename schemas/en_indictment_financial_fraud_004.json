@@ -1,47 +1,47 @@
 {
-  "doc_id": "en_indictment_financial_fraud_003",
+  "doc_id": "en_indictment_financial_fraud_004",
   "fraud_type": "financial_fraud",
   "persons": [
     {
       "id": "p0",
-      "name": "Margot Mälzer",
+      "name": "Natalie Rädel",
       "type": "defendant"
     },
     {
       "id": "p1",
-      "name": "Giosuè Federici",
+      "name": "Mauro Viola",
       "type": "defendant"
     },
     {
       "id": "p2",
-      "name": "Émilie Fernandes",
+      "name": "Franck Lebreton",
       "type": "defendant"
     },
     {
       "id": "p3",
-      "name": "Kurt Lehmann",
+      "name": "Slavko Höfig",
       "type": "collateral"
     },
     {
       "id": "p4",
-      "name": "Luisa Gute",
+      "name": "Arne Kroker",
       "type": "collateral"
     }
   ],
   "orgs": [
     {
       "id": "o0",
-      "name": "ROSIELLO BODONI HOLDINGS LTD",
+      "name": "FUSELI LTD",
       "type": "charged"
     },
     {
       "id": "o1",
-      "name": "GEISSLER KARGE SERVICES LTD",
+      "name": "LABBÉ LIMITED",
       "type": "charged"
     },
     {
       "id": "o2",
-      "name": "BACOSI GROUP LTD",
+      "name": "TOUSSAINT INTERNATIONAL LTD",
       "type": "associated"
     }
   ],
@@ -50,55 +50,55 @@
       "from": "p0",
       "to": "o0",
       "type": "controlled",
-      "label": "Margot Mälzer controlled ROSIELLO BODONI HOLDINGS LTD"
+      "label": "Natalie Rädel controlled FUSELI LTD"
     },
     {
       "from": "p1",
       "to": "o1",
       "type": "controlled",
-      "label": "Giosuè Federici controlled GEISSLER KARGE SERVICES LTD"
+      "label": "Mauro Viola controlled LABBÉ LIMITED"
     },
     {
       "from": "p2",
       "to": "o2",
       "type": "controlled",
-      "label": "Émilie Fernandes controlled BACOSI GROUP LTD"
+      "label": "Franck Lebreton controlled TOUSSAINT INTERNATIONAL LTD"
     },
     {
       "from": "p0",
       "to": "p3",
       "type": "instructed",
-      "label": "Margot Mälzer instructed Kurt Lehmann"
+      "label": "Natalie Rädel instructed Slavko Höfig"
     },
     {
       "from": "p0",
       "to": "p4",
       "type": "instructed",
-      "label": "Margot Mälzer instructed Luisa Gute"
+      "label": "Natalie Rädel instructed Arne Kroker"
     },
     {
       "from": "p0",
       "to": "p1",
       "type": "conspired_with",
-      "label": "Margot Mälzer conspired with Giosuè Federici"
+      "label": "Natalie Rädel conspired with Mauro Viola"
     },
     {
       "from": "p1",
       "to": "p2",
       "type": "conspired_with",
-      "label": "Giosuè Federici conspired with Émilie Fernandes"
+      "label": "Mauro Viola conspired with Franck Lebreton"
     },
     {
       "from": "o0",
       "to": "o2",
       "type": "received_funds_from",
-      "label": "BACOSI GROUP LTD received funds from ROSIELLO BODONI HOLDINGS LTD"
+      "label": "TOUSSAINT INTERNATIONAL LTD received funds from FUSELI LTD"
     },
     {
       "from": "o1",
       "to": "o2",
       "type": "received_funds_from",
-      "label": "BACOSI GROUP LTD received funds from GEISSLER KARGE SERVICES LTD"
+      "label": "TOUSSAINT INTERNATIONAL LTD received funds from LABBÉ LIMITED"
     }
   ]
 }

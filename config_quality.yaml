@@ -1,0 +1,7 @@
+quality_scoring:
+  validator_issue_penalty: 12
+  validator_issue_penalty_cap: 60
+  revision_penalty: 6
+  revision_penalty_cap: 18
+  short_section_penalty: 15
+  short_section_word_threshold: 80

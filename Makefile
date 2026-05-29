@@ -7,21 +7,23 @@ PREFECT_HOME ?= $(CURDIR)/.prefect
 PREFECT_API_URL ?= http://localhost:4200/api
 PREFECT_POOL ?= synthetic-ner-local
 PREFECT_DEPLOYMENT ?= document-generation
+PREFECT_QUALITY_DEPLOYMENT ?= document-quality
 
 .PHONY: help install setup
 .PHONY: langfuse-up langfuse-down langfuse-ps
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
 .PHONY: ollama-health ollama-pull sync-langfuse
-.PHONY: generate generate-classic smoke-model-routes check
+.PHONY: generate smoke-model-routes check mi
 
 help:
 	@echo "Common targets:"
 	@echo "  make setup          Install deps, prepare Prefect, start Langfuse, pull model, sync prompts"
 	@echo "  make generate       Generate documents with LangGraph workflow"
 	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
+	@echo "  make mi             Show radon maintainability index for src and tests"
 	@echo "  make langfuse-up    Start local Langfuse Docker stack"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
-	@echo "  make prefect-up     Start Prefect, deploy the flow, and run worker in background"
+	@echo "  make prefect-up     Start Prefect, deploy generation and quality flows, and run worker in background"
 	@echo "  make prefect-status Show Prefect server and worker status"
 	@echo "  make prefect-down   Stop Prefect worker and Docker server"
 	@echo "  make ollama-pull    Pull OLLAMA_MODEL=$(OLLAMA_MODEL)"
@@ -45,7 +47,7 @@ prefect-setup:
 	poetry install
 
 prefect-up:
-	docker compose -f docker-compose.prefect.yml up -d
+	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml up -d
 	$(MAKE) _prefect-deploy
 	$(MAKE) _prefect-worker-bg
 
@@ -57,10 +59,10 @@ prefect-down:
 	else \
 		echo "No Prefect worker pid file found."; \
 	fi
-	docker compose -f docker-compose.prefect.yml down
+	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml down
 
 prefect-status:
-	docker compose -f docker-compose.prefect.yml ps
+	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml ps
 	@if [ -f "$(PREFECT_HOME)/run/worker.pid" ]; then \
 		echo "Prefect worker pid: `cat $(PREFECT_HOME)/run/worker.pid`"; \
 	else \
@@ -72,11 +74,16 @@ _prefect-deploy:
 		poetry run prefect work-pool create $(PREFECT_POOL) --type process --overwrite
 	PREFECT_HOME=$(PREFECT_HOME) PREFECT_API_URL=$(PREFECT_API_URL) \
 		poetry run prefect --no-prompt deploy \
-		src/synthetic_ner/prefect_pipeline.py:generate_dataset \
+		prefect_pipeline.py:generate_dataset \
 		--name $(PREFECT_DEPLOYMENT) \
 		--pool $(PREFECT_POOL) \
-		--param case_config=$(CASE_CONFIG) \
-		--param documents=$(DOCS)
+		--params '{"case_config":"$(CASE_CONFIG)","documents":$(DOCS),"review_scenario":true,"review_entities":true}'
+	PREFECT_HOME=$(PREFECT_HOME) PREFECT_API_URL=$(PREFECT_API_URL) \
+		poetry run prefect --no-prompt deploy \
+		prefect_pipeline.py:score_existing_document \
+		--name $(PREFECT_QUALITY_DEPLOYMENT) \
+		--pool $(PREFECT_POOL) \
+		--params '{"case_config":"$(CASE_CONFIG)","quality_config":"config_quality.yaml","review_document_selection":true}'
 
 _prefect-worker-bg:
 	mkdir -p $(PREFECT_HOME)/logs $(PREFECT_HOME)/run
@@ -96,11 +103,11 @@ sync-langfuse:
 generate:
 	$(PYTHON) main.py --case-config $(CASE_CONFIG) --documents $(DOCS) --workflow-mode langgraph
 
-generate-classic:
-	$(PYTHON) main.py --case-config $(CASE_CONFIG) --documents $(DOCS) --workflow-mode classic
-
 smoke-model-routes:
 	$(PYTHON) scripts/smoke_model_routes.py --case-config $(CASE_CONFIG)
 
 check:
 	poetry run ruff check .
+
+mi:
+	poetry run radon mi src tests

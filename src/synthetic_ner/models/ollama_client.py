@@ -317,7 +317,7 @@ class TracedOllamaClient:
 
 
 def _extract_section_name(task_id: str) -> str | None:
-    for prefix in ("section_planner_", "writer_", "critic_"):
+    for prefix in ("section_planner_", "writer_", "polish_", "critic_"):
         if not task_id.startswith(prefix):
             continue
         tail = task_id.removeprefix(prefix)

@@ -19,8 +19,6 @@ from src.synthetic_ner.types.app_config import (
     ModelProviderConfig,
     ModelRoutingConfig,
     OffencePeriodConfig,
-    OllamaConfig,
-    OllamaRecoveryConfig,
     PathsConfig,
     PersonSpecConfig,
     PersonVariantEligibilityConfig,
@@ -45,7 +43,7 @@ def load_app_config(
     resolved_case_config_path = (
         Path(case_config_path)
         if case_config_path is not None
-        else config_path.resolve().parent / "config_case" / "case_1.yaml"
+        else config_path.parent / "config_case" / "case_1.yaml"
     )
     case_raw = load_config(resolved_case_config_path)
     if not isinstance(case_raw, dict):
@@ -67,10 +65,8 @@ def build_app_config(
 ) -> AppConfig:
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
-        ollama=_build_ollama_config(_require_mapping(cfg["ollama"], "ollama")),
         model_routing=_build_model_routing_config(
-            cfg.get("model_routing"),
-            _build_ollama_config(_require_mapping(cfg["ollama"], "ollama")),
+            _require_mapping(cfg["model_routing"], "model_routing"),
         ),
         langfuse=_build_langfuse_config(_require_mapping(cfg["langfuse"], "langfuse")),
         generation=_build_generation_config(
@@ -100,11 +96,6 @@ def build_app_config(
     )
 
 
-def resolve_doc_types(generation_cfg: GenerationConfig) -> tuple[str, ...]:
-    del generation_cfg
-    return tuple(PROSE_SECTION_ORDER.keys())
-
-
 def resolve_section_order(doc_type: str) -> list[str]:
     section_order = PROSE_SECTION_ORDER.get(doc_type)
     if section_order is None:
@@ -123,122 +114,62 @@ def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
     )
 
 
-def _build_ollama_config(raw: dict[str, Any]) -> OllamaConfig:
-    recovery = _require_mapping(raw["recovery"], "ollama.recovery")
-    return OllamaConfig(
-        base_url=_require_string(raw["base_url"], "ollama.base_url"),
-        model=_require_string(raw["model"], "ollama.model"),
-        timeout=_require_positive_int(raw["timeout"], "ollama.timeout"),
-        num_ctx=(
-            _require_positive_int(raw["num_ctx"], "ollama.num_ctx")
-            if raw.get("num_ctx") is not None
-            else None
-        ),
-        think=(
-            _require_bool(raw["think"], "ollama.think")
-            if raw.get("think") is not None
-            else None
-        ),
-        recovery=OllamaRecoveryConfig(
-            max_generate_attempts=_require_positive_int(
-                recovery["max_generate_attempts"],
-                "ollama.recovery.max_generate_attempts",
-            ),
-            retry_backoff_seconds=_require_positive_number(
-                recovery["retry_backoff_seconds"],
-                "ollama.recovery.retry_backoff_seconds",
-            ),
-            controlled_empty_section=_require_string(
-                recovery["controlled_empty_section"],
-                "ollama.recovery.controlled_empty_section",
-            ),
-        ),
-    )
-
-
-def _build_model_routing_config(
-    raw: Any,
-    ollama_cfg: OllamaConfig,
-) -> ModelRoutingConfig:
-    fallback_default = ModelProviderConfig(
-        provider="ollama",
-        model=ollama_cfg.model,
-        timeout=ollama_cfg.timeout,
-        base_url=ollama_cfg.base_url,
-        num_ctx=ollama_cfg.num_ctx,
-        think=ollama_cfg.think,
-        max_generate_attempts=ollama_cfg.recovery.max_generate_attempts,
-        retry_backoff_seconds=ollama_cfg.recovery.retry_backoff_seconds,
-    )
-    if raw is None:
-        return ModelRoutingConfig(default=fallback_default, stages={})
-
-    mapping = _require_mapping(raw, "model_routing")
-    default = _build_model_provider_config(
-        _require_mapping(mapping.get("default", {}), "model_routing.default"),
-        "model_routing.default",
-        fallback=fallback_default,
-    )
-    stages_raw = _require_mapping(mapping.get("stages", {}), "model_routing.stages")
+def _build_model_routing_config(raw: dict[str, Any]) -> ModelRoutingConfig:
+    stages_raw = _require_mapping(raw["stages"], "model_routing.stages")
+    required_stages = ("planner", "writer", "critic")
+    missing_stages = [
+        stage_name for stage_name in required_stages if stage_name not in stages_raw
+    ]
+    if missing_stages:
+        raise ValueError(
+            "model_routing.stages must explicitly configure: "
+            + ", ".join(missing_stages)
+        )
     stages = {
         stage_name: _build_model_provider_config(
             _require_mapping(stage_raw, f"model_routing.stages.{stage_name}"),
             f"model_routing.stages.{stage_name}",
-            fallback=default,
         )
         for stage_name, stage_raw in stages_raw.items()
     }
-    return ModelRoutingConfig(default=default, stages=stages)
+    return ModelRoutingConfig(stages=stages)
 
 
 def _build_model_provider_config(
     raw: dict[str, Any],
     path: str,
-    *,
-    fallback: ModelProviderConfig,
 ) -> ModelProviderConfig:
-    provider = _require_string(raw.get("provider", fallback.provider), f"{path}.provider")
-    model = _require_string(raw.get("model", fallback.model), f"{path}.model")
-    timeout = _require_positive_int(raw.get("timeout", fallback.timeout), f"{path}.timeout")
-    base_url_value = raw.get(
-        "base_url",
-        fallback.base_url if provider == fallback.provider else None,
-    )
-    base_url = (
-        _require_string(base_url_value, f"{path}.base_url")
-        if base_url_value is not None
-        else None
-    )
-    num_ctx_value = raw.get("num_ctx", fallback.num_ctx)
+    provider = _require_string(raw["provider"], f"{path}.provider")
+    model = _require_string(raw["model"], f"{path}.model")
+    timeout = _require_positive_int(raw["timeout"], f"{path}.timeout")
+    base_url = _require_string(raw["base_url"], f"{path}.base_url")
+    num_ctx_value = raw.get("num_ctx")
     num_ctx = (
         _require_positive_int(num_ctx_value, f"{path}.num_ctx")
         if num_ctx_value is not None
         else None
     )
-    think_value = raw.get("think", fallback.think)
+    think_value = raw.get("think")
     think = (
         _require_bool(think_value, f"{path}.think")
         if think_value is not None
         else None
     )
-    recovery_raw = raw.get("recovery")
-    if recovery_raw is None:
-        max_generate_attempts = fallback.max_generate_attempts
-        retry_backoff_seconds = fallback.retry_backoff_seconds
-    else:
-        recovery = _require_mapping(recovery_raw, f"{path}.recovery")
-        max_generate_attempts = _require_positive_int(
-            recovery.get("max_generate_attempts", fallback.max_generate_attempts),
-            f"{path}.recovery.max_generate_attempts",
-        )
-        retry_backoff_seconds = _require_positive_number(
-            recovery.get("retry_backoff_seconds", fallback.retry_backoff_seconds),
-            f"{path}.recovery.retry_backoff_seconds",
-        )
+    recovery = _require_mapping(raw["recovery"], f"{path}.recovery")
+    max_generate_attempts = _require_positive_int(
+        recovery["max_generate_attempts"],
+        f"{path}.recovery.max_generate_attempts",
+    )
+    retry_backoff_seconds = _require_positive_number(
+        recovery["retry_backoff_seconds"],
+        f"{path}.recovery.retry_backoff_seconds",
+    )
+    controlled_empty_section = _require_string(
+        recovery["controlled_empty_section"],
+        f"{path}.recovery.controlled_empty_section",
+    )
     if provider != "ollama":
         raise ValueError(f"{path}.provider must be ollama")
-    if not base_url:
-        raise ValueError(f"{path}.base_url is required for ollama provider")
     return ModelProviderConfig(
         provider=provider,
         model=model,
@@ -248,6 +179,7 @@ def _build_model_provider_config(
         think=think,
         max_generate_attempts=max_generate_attempts,
         retry_backoff_seconds=retry_backoff_seconds,
+        controlled_empty_section=controlled_empty_section,
     )
 
 
@@ -386,6 +318,14 @@ def _build_workflow_config(
             writer_user=_require_string(
                 prompts["writer_user"],
                 "workflow.prompts.writer_user",
+            ),
+            polisher_system=_require_string(
+                prompts["polisher_system"],
+                "workflow.prompts.polisher_system",
+            ),
+            polisher_user=_require_string(
+                prompts["polisher_user"],
+                "workflow.prompts.polisher_user",
             ),
             critic_system=_require_string(
                 prompts["critic_system"],
@@ -731,23 +671,12 @@ def _require_non_negative_int(value: Any, path: str) -> int:
     return value
 
 
-def _require_int(value: Any, path: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"{path} must be an integer")
-    return value
 
 
 def _require_number(value: Any, path: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{path} must be a number")
     return float(value)
-
-
-def _require_non_negative_number(value: Any, path: str) -> float:
-    number = _require_number(value, path)
-    if number < 0:
-        raise ValueError(f"{path} must be non-negative")
-    return number
 
 
 def _require_positive_number(value: Any, path: str) -> float:

@@ -33,16 +33,16 @@ class ModelProviderConfig:
     provider: str
     model: str
     timeout: int
-    base_url: str | None = None
+    base_url: str
     num_ctx: int | None = None
     think: bool | None = None
     max_generate_attempts: int = 1
     retry_backoff_seconds: float = 0.0
+    controlled_empty_section: str = "[section not generated]"
 
 
 @dataclass(frozen=True)
 class ModelRoutingConfig:
-    default: ModelProviderConfig
     stages: dict[str, ModelProviderConfig]
 
 
@@ -112,6 +112,8 @@ class WorkflowPromptsConfig:
     section_planner_user: str
     writer_system: str
     writer_user: str
+    polisher_system: str
+    polisher_user: str
     critic_system: str
     critic_user: str
 
@@ -189,7 +191,6 @@ class CaseConfig:
 @dataclass(frozen=True)
 class AppConfig:
     paths: PathsConfig
-    ollama: OllamaConfig
     model_routing: ModelRoutingConfig
     langfuse: LangfuseConfig
     generation: GenerationConfig

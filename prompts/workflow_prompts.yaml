@@ -56,13 +56,17 @@ prompts:
     - Closing move: how the section should end or transition to the next section
 
   writer_system: |
-    You are writing a formal legal document.
+    You are preparing a structured drafting packet for a formal legal document.
     Use only the information from SECTION_CONTEXT, SECTION_CONTRACT, the
     document plan and the section plan.
     SECTION_CONTRACT is stricter than the section plan. If they conflict,
     follow SECTION_CONTRACT.
-    Write in clear, formal, neutral legal language that reads like a continuous
-    legal document rather than a generated summary.
+    Return exactly one JSON object and no surrounding text.
+    The object must have exactly these fields:
+    - content: draft formal legal prose as a string
+    - facts_used: array of exact or near-exact facts used from SECTION_CONTEXT
+    - tone: concise description of the intended legal tone
+    - legal_risks: array of legal or factual risks to preserve or avoid
     Do not use any country-specific court names, prosecution agencies, or statutes unless explicitly provided in SECTION_CONTEXT.
     Transform the listed facts into connected paragraphs. Do not copy CASE_MEMORY
     bullet lines or write sentences whose only purpose is to enumerate all allowed
@@ -73,13 +77,13 @@ prompts:
     Avoid formulaic openings such as "The defendants identified in this matter are",
     "The organisations materially connected are", "This section is limited to",
     or "The evidence summary is limited to".
-    Write multiple paragraphs for every section. For short identifying sections,
+    The content field must contain multiple paragraphs for every section. For short identifying sections,
     write at least 2 paragraphs; for history, charges, evidence and assessment,
     write at least 3 paragraphs; for facts, write at least 4 paragraphs.
     Prefer paragraphs of 2-5 connected sentences. Vary sentence openings and
     sentence length. Do not use bullet points, numbered lists, headings, markdown,
     explanatory notes, or meta-commentary.
-    No headings in the output. No markdown.
+    No headings in content. No markdown in content.
 
   writer_user: |
     SECTION_CONTEXT:
@@ -110,9 +114,9 @@ prompts:
     SECTION_CONTEXT. Remove unknown identifiers instead of inventing replacements.
     {% endif -%}
 
-    Write the next formal legal passage for this section.
+    Return the next structured drafting packet for this section.
     Continue in paragraph form. If this is the first chunk of the section, open
-    with a substantive legal paragraph rather than a summary sentence. If this
+    content with a substantive legal paragraph rather than a summary sentence. If this
     is a later chunk, continue the same section without repeating the opening.
 
     Section prose expectations:
@@ -139,13 +143,40 @@ prompts:
     exhibit, search, email or procedural step that is not present in SECTION_CONTEXT.
     Do not restate the section plan. Do not summarize your task.
 
+  polisher_system: |
+    You polish structured legal drafting packets into final prose.
+    Use only the JSON packet, SECTION_CONTEXT and SECTION_CONTRACT.
+    Do not add new facts, entities, dates, statutes, amounts, references, exhibits
+    or procedural steps. Preserve all facts already used unless the JSON packet
+    marks them as a legal risk. Return final polished prose only.
+    Do not return JSON, markdown, headings, bullets, commentary, or explanations.
+
+  polisher_user: |
+    SECTION_CONTEXT:
+    {{ section_context }}
+
+    SECTION_CONTRACT:
+    {{ section_contract }}
+
+    WRITER_JSON:
+    {{ writer_json }}
+
+    Polish the content field into final formal legal prose for section "{{ section_name }}".
+    Keep the same factual scope. Use the tone field as guidance. Avoid or neutralise
+    the legal_risks without introducing new facts.
+
   critic_system: |
-    You are a strict critic. Check the draft ONLY against SECTION_CONTEXT,
-    SECTION_CONTRACT and the section plan.
-    APPROVED must be no if the draft violates SECTION_CONTRACT.
-    APPROVED must be no if any rubric score is 1 or 2.
-    Also check whether the section reads like natural formal legal prose rather
-    than a mechanical list or memory dump.
+    You are a strict legal editor. Check the draft ONLY against SECTION_CONTEXT,
+    SECTION_CONTRACT and the section plan. Return exactly one JSON object and no
+    surrounding text. Do not give a yes/no verdict or general explanation.
+    The object must contain:
+    - blocking: boolean
+    - edits: array of specific edits
+    - risk_level: "low", "medium", or "high"
+    - rubrics: object with integer 1-5 scores for grounding, completeness,
+      legal_style, and chronology
+    Each edit must contain target, action, reason, and replacement fields.
+    Use replacement as an empty string when no exact replacement is needed.
 
   critic_user: |
     SECTION_CONTEXT:
@@ -160,19 +191,16 @@ prompts:
     DRAFT:
     {{ section_text }}
 
-    Review for consistency, hallucinations, missing required facts, and prose quality.
-    Flag the draft if it copies CASE_MEMORY structure, repeatedly lists the same
+    Return specific edits for consistency, hallucinations, missing required facts, and prose quality.
+    Add an edit if the draft copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
     Treat out-of-scope allegations, fabricated identifiers, chronology conflicts,
     mechanical memory-dump style, and repeated entity inventories as blocking issues.
     Treat any detail outside SECTION_CONTEXT as a hallucination.
 
-    Respond exactly in this format:
-    APPROVED: yes|no
-    RUBRICS:
+    Rubric guidance:
     {{ critic_rubrics }}
-    ISSUES:
-    - ...
-    REVISION:
-    one short instruction
+
+    If no edits are needed, return:
+    {"blocking": false, "edits": [], "risk_level": "low", "rubrics": {"grounding": 5, "completeness": 5, "legal_style": 5, "chronology": 5}}

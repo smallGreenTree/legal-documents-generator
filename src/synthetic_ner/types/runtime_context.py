@@ -10,7 +10,6 @@ from src.synthetic_ner.types.app_config import (
     GenerationConfig,
     LangfuseConfig,
     ModelRoutingConfig,
-    OllamaConfig,
     PathsConfig,
     ProfileConfig,
     WorkflowConfig,
@@ -19,13 +18,13 @@ from src.synthetic_ner.types.app_config import (
 
 @dataclass
 class RuntimeContext:
+    project_root: Path
     app_config: AppConfig
     paths: PathsConfig
     generation_cfg: GenerationConfig
     profile: ProfileConfig
     case_cfg: CaseConfig
     langfuse_cfg: LangfuseConfig
-    ollama_cfg: OllamaConfig
     model_routing_cfg: ModelRoutingConfig
     workflow_cfg: WorkflowConfig
     nat_locales: dict[str, str]
