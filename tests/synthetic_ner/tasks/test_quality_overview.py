@@ -83,6 +83,12 @@ def test_quality_overview_uses_existing_report_and_quality_score(tmp_path):
     assert overview["model_workflow"]["total_tokens"] == 3_800
     assert "6m 40s" in model_workflow
     assert "Total model time for document" in model_workflow
+    assert "Document generator version | 0.1.0" in run_health
+    assert "Document generator reference | generator-v0.1.0" in run_health
+    assert "Document generator summary | First versioned test workflow." in run_health
+    assert "Document generator git commit | abc123abc123" in run_health
+    assert "Quality analyzer version | 0.1.0" in run_health
+    assert "Quality analyzer reference | generator-v0.1.0" in run_health
     assert "`Total latency` is the sum of all LLM calls" in model_workflow
     assert "[open trace](http://localhost:3000/project/x/traces/trace-1)" in model_workflow
     assert "writer" in model_workflow
@@ -290,6 +296,15 @@ def _write_existing_artifacts(context, doc_id):
             [
                 "# Generation Report: en_indictment_financial_fraud_004",
                 "",
+                "- Generator version: 0.1.0",
+                "- Generator version reference: generator-v0.1.0",
+                "- Generator version summary: First versioned test workflow.",
+                "- Generator version features: Test feature",
+                "- Generator version manifest hash: sha256:test",
+                "- Generator report schema version: 1.0.0",
+                "- Generator git commit: abc123abc123abc123",
+                "- Generator git branch: test-branch",
+                "- Generator git dirty: false",
                 "- Workflow mode: langgraph",
                 "- Langfuse trace id: trace-1",
                 "- Langfuse trace url: http://localhost:3000/project/x/traces/trace-1",

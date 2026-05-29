@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from src.synthetic_ner.version import get_version_provenance
+
 LATENCY_BANDS = (
     ("very fast", 30_000),
     ("fast", 90_000),
@@ -23,6 +25,7 @@ def build_quality_overview(
 ) -> dict[str, Any]:
     """Build a compact overview from existing quality and generation evidence."""
     generation_report = _parse_generation_report(_generation_report_path(context, doc_id))
+    current_version = get_version_provenance(getattr(context, "project_root", None))
     sections = quality_report.get("sections", [])
     missing_sections = [
         section["section"]
@@ -62,6 +65,20 @@ def build_quality_overview(
         ),
         "run_health": {
             "final_document": "rendered" if final_document_exists else "missing",
+            "document_generator_version": generation_report.get("generator_version"),
+            "document_generator_reference": generation_report.get("generator_reference"),
+            "document_generator_summary": generation_report.get("generator_summary"),
+            "document_generator_manifest_hash": generation_report.get("generator_manifest_hash"),
+            "document_generator_git_commit": generation_report.get("generator_git_commit"),
+            "document_generator_git_branch": generation_report.get("generator_git_branch"),
+            "document_generator_git_dirty": generation_report.get("generator_git_dirty"),
+            "quality_analyzer_version": current_version["version"],
+            "quality_analyzer_reference": current_version["git_tag"],
+            "quality_analyzer_summary": current_version["summary"],
+            "quality_analyzer_manifest_hash": current_version["manifest_hash"],
+            "quality_analyzer_git_commit": current_version["git_commit"],
+            "quality_analyzer_git_branch": current_version["git_branch"],
+            "quality_analyzer_git_dirty": current_version["git_dirty"],
             "quality_score": quality_report.get("overall_score"),
             "quality_verdict": quality_report.get("verdict"),
             "missing_sections": missing_sections,
@@ -71,6 +88,8 @@ def build_quality_overview(
         "model_workflow": {
             "workflow_mode": generation_report.get("workflow_mode"),
             "langfuse_trace_url": generation_report.get("langfuse_trace_url"),
+            "document_generator_version": generation_report.get("generator_version"),
+            "quality_analyzer_version": current_version["version"],
             "total_llm_calls": generation_report.get("total_llm_calls"),
             "total_latency_ms": generation_report.get("total_latency_ms"),
             "total_latency": format_duration_ms(generation_report.get("total_latency_ms")),
@@ -143,6 +162,45 @@ def format_run_health_markdown(overview: dict[str, Any]) -> str:
         "| --- | --- |",
         f"| Document ID | `{overview['doc_id']}` |",
         f"| Final document | {run_health['final_document']} |",
+        (
+            "| Document generator version | "
+            f"{run_health.get('document_generator_version') or 'not recorded'} |"
+        ),
+        (
+            "| Document generator reference | "
+            f"{run_health.get('document_generator_reference') or 'not recorded'} |"
+        ),
+        (
+            "| Document generator summary | "
+            f"{run_health.get('document_generator_summary') or 'not recorded'} |"
+        ),
+        (
+            "| Document generator manifest hash | "
+            f"{run_health.get('document_generator_manifest_hash') or 'not recorded'} |"
+        ),
+        (
+            "| Document generator git commit | "
+            f"{_short_commit(run_health.get('document_generator_git_commit'))} |"
+        ),
+        (
+            "| Document generator git dirty | "
+            f"{run_health.get('document_generator_git_dirty') or 'not recorded'} |"
+        ),
+        f"| Quality analyzer version | {run_health.get('quality_analyzer_version') or 'n/a'} |",
+        f"| Quality analyzer reference | {run_health.get('quality_analyzer_reference') or 'n/a'} |",
+        f"| Quality analyzer summary | {run_health.get('quality_analyzer_summary') or 'n/a'} |",
+        (
+            "| Quality analyzer manifest hash | "
+            f"{run_health.get('quality_analyzer_manifest_hash') or 'n/a'} |"
+        ),
+        (
+            "| Quality analyzer git commit | "
+            f"{_short_commit(run_health.get('quality_analyzer_git_commit'))} |"
+        ),
+        (
+            "| Quality analyzer git dirty | "
+            f"{run_health.get('quality_analyzer_git_dirty') or 'n/a'} |"
+        ),
         (
             "| Quality score | "
             f"{_score_display(run_health.get('quality_score'))} "
@@ -306,6 +364,13 @@ def _parse_generation_report(path: Path) -> dict[str, Any]:
             "exists": False,
             "stage_rows": [],
             "workflow_mode": None,
+            "generator_version": None,
+            "generator_reference": None,
+            "generator_summary": None,
+            "generator_manifest_hash": None,
+            "generator_git_commit": None,
+            "generator_git_branch": None,
+            "generator_git_dirty": None,
             "total_llm_calls": 0,
             "total_latency_ms": 0,
             "empty_responses": 0,
@@ -316,6 +381,16 @@ def _parse_generation_report(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     return {
         "exists": True,
+        "generator_version": _match_text(text, r"- Generator version:\s*(.+)"),
+        "generator_reference": _match_text(text, r"- Generator version reference:\s*(.+)"),
+        "generator_summary": _match_text(text, r"- Generator version summary:\s*(.+)"),
+        "generator_manifest_hash": _match_text(
+            text,
+            r"- Generator version manifest hash:\s*(.+)",
+        ),
+        "generator_git_commit": _match_text(text, r"- Generator git commit:\s*(.+)"),
+        "generator_git_branch": _match_text(text, r"- Generator git branch:\s*(.+)"),
+        "generator_git_dirty": _match_text(text, r"- Generator git dirty:\s*(.+)"),
         "workflow_mode": _match_text(text, r"- Workflow mode:\s*(.+)"),
         "total_llm_calls": _match_int(text, r"- Total LLM calls:\s*(\d+)"),
         "total_latency_ms": _match_int(text, r"- Total LLM latency ms:\s*(\d+)"),
@@ -962,6 +1037,12 @@ def _link_or_na(url: Any, label: str) -> str:
     if isinstance(url, str) and url.strip():
         return f"[{label}]({url.strip()})"
     return "n/a"
+
+
+def _short_commit(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip() or value == "unknown":
+        return "not recorded"
+    return value[:12]
 
 
 def _rubric_number_display(value: Any) -> str:

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from src.synthetic_ner.tasks.tracer import TraceStore
+from src.synthetic_ner.version import get_version_provenance
 
 
 def write_generation_report(
@@ -58,9 +59,19 @@ def _report_header(
     llm_summary: dict[str, Any],
     document_plan: str,
 ) -> list[str]:
+    version = get_version_provenance(getattr(context, "project_root", None))
     return [
         f"# Generation Report: {doc_id}",
         "",
+        f"- Generator version: {version['version']}",
+        f"- Generator version reference: {version['git_tag']}",
+        f"- Generator version summary: {version['summary']}",
+        f"- Generator version features: {_format_features(version['features'])}",
+        f"- Generator version manifest hash: {version['manifest_hash']}",
+        f"- Generator report schema version: {version['report_schema_version']}",
+        f"- Generator git commit: {version['git_commit']}",
+        f"- Generator git branch: {version['git_branch']}",
+        f"- Generator git dirty: {version['git_dirty']}",
         f"- Workflow mode: {context.workflow_cfg.mode}",
         f"- Max revision rounds: {context.workflow_cfg.max_revisions}",
         f"- Memory file: {memory_path}",
@@ -230,6 +241,10 @@ def _format_optional_int(value: Any) -> str:
     if isinstance(value, bool):
         return "-"
     return str(value) if isinstance(value, int) else "-"
+
+
+def _format_features(features: list[str]) -> str:
+    return "; ".join(features) if features else "n/a"
 
 
 def _format_call_summary(call: dict[str, Any] | None, field_name: str) -> str:

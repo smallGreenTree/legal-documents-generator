@@ -1,0 +1,22 @@
+versions:
+  "0.1.0":
+    released_at: "2026-05-29"
+    git_tag: "generator-v0.1.0"
+    report_schema_version: "1.0.0"
+    summary: "First versioned Prefect generator and quality workflow."
+    features:
+      - "Prefect generation deployment"
+      - "Prefect quality deployment"
+      - "Single document quality artifact"
+      - "Deterministic quality score explanation"
+      - "Expected section word target visibility"
+      - "Langfuse prompt/response references"
+      - "Section-level critic rubric display"
+      - "Semantic version stamping in reports"
+    scoring:
+      deterministic_quality_score: "Section score starts at 100 and subtracts validator, revision, and short-section penalties."
+      critic_rubric_score: "LLM critic score from 1 bad to 5 good across grounding, completeness, legal style, and chronology."
+    breaking_changes: []
+    known_limitations:
+      - "Documents generated before version stamping may not record generator version."
+      - "Historical quality reports do not update retroactively."
