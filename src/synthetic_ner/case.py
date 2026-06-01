@@ -17,12 +17,10 @@ from src.synthetic_ner.case_entities import (
     normalize_org_record,
     normalize_person_record,
 )
-from src.synthetic_ner.config import resolve_section_order
 from src.synthetic_ner.constants import COURTS
 from src.synthetic_ner.types.app_config import (
     CaseConfig,
     CountConfig,
-    GenerationConfig,
     PersonVariantGenerationConfig,
 )
 from src.synthetic_ner.utils import is_auto
@@ -192,11 +190,41 @@ def normalize_counts(counts_cfg: list[CountConfig]) -> list[dict]:
     ]
 
 
+def make_money_amount(min_value: int = 25_000, max_value: int = 950_000) -> str:
+    return f"£{random.randint(min_value, max_value):,}"
+
+
+def build_amounts(charged_orgs: list, associated_orgs: list) -> dict:
+    transfer_records = []
+    transfer_total = 0
+    if charged_orgs and associated_orgs:
+        for charged_index, charged_org in enumerate(charged_orgs):
+            associated_org = associated_orgs[charged_index % len(associated_orgs)]
+            value = random.randint(50_000, 450_000)
+            transfer_total += value
+            transfer_records.append(
+                {
+                    "from": charged_org["name"],
+                    "to": associated_org["name"],
+                    "amount": f"£{value:,}",
+                }
+            )
+
+    invoice_value = random.randint(25_000, 175_000)
+    total_loss = transfer_total or random.randint(75_000, 750_000)
+    return {
+        "total_loss": f"£{total_loss:,}",
+        "inflated_invoice_value": f"£{invoice_value:,}",
+        "transfers": transfer_records,
+    }
+
+
 def build_counts(
     fraud_statutes: dict[str, list[CountConfig]],
     fraud_type: str,
     defendants: list,
     orgs: list,
+    amounts: dict | None = None,
     offence_period: tuple[str, str] | None = None,
 ) -> list[dict]:
     statutes = fraud_statutes.get(fraud_type)
@@ -206,6 +234,11 @@ def build_counts(
     start_date, end_date = offence_period or make_offence_period()
     defendants_str = " and ".join(person["name"].upper() for person in defendants)
     companies_str = " and ".join(org["name"] for org in orgs)
+    total_loss = (amounts or {}).get("total_loss", make_money_amount())
+    inflated_invoice_value = (amounts or {}).get(
+        "inflated_invoice_value",
+        make_money_amount(25_000, 175_000),
+    )
 
     counts = []
     for statute in statutes:
@@ -215,6 +248,8 @@ def build_counts(
             .replace("{companies}", companies_str)
             .replace("{start_date}", start_date)
             .replace("{end_date}", end_date)
+            .replace("{total_loss}", total_loss)
+            .replace("{inflated_invoice_value}", inflated_invoice_value)
             .strip()
         )
         counts.append({
@@ -232,6 +267,7 @@ def resolve_counts(
     fraud_type: str,
     defendants: list,
     charged_orgs: list,
+    amounts: dict | None,
     offence_period: tuple[str, str] | None,
 ) -> list[dict]:
     if doc_type != "indictment":
@@ -246,23 +282,22 @@ def resolve_counts(
         fraud_type,
         defendants,
         charged_orgs,
+        amounts=amounts,
         offence_period=offence_period,
     )
 
 
 def resolve_prose_overrides(
     case_cfg: CaseConfig,
-    generation_cfg: GenerationConfig,
-    doc_type: str,
+    section_order: list[str],
 ) -> dict[str, str]:
-    del generation_cfg
     prose_cfg = case_cfg.prose
 
-    section_order = resolve_section_order(doc_type)
     extra = [name for name in prose_cfg if name not in section_order]
     if extra:
         raise ValueError(
-            f"case.prose has unknown sections for {doc_type}: {', '.join(extra)}"
+            "case.prose has unknown sections for configured section_words: "
+            + ", ".join(extra)
         )
 
     resolved = {}

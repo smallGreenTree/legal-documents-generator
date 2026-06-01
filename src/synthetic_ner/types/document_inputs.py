@@ -8,4 +8,5 @@ class DocumentInputs:
     charged_orgs: list[dict]
     associated_orgs: list[dict]
     metadata: dict
+    amounts: dict
     counts_list: list[dict]

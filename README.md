@@ -267,10 +267,6 @@ poetry run python generator.py --documents 3
 
 Visualize entity coverage:
 
-```bash
-poetry run python visualize.py
-```
-
 Check code quality:
 
 ```bash

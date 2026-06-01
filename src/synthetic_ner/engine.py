@@ -5,16 +5,15 @@ from argparse import Namespace
 from dataclasses import replace
 from pathlib import Path
 
-import requests
 from jinja2 import Environment, FileSystemLoader
-
 from src.synthetic_ner.case import (
+    build_amounts,
     resolve_case_entities,
     resolve_case_metadata,
     resolve_counts,
     resolve_prose_overrides,
 )
-from src.synthetic_ner.config import load_app_config, resolve_section_order
+from src.synthetic_ner.config import load_app_config
 from src.synthetic_ner.constants import (
     EN_LABELS,
     EN_SECTIONS,
@@ -30,10 +29,7 @@ from src.synthetic_ner.schema import (
     normalize_schema,
     write_case_schema,
 )
-from src.synthetic_ner.types.app_config import (
-    OllamaConfig,
-    ProfileConfig,
-)
+from src.synthetic_ner.types.app_config import ProfileConfig
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 from src.synthetic_ner.utils import (
@@ -52,13 +48,10 @@ _AMOUNT_RE = re.compile(
 
 def build_section_word_targets(
     profile: ProfileConfig,
-    doc_type: str,
 ) -> dict[str, int]:
-    section_order = resolve_section_order(doc_type)
     configured = profile.section_words
+    section_order = list(configured)
 
-    missing = [name for name in section_order if name not in configured]
-    extra = [name for name in configured if name not in section_order]
     invalid = [
         name
         for name in section_order
@@ -67,15 +60,13 @@ def build_section_word_targets(
     ]
 
     problems = []
-    if missing:
-        problems.append(f"missing keys: {', '.join(missing)}")
-    if extra:
-        problems.append(f"unknown keys: {', '.join(extra)}")
     if invalid:
         problems.append(f"non-positive integer values: {', '.join(invalid)}")
+    if not section_order:
+        problems.append("at least one section is required")
     if problems:
         raise ValueError(
-            f"Invalid profile.section_words for {doc_type}: {'; '.join(problems)}"
+            f"Invalid profile.section_words: {'; '.join(problems)}"
         )
 
     return {name: configured[name] for name in section_order}
@@ -93,6 +84,7 @@ def build_groundtruth_rows(
     associated_orgs: list,
     metadata: dict,
     counts_list: list[dict],
+    amounts: dict | None = None,
 ) -> list[tuple[str, str, str, str, str]]:
     rows: list[tuple[str, str, str, str, str]] = []
     all_people = defendants + collateral
@@ -102,7 +94,7 @@ def build_groundtruth_rows(
     _append_org_rows(rows, doc_id, all_orgs, charged_orgs)
     _append_reference_rows(rows, doc_id, metadata)
     _append_date_rows(rows, doc_id, metadata, all_people)
-    _append_amount_rows(rows, doc_id, counts_list)
+    _append_amount_rows(rows, doc_id, counts_list, amounts or {})
     _append_initial_rows(rows, doc_id, all_people)
     _append_title_rows(rows, doc_id, all_people)
     _append_all_address_rows(rows, doc_id, defendants, all_orgs)
@@ -166,9 +158,37 @@ def _append_amount_rows(
     rows: list[tuple[str, str, str, str, str]],
     doc_id: str,
     counts_list: list[dict],
+    amounts: dict,
 ) -> None:
+    seen: set[str] = set()
     for amount in _extract_count_values(counts_list, _AMOUNT_RE):
-        _append_row(rows, doc_id, amount, "AMOUNT", "yes", "amount in count particulars")
+        if amount not in seen:
+            _append_row(rows, doc_id, amount, "AMOUNT", "yes", "amount in count particulars")
+            seen.add(amount)
+    for label, amount in _amount_values(amounts):
+        if amount not in seen:
+            _append_row(rows, doc_id, amount, "AMOUNT", "yes", label)
+            seen.add(amount)
+
+
+def _amount_values(amounts: dict) -> list[tuple[str, str]]:
+    values = []
+    total_loss = amounts.get("total_loss")
+    if total_loss:
+        values.append(("total alleged loss", total_loss))
+    invoice_value = amounts.get("inflated_invoice_value")
+    if invoice_value:
+        values.append(("inflated invoice value", invoice_value))
+    for transfer in amounts.get("transfers", []):
+        if not isinstance(transfer, dict) or not transfer.get("amount"):
+            continue
+        values.append(
+            (
+                f"transfer from {transfer.get('from')} to {transfer.get('to')}",
+                transfer["amount"],
+            )
+        )
+    return values
 
 
 def _append_initial_rows(
@@ -244,7 +264,7 @@ def _extract_count_values(counts_list: list[dict], pattern: re.Pattern[str]) -> 
     seen: set[str] = set()
     for count in counts_list:
         for match in pattern.findall(count.get("particulars", "")):
-            normalized = str(match).strip()
+            normalized = str(match).strip().rstrip(".,;:")
             if normalized and normalized not in seen:
                 seen.add(normalized)
                 values.append(normalized)
@@ -277,20 +297,37 @@ def _append_address_rows(
     )
 
 
-def build_template_environment(project_root: Path) -> Environment:
+def build_template_environment(template_path: Path) -> Environment:
     return Environment(
-        loader=FileSystemLoader(str(project_root / "templates")),
+        loader=FileSystemLoader(str(template_path.parent)),
         trim_blocks=True,
         lstrip_blocks=True,
         keep_trailing_newline=True,
     )
 
 
+def build_section_labels(doc_type: str, section_order: list[str]) -> dict[str, str]:
+    configured = EN_SECTIONS.get(doc_type)
+    if configured is not None:
+        return dict(configured)
+
+    labels = {"title": doc_type.replace("_", " ").upper()}
+    for index, section_name in enumerate(section_order, start=1):
+        labels[f"section_{section_name}"] = (
+            f"SECTION {index} - {section_name.replace('_', ' ').upper()}"
+        )
+    return labels
+
+
 def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext:
+    case_config_path = resolve_project_path(project_root, args.case_config)
+    if not args.template:
+        raise SystemExit("--template is required")
+    template_path = resolve_project_path(project_root, args.template)
     try:
         app_config = load_app_config(
             project_root / "config.yaml",
-            resolve_project_path(project_root, args.case_config),
+            case_config_path,
         )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
@@ -319,13 +356,12 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     try:
         section_word_targets = build_section_word_targets(
             profile,
-            doc_type,
         )
+        section_order = list(section_word_targets)
         documents = resolve_documents_to_generate(profile)
         prose_overrides = resolve_prose_overrides(
             app_config.case,
-            app_config.generation,
-            doc_type,
+            section_order,
         )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
@@ -353,8 +389,10 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         output_dir=output_dir,
         schema_dir=schema_dir,
         memory_dir=memory_dir,
-        template_env=build_template_environment(project_root),
-        sections=EN_SECTIONS[doc_type],
+        template_path=template_path,
+        template_env=build_template_environment(template_path),
+        template_name=template_path.name,
+        sections=build_section_labels(doc_type, section_order),
         labels=EN_LABELS,
         section_word_targets=section_word_targets,
         documents=documents,
@@ -377,6 +415,7 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
             context.app_config.entity_variants.persons,
         )
         metadata = resolve_case_metadata(context.case_cfg, context.doc_type)
+        amounts = build_amounts(charged_orgs, associated_orgs)
         counts_list = resolve_counts(
             context.app_config.fraud_statutes,
             context.case_cfg,
@@ -384,6 +423,7 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
             context.fraud_type,
             defendants,
             charged_orgs,
+            amounts,
             metadata["offence_period"],
         )
     except ValueError as exc:
@@ -395,6 +435,7 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
         charged_orgs=charged_orgs,
         associated_orgs=associated_orgs,
         metadata=metadata,
+        amounts=amounts,
         counts_list=counts_list,
     )
 
@@ -480,6 +521,7 @@ def resolve_schema_for_document(
 def collect_section_output_problems(
     section_targets: dict[str, int],
     section_texts: list[str],
+    min_completion_ratio: float = 0.7,
 ) -> list[str]:
     problems = []
     section_names = list(section_targets.keys())
@@ -502,7 +544,7 @@ def collect_section_output_problems(
             problems.append(f"section '{section_name}' is incomplete: {text}")
             continue
 
-        minimum_words = max(60, section_targets[section_name] // 4)
+        minimum_words = max(60, int(section_targets[section_name] * min_completion_ratio))
         if len(text.split()) < minimum_words:
             problems.append(
                 f"section '{section_name}' is too short for its target "
@@ -517,7 +559,7 @@ def render_document_text(
     document: DocumentInputs,
     llm_sections: list[str],
 ) -> str:
-    template = context.template_env.get_template(f"en_{context.doc_type}.j2")
+    template = context.template_env.get_template(context.template_name)
     metadata = document.metadata
     return template.render(
         prosecution=PROSECUTION,
@@ -575,6 +617,7 @@ def save_document_artifacts(
         document.associated_orgs,
         document.metadata,
         document.counts_list,
+        document.amounts,
     )
     gt_path = doc_dir / "groundtruth.tsv"
     write_groundtruth(gt_path, gt_rows)
@@ -584,5 +627,3 @@ def save_document_artifacts(
     print(f"  Schema : {schema_path}")
     print(f"  Saved  : {txt_path}  ({actual_words}w ≈ {actual_pages} pages)")
     print(f"  GT rows: {len(gt_rows)}  →  {gt_path}")
-
-

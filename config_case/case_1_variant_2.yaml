@@ -175,14 +175,16 @@ fraud_statutes:
       particulars: >
         {defendants} between {start_date} and {end_date} dishonestly made false
         representations, namely by submitting fabricated financial documentation
-        and inflated invoices through {companies}, intending thereby to make a
+        and inflated invoices valued at {inflated_invoice_value} through {companies},
+        causing an alleged loss of {total_loss}, intending thereby to make a
         gain for themselves and to cause loss to others.
     - offence: "CONSPIRACY TO DEFRAUD"
       statute: "common law"
       particulars: >
         {defendants} between {start_date} and {end_date} conspired together and
         with others to defraud by dishonestly causing {companies} to enter into
-        transactions on the basis of false and misleading information.
+        transactions on the basis of false and misleading information, causing an
+        alleged loss of {total_loss}.
 
   procurement_fraud:
     - offence: "FRAUD BY FALSE REPRESENTATION"

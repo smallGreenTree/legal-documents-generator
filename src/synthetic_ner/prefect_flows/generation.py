@@ -21,6 +21,7 @@ from src.synthetic_ner.prefect_flows.utils import (
 @flow(name="synthetic-ner-generation")
 def generate_dataset(
     case_config: str = "config_case/case_1.yaml",
+    template: str | None = None,
     documents: int | None = None,
     doc_type: str | None = None,
     fraud_type: str | None = None,
@@ -35,6 +36,7 @@ def generate_dataset(
     scenario = select_scenario(
         project_root=resolved_project_root,
         case_config=case_config,
+        template=template,
         documents=documents,
         doc_type=doc_type,
         fraud_type=fraud_type,

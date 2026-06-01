@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.synthetic_ner.models.ollama_client import TracedOllamaClient
-from src.synthetic_ner.tasks.tracer import TraceStore
+from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
 from src.synthetic_ner.types.app_config import (
     ModelProviderConfig,
     ModelRoutingConfig,

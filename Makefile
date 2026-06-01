@@ -2,6 +2,7 @@ PYTHON ?= poetry run python
 OLLAMA_MODEL ?= qwen3:8b
 DOCS ?= 1
 CASE_CONFIG ?= config_case/case_1.yaml
+TEMPLATE ?= templates/en_indictment.j2
 MSG ?= Sync prompt templates
 PREFECT_HOME ?= $(CURDIR)/.prefect
 PREFECT_API_URL ?= http://localhost:4200/api
@@ -77,7 +78,7 @@ _prefect-deploy:
 		prefect_pipeline.py:generate_dataset \
 		--name $(PREFECT_DEPLOYMENT) \
 		--pool $(PREFECT_POOL) \
-		--params '{"case_config":"$(CASE_CONFIG)","documents":$(DOCS),"review_scenario":true,"review_entities":true}'
+		--params '{"case_config":"$(CASE_CONFIG)","template":"$(TEMPLATE)","documents":$(DOCS),"review_scenario":true,"review_entities":true}'
 	PREFECT_HOME=$(PREFECT_HOME) PREFECT_API_URL=$(PREFECT_API_URL) \
 		poetry run prefect --no-prompt deploy \
 		prefect_pipeline.py:score_existing_document \
@@ -101,7 +102,7 @@ sync-langfuse:
 	$(PYTHON) -m src.synthetic_ner.sync_langfuse_prompts --commit-message "$(MSG)"
 
 generate:
-	$(PYTHON) main.py --case-config $(CASE_CONFIG) --documents $(DOCS) --workflow-mode langgraph
+	$(PYTHON) main.py --case-config $(CASE_CONFIG) --template $(TEMPLATE) --documents $(DOCS) --workflow-mode langgraph
 
 smoke-model-routes:
 	$(PYTHON) scripts/smoke_model_routes.py --case-config $(CASE_CONFIG)

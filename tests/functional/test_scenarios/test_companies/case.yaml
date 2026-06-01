@@ -1,0 +1,112 @@
+profile:
+  doc_type: companies_test
+  fraud_type: financial_fraud
+  documents: 1
+  section_words:
+    companies: 300
+
+case:
+  metadata:
+    court: auto
+    case_number: auto
+    cross_ref: auto
+    filing_date: auto
+    offence_period:
+      start: auto
+      end: auto
+
+  cast:
+    defendants:
+      - nationality: DE
+        title: Dr
+        surface_forms: 2
+      - nationality: IT
+        title: Mr
+        surface_forms: 2
+      - nationality: FR
+        title: Ms
+        surface_forms: 1
+
+    collateral:
+      - nationality: DE
+        title: ""
+        surface_forms: 1
+      - nationality: DE
+        title: ""
+        surface_forms: 1
+
+    charged_orgs: 2
+    associated_orgs: 1
+
+  defendants: auto
+  collateral: auto
+  charged_orgs: auto
+  associated_orgs: auto
+  schema: auto
+  prose:
+    companies: auto
+  counts: auto
+
+nationality_locales:
+  GB: en_GB
+  DE: de_DE
+  FR: fr_FR
+  IT: it_IT
+  NL: nl_NL
+  CZ: cs_CZ
+  PL: pl_PL
+  ES: es_ES
+  PT: pt_PT
+  BE: fr_BE
+  AT: de_AT
+  SE: sv_SE
+  DK: da_DK
+  FI: fi_FI
+  HU: hu_HU
+  RO: ro_RO
+  BG: bg_BG
+  GR: el_GR
+  HR: hr_HR
+  SK: sk_SK
+  SI: sl_SI
+
+vat_prefixes:
+  GB: GB
+  DE: DE
+  FR: FR
+  IT: IT
+  NL: NL
+  CZ: CZ
+  PL: PL
+  ES: ES
+  PT: PT
+  BE: BE
+  AT: AT
+  SE: SE
+  DK: DK
+  FI: FI
+  HU: HU
+  RO: RO
+  BG: BG
+  GR: EL
+  HR: HR
+  SK: SK
+  SI: SI
+
+fraud_statutes:
+  financial_fraud:
+    - offence: "FRAUD BY FALSE REPRESENTATION"
+      statute: "section 1 of the Fraud Act 2006"
+      particulars: >
+        {defendants} between {start_date} and {end_date} dishonestly made false
+        representations, namely by submitting fabricated financial documentation
+        and inflated invoices valued at {inflated_invoice_value} through {companies},
+        causing an alleged loss of {total_loss}, intending thereby to make a
+        gain for themselves and to cause loss to others.
+    - offence: "CONSPIRACY TO DEFRAUD"
+      statute: "common law"
+      particulars: >
+        {defendants} between {start_date} and {end_date} conspired together and
+        with others to defraud by dishonestly causing {companies} to enter into
+        transactions on the basis of false and misleading information, causing an
+        alleged loss of {total_loss}.

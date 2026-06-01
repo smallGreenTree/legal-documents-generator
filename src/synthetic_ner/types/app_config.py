@@ -80,6 +80,7 @@ class EntityVariantsConfig:
 
 @dataclass(frozen=True)
 class PlannerConfig:
+    active: bool
     temperature: float
     document_max_output_tokens: int
     section_max_output_tokens: int
@@ -87,16 +88,20 @@ class PlannerConfig:
 
 @dataclass(frozen=True)
 class WriterConfig:
+    active: bool
     chunk_words: int
     context_tail_chars: int
     temperature: float
     max_output_tokens: int
     min_output_tokens: int
     output_token_multiplier: float
+    min_completion_ratio: float
 
 
 @dataclass(frozen=True)
 class CriticConfig:
+    active: bool
+    acceptance_threshold: float
     temperature: float
     max_output_tokens: int
     memory_char_limit: int
@@ -123,6 +128,7 @@ class WorkflowConfig:
     mode: str
     max_revisions: int
     memory_summary_chars: int
+    validators: dict[str, bool]
     planner: PlannerConfig
     writer: WriterConfig
     critic: CriticConfig

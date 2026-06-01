@@ -6,13 +6,12 @@ section_contracts:
     - Purpose: Identify the defendants in natural legal prose, preserving exact names, dates of birth, birthplaces, nationalities, roles and addresses.
     - Allowed scope: Identity and procedural role only.
     - Required facts: Defendant names, dates of birth, nationalities, roles, and addresses when listed; collateral persons only where section context requires them.
-    - Forbidden content: Allegations, scheme mechanics, culpability language, false documents, fund flows, investigative conclusions, or characterisations such as central figure, architect, instrumental, coordinated, or deliberate.
     - Style: Concise formal legal prose; no bullet list, memory dump, or repetitive inventory of every relationship.
 
     ## Contract Rules
-    - Treat this contract as stricter than any narrative plan.
-    - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
-    - If a plan conflicts with this contract, follow this contract.
+    - Use only person identity facts listed in SECTION_CONTEXT.
+    - Do not add unlisted facts or conclusions.
+    - If a detail is missing, omit it rather than guessing it.
 
   companies: |
     # SECTION_CONTRACT
@@ -23,6 +22,9 @@ section_contracts:
     - Required facts: Company names, VAT numbers, addresses, and charged status when listed.
     - Forbidden content: Inferred directors, trading history, registration dates, business activity, fund-flow conclusions, or unlisted relationships.
     - Style: Concise formal legal prose; no registry-style inventory.
+    - Preferred shape: one connected paragraph of direct identification prose.
+    - Do not include meta-compliance language about the contract, scope, prompt, required facts, or drafting process.
+    - Do not include negative-scope sentences that explain what is not included.
 
     ## Contract Rules
     - Treat this contract as stricter than any narrative plan.
@@ -50,8 +52,8 @@ section_contracts:
     - Section: charges
     - Purpose: State precise allegations against each defendant and each company.
     - Allowed scope: Charge language tied to listed counts and parties.
-    - Required facts: Defendants, charged organisations, count particulars, statutes, and charged period when listed.
-    - Forbidden content: Invented count numbers, statutory wording, exhibits, procedural steps, or facts outside the listed particulars.
+    - Required facts: Defendants, charged organisations, count particulars, statutes, charged period, and amount facts when listed.
+    - Forbidden content: Invented count numbers, statutory wording, amounts, exhibits, procedural steps, or facts outside the listed particulars.
     - Style: Precise charge prose; compact and non-speculative.
 
     ## Contract Rules
@@ -65,7 +67,7 @@ section_contracts:
     - Section: facts
     - Purpose: Build the main chronological narrative from listed relationship facts and count particulars.
     - Allowed scope: Main chronological narrative from listed relationship facts.
-    - Required facts: Recorded control, instruction, conspiracy, and fund-flow facts.
+    - Required facts: Recorded control, instruction, conspiracy, fund-flow facts, and amount facts when listed.
     - Forbidden content: Unlisted dates, invoices, amounts, accounts, witnesses, documents, or inferred motives.
     - Style: Natural chronological legal narrative, not a relationship dump.
 

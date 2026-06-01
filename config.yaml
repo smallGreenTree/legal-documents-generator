@@ -13,7 +13,7 @@ model_routing:
       think: false
       timeout: 900
       recovery:
-        max_generate_attempts: 3
+        max_generate_attempts: 1
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated]"
     writer:
@@ -24,7 +24,7 @@ model_routing:
       think: false
       timeout: 900
       recovery:
-        max_generate_attempts: 3
+        max_generate_attempts: 1
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated]"
     critic:
@@ -35,7 +35,7 @@ model_routing:
       think: false
       timeout: 900
       recovery:
-        max_generate_attempts: 3
+        max_generate_attempts: 1
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated]"
 
@@ -52,8 +52,8 @@ entity_variants:
   persons:
     enabled: true
     generation:
-      nickname_variants: 1
-      misspelling_variants: 1
+      nickname_variants: 2
+      misspelling_variants: 2
       locale_aware: false
 
 workflow:
@@ -61,21 +61,58 @@ workflow:
   max_revisions: 2
   memory_summary_chars: 900
 
+  validators:
+    # Necessary deterministic safety checks.
+    empty_section: true
+    placeholder_text: true
+    hidden_reasoning_markup: true
+    placeholder_markers: true
+    review_metadata: true
+    markdown_formatting: true
+    minimum_length: false
+    required_person_facts: true
+    required_company_facts: true
+    known_entity_presence: true
+    unknown_case_references: true
+    unknown_dates: true
+    unknown_amounts: true
+    unknown_vat_numbers: true
+    unknown_organisations: true
+    unknown_titled_people: true
+    unknown_initials: true
+
+    # Optional/legacy prose-shaping checks.
+    meta_summary_style: false
+    incomplete_date_range: false
+    dangling_between_phrase: false
+    unresolved_timeline_placeholder: false
+    partial_vat_identifier: false
+    repeated_long_sentences: false
+    repeated_sentence_fragments: false
+    truncated_sentence: false
+    facts_contract: false
+    repair_output: false
+
   planner:
+    active: false
     temperature: 0.0
     max_output_tokens:
       document: 2000
       section: 1200
 
   writer:
+    active: true
     chunk_words: 500
     context_tail_chars: 900
-    temperature: 0.0
+    temperature: 0.5
     max_output_tokens: 2500
     min_output_tokens: 1200
     output_token_multiplier: 1.8
+    min_completion_ratio: 0.7
 
   critic:
+    active: true
+    acceptance_threshold: 3.5
     temperature: 0.0
     max_output_tokens: 1200
     memory_char_limit: 6000
@@ -83,7 +120,6 @@ workflow:
     rubrics:
       grounding: "1-5"
       completeness: "1-5"
-      legal_style: "1-5"
       chronology: "1-5"
 
   prompts_config_path: prompts/workflow_prompts.yaml

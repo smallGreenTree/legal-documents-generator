@@ -9,7 +9,7 @@ from time import perf_counter, sleep
 from typing import Any, Callable
 
 import requests
-from src.synthetic_ner.tasks.tracer import TraceStore
+from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
 from src.synthetic_ner.types.app_config import OllamaConfig
 
 

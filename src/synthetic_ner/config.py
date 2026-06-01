@@ -31,6 +31,36 @@ from src.synthetic_ner.types.app_config import (
 )
 from src.synthetic_ner.utils import load_config, resolve_project_path
 
+DEFAULT_WORKFLOW_VALIDATORS = {
+    "empty_section": True,
+    "placeholder_text": True,
+    "hidden_reasoning_markup": True,
+    "placeholder_markers": True,
+    "review_metadata": True,
+    "meta_summary_style": True,
+    "markdown_formatting": True,
+    "incomplete_date_range": True,
+    "dangling_between_phrase": True,
+    "unresolved_timeline_placeholder": True,
+    "partial_vat_identifier": True,
+    "repeated_long_sentences": True,
+    "repeated_sentence_fragments": True,
+    "truncated_sentence": True,
+    "minimum_length": True,
+    "required_person_facts": True,
+    "required_company_facts": True,
+    "known_entity_presence": True,
+    "unknown_case_references": True,
+    "unknown_dates": True,
+    "unknown_amounts": True,
+    "unknown_vat_numbers": True,
+    "unknown_organisations": True,
+    "unknown_titled_people": True,
+    "unknown_initials": True,
+    "facts_contract": True,
+    "repair_output": True,
+}
+
 
 def load_app_config(
     path: Path | str,
@@ -268,10 +298,15 @@ def _build_workflow_config(
             raw["memory_summary_chars"],
             "workflow.memory_summary_chars",
         ),
+        validators=_build_validator_config(raw.get("validators", {})),
         planner=_build_planner_config(
             _require_mapping(raw["planner"], "workflow.planner")
         ),
         writer=WriterConfig(
+            active=_require_bool(
+                writer.get("active", True),
+                "workflow.writer.active",
+            ),
             chunk_words=_require_positive_int(
                 writer["chunk_words"],
                 "workflow.writer.chunk_words",
@@ -289,6 +324,10 @@ def _build_workflow_config(
             output_token_multiplier=_require_positive_number(
                 writer["output_token_multiplier"],
                 "workflow.writer.output_token_multiplier",
+            ),
+            min_completion_ratio=_require_ratio(
+                writer["min_completion_ratio"],
+                "workflow.writer.min_completion_ratio",
             ),
         ),
         critic=_build_critic_config(
@@ -339,6 +378,23 @@ def _build_workflow_config(
     )
 
 
+def _build_validator_config(raw: Any) -> dict[str, bool]:
+    validators = dict(DEFAULT_WORKFLOW_VALIDATORS)
+    if raw is None:
+        return validators
+    configured = _require_mapping(raw, "workflow.validators")
+    unknown = sorted(set(configured) - set(DEFAULT_WORKFLOW_VALIDATORS))
+    if unknown:
+        raise ValueError(
+            "Unknown workflow.validators keys: "
+            f"{', '.join(unknown)}. Available validators: "
+            f"{', '.join(sorted(DEFAULT_WORKFLOW_VALIDATORS))}"
+        )
+    for key, value in configured.items():
+        validators[key] = _require_bool(value, f"workflow.validators.{key}")
+    return validators
+
+
 def _resolve_workflow_prompts(
     raw: dict[str, Any],
     *,
@@ -376,6 +432,10 @@ def _build_planner_config(raw: dict[str, Any]) -> PlannerConfig:
         "workflow.planner.max_output_tokens",
     )
     return PlannerConfig(
+        active=_require_bool(
+            raw.get("active", True),
+            "workflow.planner.active",
+        ),
         temperature=_require_number(
             raw["temperature"],
             "workflow.planner.temperature",
@@ -393,6 +453,14 @@ def _build_planner_config(raw: dict[str, Any]) -> PlannerConfig:
 
 def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
     return CriticConfig(
+        active=_require_bool(
+            raw.get("active", True),
+            "workflow.critic.active",
+        ),
+        acceptance_threshold=_require_ratio_score(
+            raw.get("acceptance_threshold", 3.5),
+            "workflow.critic.acceptance_threshold",
+        ),
         temperature=_require_number(
             raw["temperature"],
             "workflow.critic.temperature",
@@ -683,4 +751,18 @@ def _require_positive_number(value: Any, path: str) -> float:
     number = _require_number(value, path)
     if number <= 0:
         raise ValueError(f"{path} must be a positive number")
+    return number
+
+
+def _require_ratio(value: Any, path: str) -> float:
+    number = _require_number(value, path)
+    if number <= 0 or number > 1:
+        raise ValueError(f"{path} must be greater than 0 and less than or equal to 1")
+    return number
+
+
+def _require_ratio_score(value: Any, path: str) -> float:
+    number = _require_number(value, path)
+    if number < 1 or number > 5:
+        raise ValueError(f"{path} must be between 1 and 5")
     return number

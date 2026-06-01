@@ -5,31 +5,33 @@ import os
 from pathlib import Path
 
 from src.synthetic_ner.config import load_app_config
-from src.synthetic_ner.constants import PROSE_SECTION_ORDER
 
 
 def build_parser(project_root: Path) -> argparse.ArgumentParser:
     del project_root
-    doc_type_choices = sorted(PROSE_SECTION_ORDER)
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--case-config",
-        default="config_case/case_1.yaml",
+        required=True,
         metavar="PATH",
         help="Case recipe config path relative to project root",
+    )
+    parser.add_argument(
+        "--template",
+        required=True,
+        metavar="PATH",
+        help="Jinja template path relative to project root",
     )
     parser.add_argument(
         "--documents",
         "--count",
         dest="documents",
         type=int,
-        default=None,
         help="Override profile.documents",
     )
     parser.add_argument(
         "--doc-type",
-        choices=doc_type_choices,
         metavar="TYPE",
         help="Override profile.doc_type",
     )
@@ -96,13 +98,5 @@ def main(project_root: Path | None = None) -> None:
     resolved_project_root = project_root or Path(__file__).resolve().parents[2]
     load_env_files(resolved_project_root)
     args = build_parser(resolved_project_root).parse_args()
-    workflow_mode = resolve_workflow_mode(resolved_project_root, args)
-    if workflow_mode != "langgraph":
-        raise SystemExit(
-            "Only workflow.mode=langgraph is supported. The classic generator path "
-            "is legacy and is not used by the Prefect deployment."
-        )
-
-    from src.synthetic_ner.tasks.orchestrator import run_langgraph_workflow
-
+    from src.synthetic_ner.tasks.document_generation.orchestrator import run_langgraph_workflow
     run_langgraph_workflow(args, resolved_project_root)

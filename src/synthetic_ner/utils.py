@@ -69,6 +69,5 @@ def render_prompt_template(
     prompt_client: Any | None = None,
     **context,
 ) -> str:
-    if prompt_client is not None and hasattr(prompt_client, "compile"):
-        return prompt_client.compile(**context)
+    del prompt_client
     return render_inline_template(template, **context)

@@ -6,7 +6,7 @@ import argparse
 
 from src.synthetic_ner.prefect_flows.generation import generate_dataset
 from src.synthetic_ner.prefect_flows.quality import score_existing_document
-from src.synthetic_ner.tasks.quality_report import DEFAULT_QUALITY_CONFIG_PATH
+from src.synthetic_ner.tasks.document_quality.quality_report import DEFAULT_QUALITY_CONFIG_PATH
 
 __all__ = ["generate_dataset", "score_existing_document"]
 
@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--case-config",
         default="config_case/case_1.yaml",
         help="Case recipe config path relative to project root.",
+    )
+    parser.add_argument(
+        "--template",
+        default=None,
+        help="Jinja template path relative to project root.",
     )
     parser.add_argument("--documents", "--count", dest="documents", type=int, default=None)
     parser.add_argument("--doc-type", default=None)
@@ -84,6 +89,7 @@ def main() -> None:
         return
     generate_dataset(
         case_config=args.case_config,
+        template=args.template,
         documents=args.documents,
         doc_type=args.doc_type,
         fraud_type=args.fraud_type,

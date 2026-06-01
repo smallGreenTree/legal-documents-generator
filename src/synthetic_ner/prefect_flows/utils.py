@@ -24,15 +24,15 @@ from src.synthetic_ner.engine import (
     resolve_schema_for_document,
 )
 from src.synthetic_ner.schema import counter_from_doc_id, doc_id_prefix, make_doc_id
-from src.synthetic_ner.tasks.orchestrator import run_document_graph
-from src.synthetic_ner.tasks.quality_overview import (
+from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
+from src.synthetic_ner.tasks.document_quality.quality_overview import (
     build_quality_overview,
     fetch_langfuse_rubric_summary,
     format_audit_confidence_markdown,
     format_model_workflow_markdown,
     format_run_health_markdown,
 )
-from src.synthetic_ner.tasks.quality_report import (
+from src.synthetic_ner.tasks.document_quality.quality_report import (
     build_quality_report,
     format_markdown_report,
     load_quality_scoring_config,
@@ -61,6 +61,7 @@ class ScenarioReviewInput(RunInput):
     fraud_type_details: str = ""
     editable_fields_help: str = ""
     case_config: str = ""
+    template: str = ""
     documents: int | None = None
     doc_type: str = ""
     fraud_type: str = ""
@@ -93,6 +94,7 @@ def select_scenario(
     *,
     project_root: Path,
     case_config: str,
+    template: str | None = None,
     documents: int | None,
     doc_type: str | None,
     fraud_type: str | None,
@@ -104,6 +106,7 @@ def select_scenario(
     scenario = _build_scenario(
         project_root=project_root,
         case_config=case_config,
+        template=template,
         documents=documents,
         doc_type=doc_type,
         fraud_type=fraud_type,
@@ -221,6 +224,7 @@ def review_selected_scenario(
         action="continue",
         **review_details,
         case_config=scenario["case_config"],
+        template=scenario.get("template") or "",
         documents=scenario["documents"],
         doc_type=scenario["doc_type"] or "",
         fraud_type=scenario["fraud_type"] or "",
@@ -245,6 +249,7 @@ def review_selected_scenario(
     reviewed_scenario = _build_scenario(
         project_root=project_root,
         case_config=response.case_config.strip() or scenario["case_config"],
+        template=response.template.strip() or scenario.get("template") or None,
         documents=(
             response.documents
             if response.documents is not None
@@ -626,6 +631,7 @@ def _build_scenario(
     *,
     project_root: Path,
     case_config: str,
+    template: str | None = None,
     documents: int | None,
     doc_type: str | None,
     fraud_type: str | None,
@@ -648,11 +654,11 @@ def _build_scenario(
     prompts_config = workflow.get("prompts_config_path", "prompts/workflow_prompts.yaml")
     prompts_path = resolve_project_path(project_root, prompts_config)
     prompts_raw = load_config(prompts_path) if prompts_path.exists() else {}
-    template_path = (
-        project_root / "templates" / f"en_{selected_doc_type}.j2"
-        if selected_doc_type
-        else None
-    )
+    template_path = None
+    if template:
+        template_path = resolve_project_path(project_root, template)
+    elif selected_doc_type:
+        template_path = project_root / "templates" / f"en_{selected_doc_type}.j2"
 
     input_files = [
         _input_file_record("root config", root_config_path, required=True),
@@ -694,6 +700,7 @@ def _build_scenario(
 
     return {
         "case_config": case_config,
+        "template": template or "",
         "documents": selected_documents,
         "doc_type": selected_doc_type,
         "fraud_type": selected_fraud_type,
@@ -728,6 +735,7 @@ def ingest_configs(
     load_env_files(project_root)
     args = _build_args(
         case_config=scenario["case_config"],
+        template=scenario.get("template_path") or "",
         documents=scenario["documents"],
         doc_type=scenario["doc_type"],
         fraud_type=scenario["fraud_type"],
@@ -884,6 +892,7 @@ def score_document_quality(
 def _build_args(
     *,
     case_config: str,
+    template: str,
     documents: int | None,
     doc_type: str | None,
     fraud_type: str | None,
@@ -891,6 +900,7 @@ def _build_args(
 ) -> Namespace:
     return Namespace(
         case_config=case_config,
+        template=template,
         documents=documents,
         doc_type=doc_type,
         fraud_type=fraud_type,
@@ -1437,7 +1447,7 @@ def _publish_config_artifacts(
     context: Any,
 ) -> None:
     case_config_path = project_root / case_config
-    template_path = project_root / "templates" / f"en_{context.doc_type}.j2"
+    template_path = context.template_path
     create_markdown_artifact(
         key=_artifact_key("run-config-summary"),
         description="Run configuration summary",

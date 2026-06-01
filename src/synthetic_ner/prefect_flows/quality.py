@@ -13,7 +13,7 @@ from src.synthetic_ner.prefect_flows.utils import (
     select_quality_document,
     select_scenario,
 )
-from src.synthetic_ner.tasks.quality_report import DEFAULT_QUALITY_CONFIG_PATH
+from src.synthetic_ner.tasks.document_quality.quality_report import DEFAULT_QUALITY_CONFIG_PATH
 
 
 @flow(name="synthetic-ner-document-quality")
