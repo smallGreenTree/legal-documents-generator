@@ -1,5 +1,5 @@
 PYTHON ?= poetry run python
-OLLAMA_MODEL ?= qwen3:8b
+OLLAMA_MODEL ?= mistral-large:123b-instruct-2411-q4_K_M
 DOCS ?= 1
 CASE_CONFIG ?= config_case/case_1.yaml
 TEMPLATE ?= templates/en_indictment.j2
@@ -35,7 +35,7 @@ help:
 install:
 	poetry install
 
-setup: prefect-setup langfuse-up ollama-pull sync-langfuse
+setup: prefect-setup langfuse-up  sync-langfuse
 
 langfuse-up:
 	docker compose --env-file .env.langfuse -f docker-compose.langfuse.yml up -d
