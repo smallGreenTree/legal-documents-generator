@@ -39,11 +39,14 @@ make _prefect-deploy \
   PREFECT_DEPLOYMENT="$PREFECT_DEPLOYMENT"
 
 echo
-echo "== 2/4 Smoke-test configured model routes =="
+echo "== 2/4 Smoke-test configured model routes and prompt contract =="
 poetry run python scripts/smoke_model_routes.py \
   --case-config "$CASE_CONFIG" \
   --stage writer \
   --stage critic
+poetry run python scripts/smoke_prompt_contract.py \
+  --case-config "$CASE_CONFIG" \
+  --stage writer
 
 echo
 echo "== 3/4 Run one smoke document =="
