@@ -22,7 +22,7 @@ help:
 	@echo "  make generate       Generate documents with LangGraph workflow"
 	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
 	@echo "  make smoke-prompt-contract Check writer prompt format and content"
-	@echo "  make apple-studio-run Deploy, smoke-test, then queue 10 full documents"
+	@echo "  make apple-studio-run Deploy, smoke-test, then queue 10 scenario runs"
 	@echo "  make mi             Show radon maintainability index for src and tests"
 	@echo "  make langfuse-up    Start local Langfuse Docker stack"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
