@@ -284,7 +284,7 @@ def _stage_rows(by_stage: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _add_state_counts(metadata: dict[str, Any], state: Mapping[str, Any]) -> None:
-    for field_name in ("section_index", "revision_count"):
+    for field_name in ("section_index",):
         field_value = state.get(field_name)
         if isinstance(field_value, int):
             metadata[field_name] = field_value
@@ -307,7 +307,6 @@ def _add_text_lengths(metadata: dict[str, Any], state: Mapping[str, Any]) -> Non
         "document_plan",
         "current_section_plan",
         "current_section_text",
-        "current_revision_instruction",
         "final_text",
     ):
         field_value = state.get(field_name)

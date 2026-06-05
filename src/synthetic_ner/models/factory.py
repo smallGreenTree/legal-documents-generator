@@ -43,6 +43,7 @@ def ollama_config_from_provider(provider_cfg: ModelProviderConfig) -> OllamaConf
         timeout=provider_cfg.timeout,
         num_ctx=provider_cfg.num_ctx,
         think=provider_cfg.think,
+        top_p=provider_cfg.top_p,
         recovery=OllamaRecoveryConfig(
             max_generate_attempts=provider_cfg.max_generate_attempts,
             retry_backoff_seconds=provider_cfg.retry_backoff_seconds,

@@ -14,13 +14,14 @@ PREFECT_QUALITY_DEPLOYMENT ?= document-quality
 .PHONY: langfuse-up langfuse-down langfuse-ps
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
 .PHONY: ollama-health ollama-pull sync-langfuse
-.PHONY: generate smoke-model-routes check mi
+.PHONY: generate smoke-model-routes apple-studio-run check mi
 
 help:
 	@echo "Common targets:"
 	@echo "  make setup          Install deps, prepare Prefect, start Langfuse, pull model, sync prompts"
 	@echo "  make generate       Generate documents with LangGraph workflow"
 	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
+	@echo "  make apple-studio-run Deploy, smoke-test, then queue 10 full documents"
 	@echo "  make mi             Show radon maintainability index for src and tests"
 	@echo "  make langfuse-up    Start local Langfuse Docker stack"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
@@ -106,6 +107,9 @@ generate:
 
 smoke-model-routes:
 	$(PYTHON) scripts/smoke_model_routes.py --case-config $(CASE_CONFIG)
+
+apple-studio-run:
+	CASE_CONFIG=$(CASE_CONFIG) TEMPLATE=$(TEMPLATE) DOCUMENTS=10 scripts/apple_studio_prefect_run.sh
 
 check:
 	poetry run ruff check .

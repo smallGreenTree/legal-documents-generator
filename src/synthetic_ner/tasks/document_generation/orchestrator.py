@@ -28,7 +28,6 @@ from src.synthetic_ner.tasks.document_generation.prompt_context import build_sec
 from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
 from src.synthetic_ner.tasks.document_generation.validators import (
     clean_generated_section_text,
-    repair_section_text,
     validate_section_text,
 )
 from src.synthetic_ner.tasks.document_generation.writer import SectionWriter
@@ -211,8 +210,6 @@ def run_document_graph(
                 "instruction_channel": {},
                 "review_channel": {},
                 "content_channel": {},
-                "revision_count": 0,
-                "repair_attempts": 0,
             }
         )
     finally:
@@ -382,7 +379,6 @@ class DocumentWorkflow:
         section_plans = dict(state.get("section_plans", {}))
         section_contracts = dict(state.get("section_contracts", {}))
         section_reviews = dict(state.get("section_reviews", {}))
-        revision_counts: dict[str, int] = {}
 
         for group in _parallel_section_groups(section_order):
             if len(group) == 1:
@@ -411,7 +407,6 @@ class DocumentWorkflow:
                 section_plans[result.section_name] = result.section_plan
                 section_contracts[result.section_name] = result.section_contract
                 section_reviews[result.section_name] = result.issues
-                revision_counts[result.section_name] = result.revisions
                 self.memory_manager.append_section_result(
                     self.memory_path,
                     section_name=result.section_name,
@@ -426,7 +421,6 @@ class DocumentWorkflow:
             "section_contracts": section_contracts,
             "section_reviews": section_reviews,
             "section_index": len(section_order),
-            "revision_counts": revision_counts,
         }
 
     def _run_section_workflow(
@@ -461,71 +455,32 @@ class DocumentWorkflow:
         )
         section_text = clean_generated_section_text(section_text)
         issues: list[str] = []
-        revision_instruction = ""
-        revision_count = 0
 
-        while True:
-            issues = []
-            critic_instruction = ""
-            if self.critic is not None:
-                review = self.critic.review_section(
-                    doc_id=self.doc_id,
-                    parent_task_id=f"writer_{section_name}",
-                    memory_text=state["memory_text"],
-                    section_name=section_name,
-                    section_plan=section_plan,
-                    section_text=section_text,
-                    revision_round=revision_count,
-                )
-                issues = list(review.issues)
-                critic_instruction = review.revision_instruction
-                if review.blocking and not issues:
-                    issues.append("Critic marked the section as blocking.")
-            validator_issues = validate_section_text(
-                section_name=section_name,
-                section_text=section_text,
-                memory_text=state["memory_text"],
-                word_target=self.context.section_word_targets[section_name],
-                min_completion_ratio=self.context.workflow_cfg.writer.min_completion_ratio,
-                enabled_validators=self.context.workflow_cfg.validators,
-            )
-            for issue in validator_issues:
-                if issue not in issues:
-                    issues.append(issue)
-            revision_instruction = _combine_revision_instruction(
-                critic_instruction=critic_instruction,
-                issues=issues,
-                validator_issues=validator_issues,
-            )
-            if not issues:
-                break
-            if revision_count >= self.context.workflow_cfg.max_revisions:
-                break
-
-            revision_count += 1
-            revision_temperature = (
-                0.0
-                if revision_count >= self.context.workflow_cfg.max_revisions
-                else self.context.workflow_cfg.writer.temperature
-            )
-            section_text = self.writer.write_section(
+        if self.critic is not None:
+            review = self.critic.review_section(
                 doc_id=self.doc_id,
-                parent_task_id=(
-                    f"critic_{section_name}"
-                    if self.critic is not None
-                    else f"validator_{section_name}"
-                ),
+                parent_task_id=f"writer_{section_name}",
                 memory_text=state["memory_text"],
-                document_plan=document_plan,
                 section_name=section_name,
                 section_plan=section_plan,
-                case_number=self.document.metadata["case_number"],
-                word_target=self.context.section_word_targets[section_name],
-                revision_instruction=revision_instruction,
-                revision_round=revision_count,
-                temperature=revision_temperature,
+                section_text=section_text,
+                revision_round=0,
             )
-            section_text = clean_generated_section_text(section_text)
+            issues = list(review.issues)
+            if review.blocking and not issues:
+                issues.append("Critic marked the section as blocking.")
+
+        validator_issues = validate_section_text(
+            section_name=section_name,
+            section_text=section_text,
+            memory_text=state["memory_text"],
+            word_target=self.context.section_word_targets[section_name],
+            min_completion_ratio=self.context.workflow_cfg.writer.min_completion_ratio,
+            enabled_validators=self.context.workflow_cfg.validators,
+        )
+        for issue in validator_issues:
+            if issue not in issues:
+                issues.append(issue)
 
         final_text, final_issues = self._finalize_section_text(
             section_name=section_name,
@@ -539,7 +494,6 @@ class DocumentWorkflow:
             section_contract=section_contract,
             section_text=final_text,
             issues=final_issues,
-            revisions=revision_count,
         )
 
     def _finalize_section_text(
@@ -554,13 +508,6 @@ class DocumentWorkflow:
         word_target = self.context.section_word_targets[section_name]
         memory_text = self.memory_manager.read_memory(self.memory_path)
         final_text = clean_generated_section_text(section_text)
-        if issues and self.context.workflow_cfg.validators.get("repair_output", True):
-            repaired_text = repair_section_text(
-                section_text=final_text,
-                issues=issues,
-                memory_text=memory_text,
-            )
-            final_text = clean_generated_section_text(repaired_text) or final_text
 
         final_issues = validate_section_text(
             section_name=section_name,
@@ -575,7 +522,11 @@ class DocumentWorkflow:
                 "  Warning : section output still has validation issues "
                 f"({section_name}): {'; '.join(final_issues)}"
             )
-        return final_text, final_issues
+        combined_issues = list(issues)
+        for issue in final_issues:
+            if issue not in combined_issues:
+                combined_issues.append(issue)
+        return final_text, combined_issues
 
     def render_document_node(self, state: WorkflowState) -> WorkflowState:
         ordered_sections = [
@@ -615,7 +566,6 @@ class DocumentWorkflow:
             section_contracts=state.get("section_contracts", {}),
             section_plans=state.get("section_plans", {}),
             section_reviews=state.get("section_reviews", {}),
-            revision_counts=state.get("revision_counts", {}),
             trace_store=self.trace_store,
         )
         return {"final_text": rendered_text}
@@ -643,34 +593,3 @@ def _parallel_section_groups(section_order: list[str]) -> list[list[str]]:
         remaining = [section_name for section_name in remaining if section_name not in ready]
 
     return groups
-
-
-def _combine_revision_instruction(
-    *,
-    critic_instruction: str,
-    issues: list[str],
-    validator_issues: list[str],
-) -> str:
-    del validator_issues
-    selected_issues = issues[:6]
-    issue_lines = "\n".join(f"- {issue}" for issue in selected_issues) or "- none"
-    parts = [
-        "Rewrite the section from SECTION_CONTEXT and SECTION_CONTRACT.",
-        "Do not patch or preserve the failed structure.",
-        "",
-        "Issues to resolve:",
-        issue_lines,
-    ]
-    if len(issues) > len(selected_issues):
-        parts.append(
-            f"- plus {len(issues) - len(selected_issues)} related issue(s); "
-            "keep the rewrite scoped to SECTION_CONTEXT."
-        )
-    critic_instruction = critic_instruction.strip()
-    if (
-        critic_instruction
-        and critic_instruction.lower() != "keep as is"
-        and not selected_issues
-    ):
-        parts.extend(["", critic_instruction])
-    return "\n".join(parts).strip()

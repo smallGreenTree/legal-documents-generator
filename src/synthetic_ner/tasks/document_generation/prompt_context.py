@@ -54,9 +54,8 @@ def _section_reference_parts(memory_text: str, section_name: str) -> list[str]:
         ],
         "evidence": [
             "Case References and Dates",
-            "Allowed Person Surface Forms",
             "Allowed Organisations",
-            "Relationship Facts",
+            "Allowed Amounts",
         ],
         "assessment": [
             "Case References and Dates",
@@ -140,11 +139,11 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
     if section == "evidence":
         return [
             "",
-            "## Organisations",
-            _extract_markdown_block(memory_text, "Organisations"),
+            "## Evidence Categories",
+            _extract_markdown_block(memory_text, "Evidence Categories"),
             "",
-            "## Relationship Facts",
-            _extract_markdown_block(memory_text, "Relationship Graph"),
+            "## Counts",
+            _extract_markdown_block(memory_text, "Counts"),
         ]
     if section == "assessment":
         return [

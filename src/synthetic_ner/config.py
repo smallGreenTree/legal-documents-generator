@@ -58,7 +58,6 @@ DEFAULT_WORKFLOW_VALIDATORS = {
     "unknown_titled_people": True,
     "unknown_initials": True,
     "facts_contract": True,
-    "repair_output": True,
 }
 
 
@@ -185,6 +184,12 @@ def _build_model_provider_config(
         if think_value is not None
         else None
     )
+    top_p_value = raw.get("top_p")
+    top_p = (
+        _require_ratio(top_p_value, f"{path}.top_p")
+        if top_p_value is not None
+        else None
+    )
     recovery = _require_mapping(raw["recovery"], f"{path}.recovery")
     max_generate_attempts = _require_positive_int(
         recovery["max_generate_attempts"],
@@ -207,6 +212,7 @@ def _build_model_provider_config(
         base_url=base_url,
         num_ctx=num_ctx,
         think=think,
+        top_p=top_p,
         max_generate_attempts=max_generate_attempts,
         retry_backoff_seconds=retry_backoff_seconds,
         controlled_empty_section=controlled_empty_section,
@@ -564,6 +570,10 @@ def _build_case_config(raw: dict[str, Any]) -> CaseConfig:
             "case.associated_orgs",
         ),
         schema=_build_auto_or_mapping(raw["schema"], "case.schema"),
+        evidence_categories=_build_optional_string_list(
+            raw.get("evidence_categories", []),
+            "case.evidence_categories",
+        ),
         prose=_build_string_mapping(
             _require_mapping(raw["prose"], "case.prose"),
             "case.prose",
@@ -676,6 +686,13 @@ def _build_string_mapping(
         key: _require_string(value, f"{path}.{key}", allow_auto=allow_auto)
         for key, value in raw.items()
     }
+
+
+def _build_optional_string_list(value: Any, path: str) -> list[str]:
+    return [
+        _require_string(item, f"{path}[{index}]")
+        for index, item in enumerate(_require_list(value, path))
+    ]
 
 
 def _build_auto_or_list(value: Any, path: str) -> str | list[dict[str, Any]]:

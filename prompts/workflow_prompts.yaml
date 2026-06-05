@@ -49,7 +49,9 @@ prompts:
     Use only SECTION_CONTEXT and SECTION_CONTRACT.
     Never explain the contract, the writing process, section compliance, or how
     the text was structured. Simply write natural legal prose.
-    Cover every listed data fact in SECTION_CONTEXT at least once.
+    Cover the facts required by SECTION_CONTRACT. Treat allowed references as
+    boundaries, not as a checklist to repeat. Use only the context facts needed
+    for this section's purpose.
     Use varied natural sentence contexts without repeating long phrases.
     Return exactly one JSON object and no surrounding text.
     The object must have exactly these fields:
@@ -82,6 +84,72 @@ prompts:
     requirements", "legal prose is structured", "ensuring compliance", "no
     additional information", "outside the permitted scope", "required facts",
     "in full accordance", or "strictly encompasses".
+    {% endif -%}
+    {% if section_name == "evidence" -%}
+    EVIDENCE SECTION GUIDANCE:
+    You are a precise legal data synthesis specialist creating synthetic
+    evidence sections for criminal NER/anonymization test datasets. Your only
+    job is to follow the rules below with maximum fidelity.
+
+    CRITICAL OUTPUT RULE:
+    Your entire response must be exactly one valid JSON object and nothing
+    else. No text before the opening {, no text after the closing }, no
+    explanations, no markdown, no apologies. The JSON must be syntactically
+    perfect.
+
+    Perform these steps internally and do not output them:
+    1. Read SECTION_CONTEXT and SECTION_CONTRACT carefully.
+    2. Draft the content as 5-6 substantial, connected paragraphs of formal
+       legal prose, target 530-620 words. Integrate the evidence category
+       descriptions naturally. Use varied sentence length and smooth
+       transitions. Write in the voice of an experienced Crown Prosecution
+       Service lawyer preparing a confidential evidence memorandum.
+    3. Extract only facts, dates, amounts, entity names, and category
+       descriptions that you actually used.
+    4. Identify the main drafting risks you successfully avoided.
+    5. Verify: nothing was invented; no exhibit numbers, labels, emails,
+       witnesses, bank details, invoice numbers, or document labels were added;
+       VAT numbers and full addresses were not listed; the content contains
+       only connected paragraphs with no bullets or headings; and the word count
+       is within target.
+
+    EVIDENCE SECTION REQUIREMENTS:
+    The content field must describe the categories of evidence and what each
+    category tends to prove. Use the four Evidence Categories as the structural
+    backbone. Weave in case references, dates, organisations, transfer amounts,
+    and total alleged loss only where they help explain the relevance of a
+    specific evidence category. Write natural flowing paragraphs only. Never use
+    lists, bullets, numbered exhibits, or headings inside the content. Do not
+    retell the full alleged scheme or quote the counts in full. Stay strictly
+    within the facts provided in SECTION_CONTEXT. Invent nothing.
+
+    STRICT CONTENT RULES:
+    The content field must contain only continuous formal legal prose written in
+    connected paragraphs. Never include document headers, court names, file
+    numbers, "SECTION I", "EVIDENCE", or any structural labels inside the
+    content string. Never write any sentence that explains your own decisions,
+    justifies why you avoided certain things, mentions "the absence of invented
+    exhibits", or comments on the structure or presentation of the evidence.
+    The prose must read as if it was written by a human CPS lawyer for other
+    lawyers, with no meta-commentary of any kind. When mentioning
+    organisations, use only their short names. Do not mention VAT numbers, full
+    addresses, or say that such details "are included for clarity". These
+    details are not required in this section.
+
+    INTERNAL VERIFICATION STEP:
+    Before writing the final JSON, remove any text that explains the writing
+    process or compliance. Ensure the content starts directly with substantive
+    legal prose, without headers. Remove VAT numbers and full addresses. Keep
+    only sentences necessary to describe evidence categories and their
+    relevance.
+
+    JSON OUTPUT FORMAT:
+    {
+      "content": "string of formal legal prose, 530-620 words, connected paragraphs only",
+      "facts_used": ["array of exact or very close paraphrases of facts, dates, amounts, entity names, and evidence category descriptions from SECTION_CONTEXT that you actually used"],
+      "tone": "short description of the tone used",
+      "legal_risks": ["array of the main factual or drafting risks you successfully avoided in this generation"]
+    }
     {% endif -%}
 
     {% if revision_instruction and revision_instruction != "none" -%}
@@ -126,6 +194,13 @@ prompts:
     further information is included, that the facts are required, or that the
     section complies with instructions.
     {% endif -%}
+    {% if section_name == "evidence" -%}
+    For evidence, organise the final prose around Evidence Categories. Delete
+    repeated relationship inventory, repeated identity particulars, and any
+    sentence whose main purpose is to explain the prompt, contract, scope, or
+    absence of invented exhibits. The final text should read like a natural
+    evidence overview, not a memory dump.
+    {% endif -%}
     Preserve every required fact already present, add missing required facts only
     from SECTION_CONTEXT, remove repetition, and vary sentence structure.
     Ruthlessly delete any meta-commentary, contract-compliance explanations,
@@ -167,6 +242,9 @@ prompts:
     Add an edit if the draft copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
+    For evidence sections, add an edit if the draft mainly repeats relationship
+    facts or identity particulars instead of explaining evidence categories and
+    what those categories support.
     Treat out-of-scope allegations, fabricated identifiers, chronology conflicts,
     mechanical memory-dump style, and repeated entity inventories as blocking issues.
     Treat any detail outside SECTION_CONTEXT as a hallucination.

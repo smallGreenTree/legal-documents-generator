@@ -1,6 +1,5 @@
 from src.synthetic_ner.tasks.document_generation.validators import (
     clean_generated_section_text,
-    repair_section_text,
     validate_section_text,
 )
 
@@ -67,7 +66,7 @@ Alice Smith acted for ACME TRADING LTD
 """
 
     assert clean_generated_section_text(raw_text) == (
-        "### Heading Alice Smith acted for ACME TRADING LTD."
+        "### Heading\nAlice Smith acted for ACME TRADING LTD"
     )
 
 
@@ -110,16 +109,11 @@ def test_validate_section_text_respects_disabled_validator():
     assert "Section mentions unknown amount '£99,999'." not in issues
 
 
-def test_repair_section_text_removes_hidden_reasoning_and_unknown_value():
-    repaired = repair_section_text(
-        section_text="<think>draft</think>Alice Smith dealt with UNKNOWN LTD",
-        issues=[
-            "Section still contains hidden reasoning markup.",
-            "Section mentions unknown organisation 'UNKNOWN LTD'.",
-        ],
-        memory_text=MEMORY_TEXT,
+def test_clean_generated_section_text_does_not_repair_unknown_value():
+    cleaned = clean_generated_section_text(
+        "<think>draft</think>Alice Smith dealt with UNKNOWN LTD"
     )
 
-    assert "<think>" not in repaired
-    assert "UNKNOWN LTD" not in repaired
-    assert repaired == "Alice Smith dealt with."
+    assert "<think>" not in cleaned
+    assert "UNKNOWN LTD" in cleaned
+    assert cleaned == "Alice Smith dealt with UNKNOWN LTD"

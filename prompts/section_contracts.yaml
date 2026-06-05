@@ -80,16 +80,17 @@ section_contracts:
     # SECTION_CONTRACT
 
     - Section: evidence
-    - Purpose: Describe evidence categories only from recorded relationships and references.
-    - Allowed scope: Evidence categories grounded in recorded references.
-    - Required facts: Listed relationships, organisations, references, and evidence categories.
-    - Forbidden content: Invented exhibit labels, emails, searches, bank records, invoices, or witness statements.
-    - Style: Evidential prose explaining relevance without argument.
+    - Purpose: Describe the categories of evidence that support the recorded allegations.
+    - Allowed scope: Evidence categories listed in SECTION_CONTEXT and the limited facts they support.
+    - Required facts: Evidence categories, related organisations, related relationships, case references, and amount facts when listed.
+    - Forbidden content: Invented exhibit labels, emails, searches, bank account numbers, witnesses, invoice numbers, document labels, or evidence sources not listed in SECTION_CONTEXT.
+    - Style: Natural evidential overview explaining relevance without argument, repetition, or relationship dumping.
 
     ## Contract Rules
     - Treat this contract as stricter than any narrative plan.
     - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
     - If a plan conflicts with this contract, follow this contract.
+    - Do not state that evidence was not invented or that the section follows the contract.
 
   assessment: |
     # SECTION_CONTRACT

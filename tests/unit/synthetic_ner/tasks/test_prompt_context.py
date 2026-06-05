@@ -34,6 +34,11 @@ MEMORY_TEXT = "\n".join(
         "## Amounts",
         "- Total alleged loss: £559,822",
         "",
+        "## Evidence Categories",
+        "- Corporate identity records identify PAVAROTTI SERVICES LTD.",
+        "- Control relationship records support: Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD.",
+        "- Amount records support the listed monetary values: Total alleged loss: £559,822.",
+        "",
         "## Relationship Graph",
         "- Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD",
         "",
@@ -143,18 +148,19 @@ def test_facts_context_contains_relationship_counts_and_amounts():
     assert "## Organisations" not in context
 
 
-def test_evidence_context_contains_organisations_and_relationships_without_amounts():
+def test_evidence_context_contains_evidence_categories_not_raw_relationship_dump():
     context = build_section_context(MEMORY_TEXT, "evidence")
 
-    assert "## Organisations" in context
+    assert "### Allowed Organisations" in context
     assert "PAVAROTTI SERVICES LTD" in context
-    assert "IT60686699853" in context
-    assert "## Relationship Facts" in context
-    assert "Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD" in context
-    assert "FRAUD BY FALSE REPRESENTATION" not in context
-    assert "£559,822" not in context
-    assert "## Counts" not in context
-    assert "## Amounts" not in context
+    assert "## Evidence Categories" in context
+    assert "Corporate identity records identify PAVAROTTI SERVICES LTD" in context
+    assert "Control relationship records support" in context
+    assert "## Counts" in context
+    assert "FRAUD BY FALSE REPRESENTATION" in context
+    assert "£559,822" in context
+    assert "## Organisations" not in context
+    assert "## Relationship Facts" not in context
 
 
 def test_assessment_context_contains_counts_and_relationships_without_identity_blocks():

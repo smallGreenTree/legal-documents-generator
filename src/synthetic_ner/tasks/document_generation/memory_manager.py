@@ -25,6 +25,15 @@ def _format_amounts(amounts: dict) -> str:
     return "\n".join(lines) or "- none"
 
 
+def _format_explicit_evidence_categories(categories: list[str]) -> str:
+    lines = []
+    for category in categories:
+        cleaned = str(category).strip().removeprefix("- ").strip()
+        if cleaned:
+            lines.append(f"- {cleaned}")
+    return "\n".join(lines) or "- none"
+
+
 class CaseMemoryManager:
     def __init__(self, base_dir: Path, summary_chars: int) -> None:
         self.base_dir = base_dir
@@ -140,6 +149,9 @@ class CaseMemoryManager:
             for count in document.counts_list
         ) or "- none"
         amounts = _format_amounts(document.amounts)
+        evidence_categories = _format_explicit_evidence_categories(
+            document.evidence_categories
+        )
         edges = "\n".join(
             f"- {edge['label']}"
             for edge in schema.get("edges", [])
@@ -171,6 +183,9 @@ class CaseMemoryManager:
 
 ## Amounts
 {amounts}
+
+## Evidence Categories
+{evidence_categories}
 
 ## Relationship Graph
 {edges}

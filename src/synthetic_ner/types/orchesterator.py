@@ -15,14 +15,10 @@ class WorkflowState(TypedDict, total=False):
     current_section_plan: str
     current_section_text: str
     current_section_issues: list[str]
-    current_revision_instruction: str
-    revision_count: int
-    repair_attempts: int
     section_outputs: dict[str, str]
     section_plans: dict[str, str]
     section_contracts: dict[str, str]
     section_reviews: dict[str, list[str]]
-    revision_counts: dict[str, int]
     instruction_channel: dict[str, Any]
     review_channel: dict[str, Any]
     content_channel: dict[str, Any]
@@ -36,4 +32,3 @@ class SectionWorkflowResult:
     section_contract: str
     section_text: str
     issues: list[str]
-    revisions: int

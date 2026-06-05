@@ -1,0 +1,95 @@
+profile:
+  doc_type: indictment
+  fraud_type: money_laundering
+  documents: 1
+  section_words:
+    history: 350
+
+case:
+  metadata:
+    court: auto
+    case_number: auto
+    cross_ref: auto
+    filing_date: auto
+    offence_period:
+      start: auto
+      end: auto
+
+  cast:
+    defendants:
+      - nationality: DE
+        title: Dr
+        surface_forms: 2
+      - nationality: IT
+        title: Mr
+        surface_forms: 2
+
+    collateral: []
+    charged_orgs: 2
+    associated_orgs: 1
+
+  defendants: auto
+  collateral: auto
+  charged_orgs: auto
+  associated_orgs: auto
+  schema: auto
+  prose:
+    history: auto
+  counts: auto
+
+nationality_locales:
+  GB: en_GB
+  DE: de_DE
+  FR: fr_FR
+  IT: it_IT
+  NL: nl_NL
+  CZ: cs_CZ
+  PL: pl_PL
+  ES: es_ES
+  PT: pt_PT
+  BE: fr_BE
+  AT: de_AT
+  SE: sv_SE
+  DK: da_DK
+  FI: fi_FI
+  HU: hu_HU
+  RO: ro_RO
+  BG: bg_BG
+  GR: el_GR
+  HR: hr_HR
+  SK: sk_SK
+  SI: sl_SI
+
+vat_prefixes:
+  GB: GB
+  DE: DE
+  FR: FR
+  IT: IT
+  NL: NL
+  CZ: CZ
+  PL: PL
+  ES: ES
+  PT: PT
+  BE: BE
+  AT: AT
+  SE: SE
+  DK: DK
+  FI: FI
+  HU: HU
+  RO: RO
+  BG: BG
+  GR: EL
+  HR: HR
+  SK: SK
+  SI: SI
+
+fraud_statutes:
+  money_laundering:
+    - offence: "CONCEALING CRIMINAL PROPERTY"
+      statute: "section 327 of the Proceeds of Crime Act 2002"
+      particulars: >
+        {defendants} between {start_date} and {end_date} concealed, disguised,
+        converted and transferred criminal property, namely the proceeds of fraud,
+        by routing funds through {companies} and a series of nominee accounts,
+        knowing or suspecting that the property constituted or represented a
+        person's benefit from criminal conduct.

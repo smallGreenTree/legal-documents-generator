@@ -26,6 +26,7 @@ class OllamaConfig:
     recovery: OllamaRecoveryConfig
     num_ctx: int | None = None
     think: bool | None = None
+    top_p: float | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class ModelProviderConfig:
     base_url: str
     num_ctx: int | None = None
     think: bool | None = None
+    top_p: float | None = None
     max_generate_attempts: int = 1
     retry_backoff_seconds: float = 0.0
     controlled_empty_section: str = "[section not generated]"
@@ -190,6 +192,7 @@ class CaseConfig:
     charged_orgs: str | list[dict[str, Any]]
     associated_orgs: str | list[dict[str, Any]]
     schema: str | dict[str, Any]
+    evidence_categories: list[str]
     prose: dict[str, str]
     counts: str | list[CountConfig]
 

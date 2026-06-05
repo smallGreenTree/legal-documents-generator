@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -10,3 +10,4 @@ class DocumentInputs:
     metadata: dict
     amounts: dict
     counts_list: list[dict]
+    evidence_categories: list[str] = field(default_factory=list)

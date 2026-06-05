@@ -437,6 +437,7 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
         metadata=metadata,
         amounts=amounts,
         counts_list=counts_list,
+        evidence_categories=context.case_cfg.evidence_categories,
     )
 
 

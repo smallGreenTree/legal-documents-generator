@@ -19,14 +19,11 @@ from src.synthetic_ner.tasks.document_generation.facts import (
 )
 from src.synthetic_ner.tasks.document_generation.validation_contracts import validate_facts_contract
 from src.synthetic_ner.tasks.document_generation.validation_repetition import (
-    dedupe_repeated_content,
     has_repeated_long_sentences,
     has_repeated_sentence_fragments,
 )
 
-_UNKNOWN_VALUE_ISSUE_RE = re.compile(r"Section mentions unknown [^']+ '([^']+)'\.")
 _THINK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
-_CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 _META_TOKEN_RE = re.compile(
     r"(?im)\b(?:APPROVED:|RUBRICS:|ISSUES:|REVISION:|STRICT COMPLIANCE NOTES:|"
     r"REQUIRED FACTS(?:\s*&\s*ENTITIES)?:|ENTITIES MENTIONED:|LOGICAL ORDER:|FIX:)\b"
@@ -50,17 +47,6 @@ _VAT_LABEL_RE = re.compile(r"(?i)\bVAT(?:\s+Registration\s+No\.)?\s*:\s*([A-Z0-9
 _META_SUMMARY_OPENING_RE = re.compile(
     r"(?i)\bthis\s+(?:history|charges|facts|evidence|assessment)\s+section\s+is\s+"
     r"(?:drawn|prepared)\s+strictly\s+from\s+case_memory\b"
-)
-_META_SUMMARY_SENTENCE_RE = re.compile(
-    r"(?is)\b(?:"
-    r"this\s+(?:history|charges|facts|evidence|assessment)\s+section\s+is\s+"
-    r"(?:drawn|prepared)\s+strictly\s+from\s+case_memory[^.!?]*[.!?]?"
-    r"|the\s+identified\s+parties\s+include[^.!?]*[.!?]?"
-    r"|the\s+principal\s+organisations\s+relevant\s+to\s+this\s+section\s+are[^.!?]*[.!?]?"
-    r"|the\s+operative\s+references\s+are[^.!?]*[.!?]?"
-    r"|no\s+additional\s+entities,\s+references,\s+amounts,\s+or\s+procedural\s+claims\s+"
-    r"are\s+added\s+beyond\s+the\s+recorded\s+case\s+material[^.!?]*[.!?]?"
-    r")"
 )
 _META_LINE_PREFIXES = (
     "approved:",
@@ -125,7 +111,6 @@ DEFAULT_VALIDATORS = {
     "unknown_titled_people": True,
     "unknown_initials": True,
     "facts_contract": True,
-    "repair_output": True,
 }
 
 
@@ -202,32 +187,6 @@ def _required_company_fact_issues(text: str, memory_text: str) -> list[str]:
                     f"Section is missing required company {field} '{value}'."
                 )
     return issues
-
-
-def repair_section_text(
-    *,
-    section_text: str,
-    issues: list[str],
-    memory_text: str,
-) -> str:
-    text = clean_generated_section_text(section_text)
-    if not text:
-        return text
-
-    for issue in issues:
-        text = _repair_issue(text, issue)
-
-    allowed = collect_allowed_facts_from_memory(memory_text)
-    if (
-        "Section does not mention any known case entity." in issues
-        and text
-        and not _contains_any_entity(text, allowed.person_surface_forms | allowed.org_names)
-    ):
-        anchor_entity = _pick_anchor_entity(allowed.person_surface_forms | allowed.org_names)
-        if anchor_entity:
-            text = f"{text}\n\nThe facts above concern {anchor_entity}."
-
-    return _normalize_repaired_text(text)
 
 
 def _basic_section_issues(
@@ -474,79 +433,18 @@ def _normalise_validator_config(
     return validators
 
 
-def _repair_issue(text: str, issue: str) -> str:
-    repairer = _EXACT_ISSUE_REPAIRERS.get(issue)
-    if repairer is not None:
-        return repairer(text)
-
-    match = _UNKNOWN_VALUE_ISSUE_RE.match(issue)
-    if match:
-        return _remove_unknown_value(text, match.group(1))
-    return text
-
-
-def _finish_truncated_sentence(text: str) -> str:
-    if text and text[-1] not in ".!?;":
-        return text.rstrip(",;: ") + "."
-    return text
-
-
-_EXACT_ISSUE_REPAIRERS = {
-    "Section contains placeholder text.": lambda text: text.replace(
-        "[section not generated]",
-        "",
-    ).strip(),
-    "Section still contains hidden reasoning markup.": lambda text: _THINK_RE.sub(
-        "",
-        text,
-    ).strip(),
-    "Section contains unresolved placeholder markers (****).": lambda text: (
-        _PLACEHOLDER_STARS_RE.sub("", text).strip()
-    ),
-    "Section contains review/instruction metadata instead of prose.": (
-        lambda text: clean_generated_section_text(text)
-    ),
-    "Section contains template/meta summary wording instead of legal prose.": (
-        lambda text: _remove_meta_summary_sentences(text)
-    ),
-    "Section contains markdown/list formatting; output must be plain prose.": (
-        lambda text: clean_generated_section_text(text)
-    ),
-    "Section contains an incomplete date range ('between ... and ...').": (
-        lambda text: _INCOMPLETE_RANGE_RE.sub(
-            "during the charged period",
-            text,
-        ).strip()
-    ),
-    "Section contains a dangling 'between' phrase.": (
-        lambda text: _normalize_between_phrases(text)
-    ),
-    "Section contains unresolved timeline placeholders.": lambda text: (
-        _BROKEN_TIMELINE_RE.sub("occurred during the charged period", text)
-    ),
-    "Section contains a truncated VAT/reference identifier.": (
-        lambda text: _drop_partial_vat_fragments(text)
-    ),
-    "Section contains repeated long sentences/paragraphs.": dedupe_repeated_content,
-    "Section contains repeated sentence fragments.": dedupe_repeated_content,
-    "Section appears truncated or ends mid-sentence.": _finish_truncated_sentence,
-}
-
-
 def clean_generated_section_text(section_text: str) -> str:
     text = section_text.replace("\r", "").strip()
     if not text:
         return ""
 
     text = _THINK_RE.sub("", text)
-    text = _CODE_FENCE_RE.sub("", text)
-    text = _MARKDOWN_RULE_RE.sub("", text)
-    text = text.replace("**", "")
-    text = text.replace("__", "")
 
     cleaned_lines: list[str] = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
+        if line.startswith("```"):
+            continue
         if not line:
             cleaned_lines.append("")
             continue
@@ -557,45 +455,11 @@ def clean_generated_section_text(section_text: str) -> str:
         cleaned_lines.append(raw_line)
 
     cleaned = "\n".join(cleaned_lines)
-    cleaned = _PLACEHOLDER_STARS_RE.sub("", cleaned)
-    cleaned = _BROKEN_TIMELINE_RE.sub("occurred during the charged period", cleaned)
-    cleaned = _remove_meta_summary_sentences(cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    cleaned = dedupe_repeated_content(cleaned)
-    cleaned = _normalize_between_phrases(cleaned)
-    cleaned = _drop_partial_vat_fragments(cleaned)
-    if cleaned and cleaned[-1] not in ".!?;":
-        cleaned = cleaned.rstrip(",;: ") + "."
-    return _normalize_repaired_text(cleaned)
+    return _normalize_cleaned_text(cleaned)
 
 
-def _remove_unknown_value(text: str, value: str) -> str:
-    escaped = re.escape(value)
-    text = re.sub(rf"\b{escaped}\b", "", text)
-    text = text.replace(value, "")
-    return _normalize_repaired_text(text)
-
-
-def _contains_any_entity(text: str, entities: set[str]) -> bool:
-    for entity in entities:
-        normalized = entity.strip()
-        if len(normalized) < 4:
-            continue
-        if normalized in text:
-            return True
-    return False
-
-
-def _pick_anchor_entity(entities: set[str]) -> str | None:
-    candidates = sorted(
-        (entity.strip() for entity in entities if entity and len(entity.strip()) >= 4),
-        key=len,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
-
-
-def _normalize_repaired_text(text: str) -> str:
+def _normalize_cleaned_text(text: str) -> str:
     cleaned = re.sub(r"[ \t]+", " ", text)
     cleaned = re.sub(r"[ ]+([,.;:])", r"\1", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
@@ -692,19 +556,6 @@ def _has_dangling_between(text: str) -> bool:
     return False
 
 
-def _normalize_between_phrases(text: str) -> str:
-    def replace(match: re.Match[str]) -> str:
-        snippet = match.group(0)
-        if re.search(r"(?i)\bbetween\b.+\band\b", snippet):
-            return snippet
-        punctuation = ""
-        if snippet and snippet[-1] in ".,;:":
-            punctuation = snippet[-1]
-        return f"during the charged period{punctuation or ''}"
-
-    return _DANGLING_BETWEEN_RE.sub(replace, text)
-
-
 def _has_partial_vat_identifier(text: str) -> bool:
     for match in _VAT_LABEL_RE.finditer(text):
         raw_value = match.group(1).strip().upper()
@@ -713,24 +564,5 @@ def _has_partial_vat_identifier(text: str) -> bool:
     return False
 
 
-def _drop_partial_vat_fragments(text: str) -> str:
-    def replace(match: re.Match[str]) -> str:
-        raw_value = match.group(1).strip().upper()
-        if VAT_RE.fullmatch(raw_value):
-            return match.group(0)
-        return ""
-
-    cleaned = _VAT_LABEL_RE.sub(replace, text)
-    cleaned = re.sub(r"\(\s*\)", "", cleaned)
-    return cleaned
-
-
 def _contains_meta_summary_style(text: str) -> bool:
     return bool(_META_SUMMARY_OPENING_RE.search(text))
-
-
-def _remove_meta_summary_sentences(text: str) -> str:
-    cleaned = _META_SUMMARY_SENTENCE_RE.sub(" ", text)
-    cleaned = re.sub(r"\s{2,}", " ", cleaned)
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()

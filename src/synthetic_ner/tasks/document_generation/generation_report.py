@@ -18,7 +18,6 @@ def write_generation_report(
     section_contracts: dict[str, str],
     section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
-    revision_counts: dict[str, int],
     trace_store: TraceStore,
 ) -> Path:
     trace_info = trace_store.get_trace_info()
@@ -39,7 +38,6 @@ def write_generation_report(
             section_contracts=section_contracts,
             section_plans=section_plans,
             section_reviews=section_reviews,
-            revision_counts=revision_counts,
         )
     )
     if node_summary:
@@ -73,7 +71,7 @@ def _report_header(
         f"- Generator git branch: {version['git_branch']}",
         f"- Generator git dirty: {version['git_dirty']}",
         f"- Workflow mode: {context.workflow_cfg.mode}",
-        f"- Max revision rounds: {context.workflow_cfg.max_revisions}",
+        "- Revision loop: disabled; critic rubrics are report-only",
         f"- Memory file: {memory_path}",
         f"- Langfuse enabled: {str(trace_info.enabled).lower()}",
         f"- Langfuse trace id: {trace_info.trace_id or 'n/a'}",
@@ -95,7 +93,6 @@ def _format_section_results(
     section_contracts: dict[str, str],
     section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
-    revision_counts: dict[str, int],
 ) -> list[str]:
     lines = []
     for section_name in section_plans:
@@ -112,8 +109,6 @@ def _format_section_results(
                 "",
                 "Issues:",
                 *([f"- {issue}" for issue in issues] or ["- none"]),
-                "",
-                f"Revisions: {revision_counts.get(section_name, 0)}",
                 "",
             ]
         )
@@ -183,7 +178,6 @@ def _format_stage_totals(llm_summary: dict[str, Any]) -> list[str]:
 
 
 def _format_bottlenecks(llm_summary: dict[str, Any]) -> list[str]:
-    revised_sections = llm_summary["sections_with_revisions"]
     return [
         "",
         "### Bottleneck Candidates",
@@ -197,8 +191,7 @@ def _format_bottlenecks(llm_summary: dict[str, Any]) -> list[str]:
             "- Largest response: "
             f"{_format_call_summary(llm_summary['largest_response'], 'response_chars')}"
         ),
-        "- Sections with revisions: "
-        + (", ".join(revised_sections) if revised_sections else "none"),
+        "- Revision loop: disabled",
         "",
     ]
 

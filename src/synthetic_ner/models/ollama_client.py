@@ -28,6 +28,7 @@ class TracedOllamaClient:
         self.timeout = config.timeout
         self.num_ctx = config.num_ctx
         self.think = config.think
+        self.top_p = config.top_p
         self.recovery = config.recovery
         self.tracer = tracer
 
@@ -68,12 +69,15 @@ class TracedOllamaClient:
                     "num_predict": max_output_tokens,
                     "num_ctx": self.num_ctx,
                     "think": self.think,
+                    "top_p": self.top_p,
                 }
             },
         )
         started = perf_counter()
         partial_text = ""
         options: dict[str, Any] = {"temperature": temperature}
+        if self.top_p is not None:
+            options["top_p"] = self.top_p
         if self.num_ctx is not None:
             options["num_ctx"] = self.num_ctx
         if isinstance(max_output_tokens, int) and max_output_tokens > 0:
@@ -121,6 +125,7 @@ class TracedOllamaClient:
                     "revision_round": _extract_revision_round(task_id),
                     "model": self.model,
                     "temperature": temperature,
+                    "top_p": options.get("top_p") if "options" in locals() else None,
                     "output_budget": options.get("num_predict") if "options" in locals() else None,
                     "context_window": options.get("num_ctx") if "options" in locals() else None,
                     "latency_ms": latency_ms,
@@ -148,6 +153,7 @@ class TracedOllamaClient:
                     "revision_round": _extract_revision_round(task_id),
                     "model": self.model,
                     "temperature": temperature,
+                    "top_p": options.get("top_p"),
                     "output_budget": options.get("num_predict"),
                     "context_window": options.get("num_ctx"),
                     "latency_ms": latency_ms,
@@ -179,6 +185,7 @@ class TracedOllamaClient:
                     "task_id": task_id,
                     "model": self.model,
                     "temperature": temperature,
+                    "top_p": options.get("top_p"),
                     "latency_ms": latency_ms,
                     "prompt_chars": len(full_prompt),
                     "response_chars": 0,
@@ -301,6 +308,7 @@ class TracedOllamaClient:
             "revision_round": _extract_revision_round(task_id),
             "model": model,
             "temperature": temperature,
+            "top_p": options.get("top_p"),
             "output_budget": options.get("num_predict"),
             "context_window": options.get("num_ctx"),
             "latency_ms": latency_ms,

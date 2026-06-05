@@ -30,10 +30,15 @@ def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, 
     disabled = _run_graph(tmp_path / "disabled", monkeypatch, unknown_amounts=False)
 
     writer_call = next(call for call in enabled.calls if call["stage"] == "writer")
+    writer_calls = [call for call in enabled.calls if call["stage"] == "writer"]
+    critic_calls = [call for call in enabled.calls if call["stage"] == "critic"]
     assert "SECTION_CONTEXT:" in writer_call["user_prompt"]
     assert "SECTION_CONTRACT:" in writer_call["user_prompt"]
     assert "Allowed Amounts" in writer_call["user_prompt"]
     assert "{% if" not in writer_call["user_prompt"]
+    assert len(writer_calls) == 1
+    assert len(critic_calls) == 1
+    assert not any("_r1" in call["task_id"] for call in enabled.calls)
 
     assert UNKNOWN_AMOUNT_ISSUE in enabled.report_text
     assert UNKNOWN_AMOUNT_ISSUE not in disabled.report_text
@@ -82,7 +87,7 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
     validators = {**app_config.workflow.validators, "unknown_amounts": unknown_amounts}
     workflow_cfg = replace(
         app_config.workflow,
-        max_revisions=0,
+        max_revisions=2,
         validators=validators,
     )
     langfuse_cfg = replace(app_config.langfuse, enabled=False)
