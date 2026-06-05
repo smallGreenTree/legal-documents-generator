@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_financial_fraud_004",
+  "fraud_type": "financial_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Isidor Kitzmann",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Dino Maderna",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Marcel De Sousa",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Friedhelm Lachmann",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Gustav Holsten",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "BOHNBACH HENTSCHEL LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "LEONARDI GROUP LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "BERNINI ANTONELLI SOLUTIONS LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Isidor Kitzmann controlled BOHNBACH HENTSCHEL LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Dino Maderna controlled LEONARDI GROUP LTD"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Marcel De Sousa controlled BERNINI ANTONELLI SOLUTIONS LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Isidor Kitzmann instructed Friedhelm Lachmann"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Isidor Kitzmann instructed Gustav Holsten"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Isidor Kitzmann conspired with Dino Maderna"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Dino Maderna conspired with Marcel De Sousa"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "BERNINI ANTONELLI SOLUTIONS LTD received funds from BOHNBACH HENTSCHEL LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "BERNINI ANTONELLI SOLUTIONS LTD received funds from LEONARDI GROUP LTD"
+    }
+  ]
+}

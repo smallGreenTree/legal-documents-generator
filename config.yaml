@@ -8,11 +8,11 @@ model_routing:
     planner:
       provider: ollama
       base_url: http://localhost:11434
-      model:  MichelRosselli/apertus:70b-instruct-2509-q4_k_m
-      num_ctx: 16348
+      model:  qwen3.6:27b
+      num_ctx: 8192
       think: false
       top_p: 0.9
-      timeout: 1800
+      timeout: 900
       recovery:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
@@ -20,11 +20,11 @@ model_routing:
     writer:
       provider: ollama
       base_url: http://localhost:11434
-      model: MichelRosselli/apertus:70b-instruct-2509-q4_k_m
-      num_ctx: 16348
+      model: qwen3.6:27b
+      num_ctx: 8192
       think: false
       top_p: 0.9
-      timeout: 1800
+      timeout: 900
       recovery:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
@@ -32,11 +32,11 @@ model_routing:
     critic:
       provider: ollama
       base_url: http://localhost:11434
-      model: MichelRosselli/apertus:70b-instruct-2509-q4_k_m
+      model: qwen3.6:27b
       num_ctx: 8192
       think: false
       top_p: 0.9
-      timeout: 1800
+      timeout: 900
       recovery:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
