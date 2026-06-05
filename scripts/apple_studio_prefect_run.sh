@@ -63,21 +63,21 @@ poetry run python scripts/smoke_prompt_contract.py \
 
 echo
 echo "== 3/4 Run one smoke document =="
-smoke_watch_args=()
 if [[ "$WATCH_SMOKE" == "true" ]]; then
-  smoke_watch_args=(--watch --watch-interval "$SMOKE_WATCH_INTERVAL" --watch-timeout "$SMOKE_WATCH_TIMEOUT")
+  poetry run prefect deployment run "synthetic-ner-generation/$PREFECT_DEPLOYMENT" \
+    --flow-run-name "$SMOKE_RUN_NAME" \
+    --params "{\"case_config\":\"$CASE_CONFIG\",\"template\":\"$TEMPLATE\",\"documents\":$SMOKE_DOCUMENTS,\"review_scenario\":false,\"review_entities\":false}" \
+    --watch \
+    --watch-interval "$SMOKE_WATCH_INTERVAL" \
+    --watch-timeout "$SMOKE_WATCH_TIMEOUT"
+else
+  poetry run prefect deployment run "synthetic-ner-generation/$PREFECT_DEPLOYMENT" \
+    --flow-run-name "$SMOKE_RUN_NAME" \
+    --params "{\"case_config\":\"$CASE_CONFIG\",\"template\":\"$TEMPLATE\",\"documents\":$SMOKE_DOCUMENTS,\"review_scenario\":false,\"review_entities\":false}"
 fi
-poetry run prefect deployment run "synthetic-ner-generation/$PREFECT_DEPLOYMENT" \
-  --flow-run-name "$SMOKE_RUN_NAME" \
-  --params "{\"case_config\":\"$CASE_CONFIG\",\"template\":\"$TEMPLATE\",\"documents\":$SMOKE_DOCUMENTS,\"review_scenario\":false,\"review_entities\":false}" \
-  "${smoke_watch_args[@]}"
 
 echo
 echo "== 4/4 Schedule ${DOCUMENTS} scenario run(s) =="
-schedule_args=()
-if [[ -n "$START_IN" ]]; then
-  schedule_args=(--start-in "$START_IN")
-fi
 if (( DOCUMENTS > ${#SCENARIO_RUNS[@]} )); then
   echo "Requested DOCUMENTS=$DOCUMENTS but only ${#SCENARIO_RUNS[@]} scenario runs are configured." >&2
   exit 1
@@ -91,10 +91,16 @@ for ((index = 0; index < DOCUMENTS; index++)); do
     "$scenario_case" "$scenario_template" "$scenario_doc_type" "$scenario_fraud_type")
 
   echo "queue ${run_number}/${DOCUMENTS}: ${scenario_name}"
-  poetry run prefect deployment run "synthetic-ner-generation/$PREFECT_DEPLOYMENT" \
-    --flow-run-name "${RUN_NAME}-${run_number}-${scenario_name}" \
-    --params "$params" \
-    "${schedule_args[@]}"
+  if [[ -n "$START_IN" ]]; then
+    poetry run prefect deployment run "synthetic-ner-generation/$PREFECT_DEPLOYMENT" \
+      --flow-run-name "${RUN_NAME}-${run_number}-${scenario_name}" \
+      --params "$params" \
+      --start-in "$START_IN"
+  else
+    poetry run prefect deployment run "synthetic-ner-generation/$PREFECT_DEPLOYMENT" \
+      --flow-run-name "${RUN_NAME}-${run_number}-${scenario_name}" \
+      --params "$params"
+  fi
 done
 
 echo
