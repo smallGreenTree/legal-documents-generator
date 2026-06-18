@@ -104,6 +104,22 @@ def build_groundtruth_rows(
     return rows
 
 
+def filter_groundtruth_rows_for_rendered_text(
+    rows: list[tuple[str, str, str, str, str]],
+    rendered_text: str,
+) -> list[tuple[str, str, str, str, str]]:
+    searchable_text = _normalize_groundtruth_surface(rendered_text)
+    return [
+        row
+        for row in rows
+        if _normalize_groundtruth_surface(row[1]) in searchable_text
+    ]
+
+
+def _normalize_groundtruth_surface(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip()).casefold()
+
+
 def _append_person_rows(
     rows: list[tuple[str, str, str, str, str]],
     doc_id: str,
@@ -610,7 +626,7 @@ def save_document_artifacts(
     txt_path = doc_dir / f"{doc_id}.txt"
     txt_path.write_text(rendered_text, encoding="utf-8")
 
-    gt_rows = build_groundtruth_rows(
+    candidate_gt_rows = build_groundtruth_rows(
         doc_id,
         document.defendants,
         document.collateral,
@@ -620,6 +636,7 @@ def save_document_artifacts(
         document.counts_list,
         document.amounts,
     )
+    gt_rows = filter_groundtruth_rows_for_rendered_text(candidate_gt_rows, rendered_text)
     gt_path = doc_dir / "groundtruth.tsv"
     write_groundtruth(gt_path, gt_rows)
 
@@ -627,4 +644,7 @@ def save_document_artifacts(
     actual_pages = round(actual_words / context.generation_cfg.words_per_page, 1)
     print(f"  Schema : {schema_path}")
     print(f"  Saved  : {txt_path}  ({actual_words}w ≈ {actual_pages} pages)")
+    removed_gt_rows = len(candidate_gt_rows) - len(gt_rows)
     print(f"  GT rows: {len(gt_rows)}  →  {gt_path}")
+    if removed_gt_rows:
+        print(f"  GT trim: removed {removed_gt_rows} row(s) absent from rendered text")
