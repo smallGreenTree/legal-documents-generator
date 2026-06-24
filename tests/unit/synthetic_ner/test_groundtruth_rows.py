@@ -1,4 +1,7 @@
-from src.synthetic_ner.engine import build_groundtruth_rows
+from src.synthetic_ner.engine import (
+    build_groundtruth_rows,
+    filter_groundtruth_rows_for_rendered_text,
+)
 
 
 def test_groundtruth_rows_are_structured_in_required_order():
@@ -92,6 +95,28 @@ def test_groundtruth_rows_are_structured_in_required_order():
 
 def _texts_for_label(rows, label):
     return [row[1] for row in rows if row[2] == label]
+
+
+def test_groundtruth_rows_are_filtered_to_rendered_text_surfaces():
+    rows = [
+        ("doc-1", "Olivia Price", "PERSON", "yes", "person"),
+        ("doc-1", "1 January 1980", "DATE", "yes", "dob"),
+        ("doc-1", "PRICE GROUP LTD", "ORG", "yes", "company"),
+        ("doc-1", "Serious Fraud Office", "NEGATIVE_CONTROL", "no", "prosecution"),
+        ("doc-1", "Crown Court at Manchester", "NEGATIVE_CONTROL", "no", "court"),
+    ]
+    rendered_text = (
+        "OLIVIA PRICE appeared in proceedings involving PRICE GROUP LTD. "
+        "The case was brought by Serious Fraud Office."
+    )
+
+    filtered = filter_groundtruth_rows_for_rendered_text(rows, rendered_text)
+
+    assert filtered == [
+        ("doc-1", "Olivia Price", "PERSON", "yes", "person"),
+        ("doc-1", "PRICE GROUP LTD", "ORG", "yes", "company"),
+        ("doc-1", "Serious Fraud Office", "NEGATIVE_CONTROL", "no", "prosecution"),
+    ]
 
 
 def _required_label_order(label):

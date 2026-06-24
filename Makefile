@@ -9,6 +9,7 @@ PREFECT_API_URL ?= http://localhost:4200/api
 PREFECT_POOL ?= synthetic-ner-local
 PREFECT_DEPLOYMENT ?= document-generation
 PREFECT_QUALITY_DEPLOYMENT ?= document-quality
+PREFECT_EVALUATION_DEPLOYMENT ?= document-evaluation
 
 .PHONY: help install setup
 .PHONY: langfuse-up langfuse-down langfuse-ps
@@ -26,7 +27,7 @@ help:
 	@echo "  make mi             Show radon maintainability index for src and tests"
 	@echo "  make langfuse-up    Start local Langfuse Docker stack"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
-	@echo "  make prefect-up     Start Prefect, deploy generation and quality flows, and run worker in background"
+	@echo "  make prefect-up     Start Prefect, deploy generation, quality, evaluation, and worker"
 	@echo "  make prefect-status Show Prefect server and worker status"
 	@echo "  make prefect-down   Stop Prefect worker and Docker server"
 	@echo "  make ollama-pull    Pull OLLAMA_MODEL=$(OLLAMA_MODEL)"
@@ -87,6 +88,12 @@ _prefect-deploy:
 		--name $(PREFECT_QUALITY_DEPLOYMENT) \
 		--pool $(PREFECT_POOL) \
 		--params '{"case_config":"$(CASE_CONFIG)","quality_config":"config_quality.yaml","review_document_selection":true}'
+	PREFECT_HOME=$(PREFECT_HOME) PREFECT_API_URL=$(PREFECT_API_URL) \
+		poetry run prefect --no-prompt deploy \
+		prefect_pipeline.py:evaluate_existing_document \
+		--name $(PREFECT_EVALUATION_DEPLOYMENT) \
+		--pool $(PREFECT_POOL) \
+		--params '{"case_config":"$(CASE_CONFIG)","calibration_mode":"apply_safe","review_document_selection":true}'
 
 _prefect-worker-bg:
 	mkdir -p $(PREFECT_HOME)/logs $(PREFECT_HOME)/run
