@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 
+from src.synthetic_ner.prefect_flows.evaluation import evaluate_existing_document
 from src.synthetic_ner.prefect_flows.generation import generate_dataset
 from src.synthetic_ner.prefect_flows.quality import score_existing_document
 from src.synthetic_ner.tasks.document_quality.quality_report import DEFAULT_QUALITY_CONFIG_PATH
 
-__all__ = ["generate_dataset", "score_existing_document"]
+__all__ = ["evaluate_existing_document", "generate_dataset", "score_existing_document"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run the quality scoring flow and pause for document selection.",
     )
     parser.add_argument(
+        "--evaluate-ner",
+        action="store_true",
+        help="Run the NER evaluation flow for an existing generated document.",
+    )
+    parser.add_argument(
         "--no-document-selection-pause",
         action="store_true",
         help="Score the supplied --score-doc-id directly without the Prefect selection pause.",
@@ -37,6 +43,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--quality-config",
         default=DEFAULT_QUALITY_CONFIG_PATH,
         help="Quality scoring config path relative to project root.",
+    )
+    parser.add_argument(
+        "--predictions-path",
+        default=None,
+        help="NER predictions JSONL path. Defaults to output/<doc_id>/repo_ner_predictions.jsonl.",
+    )
+    parser.add_argument(
+        "--memory-path",
+        default=None,
+        help="Memory markdown path. Defaults to memory/case_<doc_id>/CASE_MEMORY.md.",
+    )
+    parser.add_argument(
+        "--calibration-mode",
+        choices=["off", "diagnose", "apply_safe", "apply_with_memory"],
+        default="apply_safe",
+        help="Groundtruth calibration mode for NER evaluation.",
     )
     parser.add_argument(
         "--case-config",
@@ -74,6 +96,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.evaluate_ner:
+        evaluate_existing_document(
+            doc_id=args.score_doc_id or None,
+            predictions_path=args.predictions_path,
+            memory_path=args.memory_path,
+            calibration_mode=args.calibration_mode,
+            case_config=args.case_config,
+            doc_type=args.doc_type,
+            fraud_type=args.fraud_type,
+            project_root=args.project_root,
+            review_document_selection=not args.no_document_selection_pause,
+            review_timeout_seconds=args.review_timeout_seconds,
+        )
+        return
     if args.score_doc_id is not None or args.score_document_quality:
         score_existing_document(
             doc_id=args.score_doc_id or None,
