@@ -52,7 +52,7 @@ def test_groundtruth_rows_are_structured_in_required_order():
             }
         ],
         metadata={
-            "court": "Crown Court at Manchester",
+            "court": "Test Synthetic Court",
             "case_number": "CPS/2026/1234",
             "cross_ref": "C/2026/5678",
             "filing_date": "3 March 2026",
@@ -103,7 +103,7 @@ def test_groundtruth_rows_are_filtered_to_rendered_text_surfaces():
         ("doc-1", "1 January 1980", "DATE", "yes", "dob"),
         ("doc-1", "PRICE GROUP LTD", "ORG", "yes", "company"),
         ("doc-1", "Serious Fraud Office", "NEGATIVE_CONTROL", "no", "prosecution"),
-        ("doc-1", "Crown Court at Manchester", "NEGATIVE_CONTROL", "no", "court"),
+        ("doc-1", "Test Synthetic Court", "NEGATIVE_CONTROL", "no", "court"),
     ]
     rendered_text = (
         "OLIVIA PRICE appeared in proceedings involving PRICE GROUP LTD. "

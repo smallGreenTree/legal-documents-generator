@@ -19,6 +19,7 @@ from src.synthetic_ner.types.app_config import (
     ModelProviderConfig,
     ModelRoutingConfig,
     OffencePeriodConfig,
+    OrganisationSpecConfig,
     PathsConfig,
     PersonSpecConfig,
     PersonVariantEligibilityConfig,
@@ -92,6 +93,8 @@ def build_app_config(
     case_cfg: dict[str, Any],
     config_path: Path | None = None,
 ) -> AppConfig:
+    profile_cfg = _require_mapping(case_cfg["profile"], "profile")
+    scenario_cfg = _require_mapping(case_cfg.get("scenario", {}), "scenario")
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
         model_routing=_build_model_routing_config(
@@ -108,7 +111,10 @@ def build_app_config(
             _require_mapping(cfg["workflow"], "workflow"),
             config_path=config_path,
         ),
-        profile=_build_profile_config(_require_mapping(case_cfg["profile"], "profile")),
+        profile=_build_profile_config(
+            profile_cfg,
+            scenario_id=_optional_scenario_id(scenario_cfg),
+        ),
         case=_build_case_config(_require_mapping(case_cfg["case"], "case")),
         nationality_locales=_build_string_mapping(
             _require_mapping(case_cfg["nationality_locales"], "nationality_locales"),
@@ -118,10 +124,7 @@ def build_app_config(
             _require_mapping(case_cfg["vat_prefixes"], "vat_prefixes"),
             "vat_prefixes",
         ),
-        fraud_statutes=_build_statute_mapping(
-            _require_mapping(case_cfg["fraud_statutes"], "fraud_statutes"),
-            "fraud_statutes",
-        ),
+        fraud_statutes=_build_case_statute_mapping(case_cfg),
     )
 
 
@@ -537,17 +540,32 @@ def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
     )
 
 
-def _build_profile_config(raw: dict[str, Any]) -> ProfileConfig:
+def _build_profile_config(raw: dict[str, Any], *, scenario_id: str = "") -> ProfileConfig:
     section_words = _build_required_int_mapping(
         raw["section_words"],
         "profile.section_words",
     )
+    profile_fraud_type = str(raw.get("fraud_type") or "").strip()
+    if scenario_id and profile_fraud_type and scenario_id != profile_fraud_type:
+        raise ValueError(
+            "profile.fraud_type duplicates scenario.id and the values differ; "
+            "remove profile.fraud_type or make it match scenario.id"
+        )
+    fraud_type = scenario_id or profile_fraud_type
+    if not fraud_type:
+        raise ValueError("scenario.id is required when profile.fraud_type is omitted")
     return ProfileConfig(
         doc_type=_require_string(raw["doc_type"], "profile.doc_type"),
-        fraud_type=_require_string(raw["fraud_type"], "profile.fraud_type"),
+        fraud_type=fraud_type,
         documents=_require_positive_int(raw["documents"], "profile.documents"),
         section_words=section_words,
     )
+
+
+def _optional_scenario_id(raw: dict[str, Any]) -> str:
+    if "id" not in raw:
+        return ""
+    return _require_string(raw["id"], "scenario.id")
 
 
 def _build_case_config(raw: dict[str, Any]) -> CaseConfig:
@@ -556,7 +574,7 @@ def _build_case_config(raw: dict[str, Any]) -> CaseConfig:
 
     return CaseConfig(
         metadata=CaseMetadataConfig(
-            court=_require_string(metadata["court"], "case.metadata.court", allow_auto=True),
+            court=_require_string(metadata["court"], "case.metadata.court"),
             case_number=_require_string(
                 metadata["case_number"],
                 "case.metadata.case_number",
@@ -608,29 +626,40 @@ def _build_case_config(raw: dict[str, Any]) -> CaseConfig:
                 cast["associated_orgs"],
                 "case.cast.associated_orgs",
             ),
+            organisation_specs=_build_organisation_specs(
+                cast.get("organisation_specs", []),
+                "case.cast.organisation_specs",
+            ),
             address_surface_forms=_require_positive_int(
                 cast.get("address_surface_forms", 3),
                 "case.cast.address_surface_forms",
             ),
         ),
-        defendants=_build_auto_or_list(raw["defendants"], "case.defendants"),
-        collateral=_build_auto_or_list(raw["collateral"], "case.collateral"),
-        charged_orgs=_build_auto_or_list(raw["charged_orgs"], "case.charged_orgs"),
+        defendants=_build_auto_or_list(raw.get("defendants", "auto"), "case.defendants"),
+        collateral=_build_auto_or_list(raw.get("collateral", "auto"), "case.collateral"),
+        charged_orgs=_build_auto_or_list(
+            raw.get("charged_orgs", "auto"),
+            "case.charged_orgs",
+        ),
         associated_orgs=_build_auto_or_list(
-            raw["associated_orgs"],
+            raw.get("associated_orgs", "auto"),
             "case.associated_orgs",
         ),
-        schema=_build_auto_or_mapping(raw["schema"], "case.schema"),
+        schema=_build_auto_or_mapping(raw.get("schema", "auto"), "case.schema"),
         evidence_categories=_build_optional_string_list(
             raw.get("evidence_categories", []),
             "case.evidence_categories",
         ),
         prose=_build_string_mapping(
-            _require_mapping(raw["prose"], "case.prose"),
+            _require_mapping(raw.get("prose", {}), "case.prose"),
             "case.prose",
             allow_auto=True,
         ),
-        counts=_build_auto_or_statute_list(raw["counts"], "case.counts"),
+        counts=_build_auto_or_statute_list(raw.get("counts", "auto"), "case.counts"),
+        scenario_brief=_build_optional_mapping(
+            raw.get("scenario_brief", {}),
+            "case.scenario_brief",
+        ),
     )
 
 
@@ -657,6 +686,30 @@ def _build_person_specs(raw: list[Any], path: str) -> list[PersonSpecConfig]:
                 variants=_build_person_variant_eligibility(
                     mapping.get("variants"),
                     f"{item_path}.variants",
+                ),
+                role=_require_string(
+                    mapping.get("role", ""),
+                    f"{item_path}.role",
+                    allow_empty=True,
+                ),
+            )
+        )
+    return specs
+
+
+def _build_organisation_specs(raw: Any, path: str) -> list[OrganisationSpecConfig]:
+    specs = []
+    for index, item in enumerate(_require_list(raw, path)):
+        item_path = f"{path}[{index}]"
+        mapping = _require_mapping(item, item_path)
+        specs.append(
+            OrganisationSpecConfig(
+                group=_require_string(mapping.get("group", "charged"), f"{item_path}.group"),
+                country=_require_string(mapping["country"], f"{item_path}.country"),
+                role=_require_string(
+                    mapping.get("role", ""),
+                    f"{item_path}.role",
+                    allow_empty=True,
                 ),
             )
         )
@@ -690,6 +743,25 @@ def _build_statute_mapping(
             f"{path}.{fraud_type}",
         )
     return statutes
+
+
+def _build_case_statute_mapping(case_cfg: dict[str, Any]) -> dict[str, list[CountConfig]]:
+    if "fraud_statutes" in case_cfg:
+        return _build_statute_mapping(
+            _require_mapping(case_cfg["fraud_statutes"], "fraud_statutes"),
+            "fraud_statutes",
+        )
+
+    scenario = _require_mapping(case_cfg.get("scenario", {}), "scenario")
+    if "counts" not in scenario:
+        return {}
+    scenario_id = _require_string(scenario.get("id"), "scenario.id")
+    return {
+        scenario_id: _build_statute_list(
+            _require_list(scenario.get("counts"), "scenario.counts"),
+            "scenario.counts",
+        )
+    }
 
 
 def _build_auto_or_statute_list(value: Any, path: str) -> str | list[CountConfig]:
@@ -758,6 +830,12 @@ def _build_auto_or_list(value: Any, path: str) -> str | list[dict[str, Any]]:
 def _build_auto_or_mapping(value: Any, path: str) -> str | dict[str, Any]:
     if value == "auto":
         return "auto"
+    return _require_mapping(value, path)
+
+
+def _build_optional_mapping(value: Any, path: str) -> dict[str, Any]:
+    if value is None:
+        return {}
     return _require_mapping(value, path)
 
 

@@ -67,17 +67,6 @@ SECTION_DESCRIPTIONS = {
 
 PROSECUTION = "Serious Fraud Office"
 
-COURTS = [
-    "Crown Court at Manchester",
-    "Crown Court at Birmingham",
-    "Crown Court at Leeds",
-    "Crown Court at Southwark",
-    "Crown Court at Bristol",
-    "Crown Court at Newcastle",
-    "Crown Court at Liverpool",
-    "Crown Court at Sheffield",
-]
-
 PERSON_ROLES = [
     "company director",
     "managing director",

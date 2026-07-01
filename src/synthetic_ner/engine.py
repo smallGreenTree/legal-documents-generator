@@ -13,6 +13,7 @@ from src.synthetic_ner.case import (
     resolve_case_metadata,
     resolve_counts,
     resolve_prose_overrides,
+    resolve_scenario_brief,
 )
 from src.synthetic_ner.config import load_app_config
 from src.synthetic_ner.constants import (
@@ -455,6 +456,15 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
             charged_orgs,
             amounts,
             metadata["offence_period"],
+            metadata=metadata,
+        )
+        scenario_brief = resolve_scenario_brief(
+            context.case_cfg,
+            metadata,
+            defendants,
+            charged_orgs,
+            amounts,
+            metadata["offence_period"],
         )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
@@ -468,6 +478,7 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
         amounts=amounts,
         counts_list=counts_list,
         evidence_categories=context.case_cfg.evidence_categories,
+        scenario_brief=scenario_brief,
     )
 
 

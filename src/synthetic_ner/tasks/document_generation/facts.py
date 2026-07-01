@@ -17,7 +17,9 @@ AMOUNT_RE = re.compile(
     re.IGNORECASE,
 )
 VAT_RE = re.compile(r"\b[A-Z]{2}(?=[A-Z0-9]{8,14}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b")
-CASE_REF_RE = re.compile(r"\b(?:CPS/\d{4}/\d{4}|C/\d{4}/\d{1,4}|T\d{9,10})\b")
+CASE_REF_RE = re.compile(
+    r"\b(?:CPS/\d{4}/\d{4}|C/\d{4}/\d{1,4}|T\d{9,10}|\d{7}/\d{3})\b"
+)
 INITIALS_RE = re.compile(r"\b(?:[A-Z]\.){2,4}\b")
 TITLE_NAME_RE = re.compile(r"\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Sir|Lord)\.? [A-Z][A-Za-z'-]+\b")
 
@@ -46,6 +48,7 @@ def build_allowed_facts_section(document, schema: dict) -> str:
     offence_period = metadata.get("offence_period")
     case_refs = [
         f"- Case number: {metadata['case_number']}",
+        f"- Legal reference: {metadata.get('legal_reference', 'none')}",
         f"- Cross reference: {metadata['cross_ref']}",
         f"- Filing date: {metadata['filing_date']}",
     ]
@@ -69,7 +72,10 @@ def build_allowed_facts_section(document, schema: dict) -> str:
         )
 
     organisation_lines = [
-        f"- {org['name']} | VAT: {org['vat']} | address: {org['address']}"
+        (
+            f"- {org['name']} | role: {org.get('role') or 'organisation'} | "
+            f"VAT: {org['vat']} | address: {org['address']}"
+        )
         for org in (document.charged_orgs + document.associated_orgs)
     ]
     edge_lines = [f"- {edge['label']}" for edge in schema.get("edges", [])]
@@ -156,6 +162,7 @@ def collect_allowed_facts(document) -> AllowedFacts:
 
     case_refs = {
         normalize_phrase(metadata["case_number"]),
+        normalize_phrase(metadata.get("legal_reference", "")),
         normalize_phrase(metadata["cross_ref"]),
     }
     dates = {

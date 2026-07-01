@@ -8,7 +8,7 @@ model_routing:
     planner:
       provider: ollama
       base_url: http://localhost:11434
-      model:  mistral-small3.2
+      model:  qwen3.6:27b
       num_ctx: 8192
       think: false
       top_p: 0.9
@@ -16,11 +16,11 @@ model_routing:
       recovery:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
-        controlled_empty_section: "[section not generated]"
+        controlled_empty_section: "[section not generated- ERROR dude]]"
     writer:
       provider: ollama
       base_url: http://localhost:11434
-      model: mistral-small3.2
+      model: qwen3.6:27b
       num_ctx: 8192
       think: false
       top_p: 0.9
@@ -28,11 +28,11 @@ model_routing:
       recovery:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
-        controlled_empty_section: "[section not generated]"
+        controlled_empty_section: "[section not generated - ERROR dude]"
     critic:
       provider: ollama
       base_url: http://localhost:11434
-      model: mistral-small3.2
+      model: qwen3.6:27b
       num_ctx: 8192
       think: false
       top_p: 0.9
@@ -40,7 +40,7 @@ model_routing:
       recovery:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
-        controlled_empty_section: "[section not generated]"
+        controlled_empty_section: "[section not generated- ERROR dude]"
 
 langfuse:
   enabled: true
@@ -64,11 +64,7 @@ workflow:
   max_revisions: 2
   memory_summary_chars: 900
   prefect_dialogue:
-    generated_case_config: config_case/generated/case.yaml
-    default_scenario: procurement_fraud
-    scenario_options:
-      procurement_fraud: Procurement fraud and corruption
-      eu_subsidy_fraud: Non-procurement expenditure fraud (subsidy fraud)
+    generated_case_config_pattern: config_case/generated/{doc_id}.yaml
 
   validators:
     # Necessary deterministic safety checks.
@@ -112,7 +108,7 @@ workflow:
     active: true
     chunk_words: 900
     context_tail_chars: 900
-    temperature: 0.5
+    temperature: 1
     max_output_tokens: 2500
     min_output_tokens: 1200
     output_token_multiplier: 1.8

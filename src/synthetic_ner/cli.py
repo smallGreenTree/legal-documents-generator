@@ -38,7 +38,7 @@ def build_parser(project_root: Path) -> argparse.ArgumentParser:
     parser.add_argument(
         "--fraud-type",
         metavar="TYPE",
-        help="Override profile.fraud_type",
+        help="Override scenario.id",
     )
     parser.add_argument(
         "--from-schema",

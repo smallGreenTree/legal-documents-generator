@@ -7,7 +7,7 @@ profile:
 
 case:
   metadata:
-    court: auto
+    court: Test Synthetic Court
     case_number: auto
     cross_ref: auto
     filing_date: auto
@@ -28,20 +28,11 @@ case:
     charged_orgs: 2
     associated_orgs: 1
 
-  defendants: auto
-  collateral: auto
-  charged_orgs: auto
-  associated_orgs: auto
-  schema: auto
   evidence_categories:
     - Invoice and purchase-order records concern material orders said to have been placed between the charged organisations.
     - Delivery and warehouse records concern the absence of the materials said to have been purchased.
     - Civil claim and refund records concern the non-delivery claim and the return of funds through the charged organisations.
     - Payment records concern funds moved between the charged organisations and associated organisation during the charged period.
-  prose:
-    evidence: auto
-  counts: auto
-
 nationality_locales:
   GB: en_GB
   DE: de_DE

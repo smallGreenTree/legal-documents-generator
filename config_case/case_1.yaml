@@ -1,6 +1,5 @@
 profile:
   doc_type: indictment
-  fraud_type: procurement_fraud
   documents: 1
   section_words:
     persons: 450
@@ -11,9 +10,14 @@ profile:
     evidence: 650
     assessment: 650
 
+scenario:
+  id: procurement_fraud
+  family: Procurement fraud and corruption
+  label: Czechish transport ministry sound surveillance procurement
+
 case:
   metadata:
-    court: auto
+    court: Czechish District Court
     case_number: auto
     cross_ref: auto
     filing_date: auto
@@ -23,41 +27,71 @@ case:
 
   cast:
     defendants:
-      - nationality: DE
+      - nationality: CZ
         title: Dr
-        surface_forms: 2
-      - nationality: IT
-        title: Mr
-        surface_forms: 2
-      - nationality: FR
-        title: Ms
-        surface_forms: 1
+        surface_forms: 3
+        role: Executive Director
 
     collateral:
+      - nationality: CZ
+        title: ""
+        surface_forms: 1
+        role: Tender committee chair
+      - nationality: GR
+        title: ""
+        surface_forms: 1
+        role: Tender committee member
       - nationality: DE
         title: ""
         surface_forms: 1
-      - nationality: DE
+        role: Managing authority official
+      - nationality: BG
         title: ""
         surface_forms: 1
+        role: Company director
 
-    charged_orgs: 2
-    associated_orgs: 1
+    charged_orgs: 1
+    associated_orgs: 0
+    organisation_specs:
+      - group: charged
+        country: CZ
+        role: Sole tenderer / contractor
 
-  defendants: auto
-  collateral: auto
-  charged_orgs: auto
-  associated_orgs: auto
-  schema: auto
-  prose:
-    persons: auto
-    companies: auto
-    history: auto
-    charges: auto
-    facts: auto
-    evidence: auto
-    assessment: auto
-  counts: auto
+  scenario_brief:
+    title: "case {legal_reference} - procurement fraud and corruption"
+    offence: "procurement fraud and corruption"
+    legal_basis:
+      - "Article 2(2)(b) and Article 4(3) PIF Directive"
+      - "Article 90(9)(1) of the Czechish Public Procurement Act"
+      - "Article 282(2) of the Czechish Criminal Code"
+    particulars: >
+      The present case deals with alleged misconduct in office by
+      {first_defendant}, the {first_defendant_role} of the Czechish Transport
+      Ministry. The alleged misconduct happened in a public procurement
+      procedure for the construction, implementation and maintenance of a sound
+      surveillance system in 80 branches of the transport ministry, partly
+      funded by the European Social Fund. The conduct, if proved, would
+      constitute misconduct in office under Article 282(2) of the Czechish
+      Criminal Code. {first_defendant} launched the public tender. Only one
+      tender was submitted to the platform, by {first_company}, acting as the
+      {first_company_role}, and that tender was evaluated by a committee
+      appointed by {first_defendant}. The ranking was announced and the contract
+      was signed with the sole participating company.
+    procurement_irregularity: >
+      The managing authority imposed a financial correction of 10% of the
+      contract value, represented in this synthetic case as {total_loss}, based
+      on the alleged lack of sufficient description of the severity of the
+      award criteria. The tender weighting gave 10 points to the price for
+      construction and implementation of the sound surveillance system and 90
+      points to the monthly maintenance subscription fee. The managing
+      authority treated that weighting as a breach of Article 90(9)(1) of the
+      Czechish Public Procurement Act.
+    fixed_facts:
+      - "The procurement concerned a sound surveillance system."
+      - "The system covered 80 branches of the Czechish Transport Ministry."
+      - "The project was partly funded by the European Social Fund."
+      - "Only one tender was submitted to the platform."
+      - "The financial correction was 10% of the contract value."
 
 nationality_locales:
   GB: en_GB
@@ -112,36 +146,3 @@ vat_prefixes:
   UA: UA
   CN: CN
   EG: EG
-
-fraud_statutes:
-  procurement_fraud:
-    - offence: "FRAUD BY FALSE REPRESENTATION"
-      statute: "section 1 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly made false
-        representations to a public contracting authority, namely by presenting
-        fabricated delivery records and manipulated approval documents through
-        {companies}, intending thereby to obtain public funds to which they were
-        not entitled.
-    - offence: "FRAUDULENT TRADING"
-      statute: "section 9 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} were knowingly party to
-        the carrying on of the business of {companies} with intent to defraud
-        creditors and for other fraudulent purposes.
-
-  eu_subsidy_fraud:
-    - offence: "FRAUD BY FALSE REPRESENTATION"
-      statute: "section 1 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly made false
-        representations to a public authority administering European Union
-        recovery funds, namely by submitting false reimbursement claims and
-        fabricated supporting documents through {companies}, intending thereby
-        to obtain subsidy payments to which they were not entitled.
-    - offence: "FALSE ACCOUNTING"
-      statute: "section 17 of the Theft Act 1968"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly falsified
-        accounts and records belonging to {companies} with a view to gain for
-        themselves and with intent to cause loss to another.

@@ -7,6 +7,10 @@ prompts:
     Cover the facts required by SECTION_CONTRACT. Treat allowed references as
     boundaries, not as a checklist to repeat. Use only the context facts needed
     for this section's purpose.
+    If SECTION_CONTEXT contains an Investigator Scenario Brief, treat it as the
+    binding case theory. Use generated people, organisations, dates, amounts
+    and references to instantiate that scenario; do not replace it with a
+    generic fraud narrative.
     Use varied natural sentence contexts without repeating long phrases.
     Return exactly one JSON object and no surrounding text.
     The object must have exactly these fields:
@@ -125,6 +129,7 @@ prompts:
     You polish one generated section for NER/anonymization test data.
     Use only the JSON packet, SECTION_CONTEXT and SECTION_CONTRACT.
     Preserve required fact coverage and the required length band.
+    Preserve alignment with the Investigator Scenario Brief when it is present.
     Do not add facts or identifiers that are not listed in SECTION_CONTEXT.
     Return final polished prose only. Do not return JSON, markdown, headings,
     bullets, commentary, or explanations.
@@ -197,6 +202,8 @@ prompts:
     Add an edit if the draft copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
+    Add a blocking edit if the draft contradicts, ignores, or materially weakens
+    the Investigator Scenario Brief where that brief is relevant to the section.
     For evidence sections, add an edit if the draft mainly repeats relationship
     facts or identity particulars instead of explaining evidence categories and
     what those categories support.

@@ -24,6 +24,8 @@ from src.synthetic_ner.prefect_flows.utils import (
     _person_setup_review_input_model,
     _person_specs_from_review_response,
     _required_prefilled_input_model,
+    _scenario_review_field_types,
+    _used_doc_counters,
 )
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.utils import load_config
@@ -31,7 +33,7 @@ from src.synthetic_ner.utils import load_config
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_prefect_stage_one_limits_scenarios_to_configured_options():
+def test_prefect_stage_one_reads_scenarios_from_case_config():
     scenario = _build_scenario(
         project_root=PROJECT_ROOT,
         case_config="config_case/case_1.yaml",
@@ -45,7 +47,9 @@ def test_prefect_stage_one_limits_scenarios_to_configured_options():
     assert scenario["fraud_type"] == "procurement_fraud"
     assert scenario["scenario_options"] == {
         "procurement_fraud": "Procurement fraud and corruption",
-        "eu_subsidy_fraud": "Non-procurement expenditure fraud (subsidy fraud)",
+    }
+    assert scenario["specific_scenario_options"] == {
+        "procurement_fraud": "Czechish transport ministry sound surveillance procurement",
     }
 
 
@@ -53,8 +57,10 @@ def test_case_setup_builds_generated_case_config():
     source = {
         "profile": {
             "doc_type": "indictment",
-            "fraud_type": "procurement_fraud",
             "documents": 1,
+        },
+        "scenario": {
+            "id": "procurement_fraud",
         },
         "case": {"cast": {"address_surface_forms": 3}},
     }
@@ -76,26 +82,29 @@ def test_case_setup_builds_generated_case_config():
         """
     )
     case_setup = {
+        "court": "District Court of Example",
         "person_specs": person_specs,
         "charged_orgs": 2,
         "associated_orgs": 1,
         "organisation_specs": [
-            {"group": "charged", "country": "DE"},
-            {"group": "charged", "country": "IT"},
-            {"group": "associated", "country": "FR"},
+            {"group": "charged", "role": "Contractor", "country": "DE"},
+            {"group": "charged", "role": "Awarded contractor", "country": "IT"},
+            {"group": "associated", "role": "Associated organisation", "country": "FR"},
         ],
     }
 
     generated = _apply_case_setup_to_config(source, scenario, case_setup)
 
-    assert generated["profile"]["fraud_type"] == "eu_subsidy_fraud"
+    assert "fraud_type" not in generated["profile"]
+    assert generated["scenario"]["id"] == "eu_subsidy_fraud"
     assert generated["profile"]["documents"] == 3
+    assert generated["case"]["metadata"]["court"] == "District Court of Example"
     assert generated["case"]["cast"]["charged_orgs"] == 2
     assert generated["case"]["cast"]["associated_orgs"] == 1
     assert generated["case"]["cast"]["organisation_specs"] == [
-        {"group": "charged", "country": "DE"},
-        {"group": "charged", "country": "IT"},
-        {"group": "associated", "country": "FR"},
+        {"group": "charged", "role": "Contractor", "country": "DE"},
+        {"group": "charged", "role": "Awarded contractor", "country": "IT"},
+        {"group": "associated", "role": "Associated organisation", "country": "FR"},
     ]
     assert "address_surface_forms" not in generated["case"]["cast"]
     assert generated["case"]["cast"]["defendants"] == [
@@ -106,7 +115,26 @@ def test_case_setup_builds_generated_case_config():
     ]
 
 
-def test_prefect_stage_one_collects_counts_before_person_rows():
+def test_generated_case_yaml_reserves_document_id(tmp_path):
+    generated_dir = tmp_path / "config_case" / "generated"
+    generated_dir.mkdir(parents=True)
+    generated_dir.joinpath("en_indictment_procurement_fraud_001.yaml").write_text(
+        "profile: {}\n",
+        encoding="utf-8",
+    )
+    context = SimpleNamespace(
+        project_root=tmp_path,
+        output_dir=tmp_path / "output",
+        schema_dir=tmp_path / "schemas",
+        memory_dir=tmp_path / "memory",
+        doc_type="indictment",
+        fraud_type="procurement_fraud",
+    )
+
+    assert _used_doc_counters(context) == {1}
+
+
+def test_prefect_stage_one_selects_family_and_specific_scenario_before_rows():
     scenario = _build_scenario(
         project_root=PROJECT_ROOT,
         case_config="config_case/case_1.yaml",
@@ -119,10 +147,20 @@ def test_prefect_stage_one_collects_counts_before_person_rows():
 
     initial = _case_setup_initial_data(scenario)
 
-    assert initial["scenario"] == "Procurement fraud and corruption"
-    assert initial["person_entities"] == 5
-    assert initial["charged_orgs"] == 2
-    assert initial["associated_orgs"] == 1
+    assert initial["scenario_family"] == "Procurement fraud and corruption"
+    assert (
+        initial["select_scenario"]
+        == "Czechish transport ministry sound surveillance procurement"
+    )
+    assert "Faker placeholders appear in {braces}" in initial[
+        "scenario_template_preview"
+    ]
+    assert "{first_defendant}" in initial["scenario_template_preview"]
+    assert "{first_company}" in initial["scenario_template_preview"]
+    assert initial["court"] == "Czechish District Court"
+    assert "person_entities" not in initial
+    assert "charged_orgs" not in initial
+    assert "associated_orgs" not in initial
     assert "person_1_group" not in initial
     assert "address_surface_forms" not in initial
 
@@ -140,6 +178,7 @@ def test_prefect_stage_one_schema_marks_setup_fields_required():
     input_model = _required_prefilled_input_model(
         ScenarioReviewInput,
         description="test",
+        field_types=_scenario_review_field_types(scenario),
         **_case_setup_initial_data(scenario),
         documents=scenario["documents"],
         doc_type=scenario["doc_type"] or "",
@@ -157,6 +196,19 @@ def test_prefect_stage_one_schema_marks_setup_fields_required():
     assert "from_schema" not in schema["properties"]
     assert "address_surface_forms" not in schema["properties"]
     assert "generated_case_config" not in schema["properties"]
+    assert "person_entities" not in schema["properties"]
+    assert "charged_orgs" not in schema["properties"]
+    assert "associated_orgs" not in schema["properties"]
+    assert "const" not in schema["properties"]["scenario_family"]
+    assert "const" not in schema["properties"]["select_scenario"]
+    assert schema["$defs"]["ScenarioFamilyChoice"]["enum"] == [
+        "Procurement fraud and corruption",
+    ]
+    assert schema["$defs"]["SpecificScenarioChoice"]["enum"] == [
+        "Czechish transport ministry sound surveillance procurement",
+    ]
+    assert "scenario_template_preview" in schema["properties"]
+    assert "court" in schema["properties"]
     assert schema["properties"]["doc_type"]["enum"] == ["indictment", "court_decision"]
     assert "person_1_group" not in schema["properties"]
 
@@ -177,6 +229,8 @@ def test_prefect_stage_one_b_person_setup_has_exact_selected_rows():
     schema = input_model.model_json_schema()
 
     assert "person_1_group" in schema["properties"]
+    assert "person_1_role" in schema["properties"]
+    assert "person_1_custom_role" in schema["properties"]
     assert "person_3_surface_forms" in schema["properties"]
     assert "person_4_group" not in schema["properties"]
     assert schema["properties"]["person_1_group"]["enum"] == [
@@ -194,6 +248,18 @@ def test_prefect_stage_one_b_person_setup_has_exact_selected_rows():
         "UA",
         "CN",
         "EG",
+    ]
+    assert schema["properties"]["person_1_role"]["enum"] == [
+        "Executive Director",
+        "Public official",
+        "Procurement officer",
+        "Tender committee chair",
+        "Tender committee member",
+        "Company director",
+        "Managing director",
+        "Beneficial owner",
+        "Accountant",
+        "Custom role",
     ]
     assert set(schema["required"]) == set(schema["properties"])
     assert all(field.is_required() for field in input_model.model_fields.values())
@@ -219,11 +285,24 @@ def test_prefect_stage_one_c_organisation_setup_has_exact_selected_rows():
     schema = input_model.model_json_schema()
 
     assert "organisation_1_group" in schema["properties"]
+    assert "organisation_1_role" in schema["properties"]
+    assert "organisation_1_custom_role" in schema["properties"]
     assert "organisation_3_country" in schema["properties"]
     assert "organisation_4_group" not in schema["properties"]
     assert schema["properties"]["organisation_1_group"]["enum"] == [
         "charged",
         "associated",
+    ]
+    assert schema["properties"]["organisation_1_role"]["enum"] == [
+        "Sole tenderer / contractor",
+        "Contractor",
+        "Awarded contractor",
+        "Contracting authority",
+        "Managing authority",
+        "Beneficiary company",
+        "Intermediary company",
+        "Associated organisation",
+        "Custom role",
     ]
     assert schema["properties"]["organisation_1_country"]["enum"][:4] == [
         "GB",
@@ -291,7 +370,7 @@ def test_entity_review_payload_round_trips_amounts():
         charged_orgs=[{"name": "ACME LTD"}],
         associated_orgs=[],
         metadata={
-            "court": "Crown Court at Cardiff",
+            "court": "Test Synthetic Court",
             "case_number": "T202612345",
             "cross_ref": "C/2026/1234",
             "filing_date": "1 June 2026",
@@ -318,7 +397,7 @@ def test_entity_review_payload_round_trips_amounts():
 
     assert payload["scenario"] == {
         "id": "procurement_fraud",
-        "label": "Procurement fraud and corruption",
+        "label": "procurement fraud",
         "doc_type": "indictment",
     }
     assert payload["amounts"] == {"total_loss": "£125,000"}
@@ -334,7 +413,7 @@ def test_entity_review_screen_includes_scenario_summary():
 
     summary = _entity_review_scenario_summary(context)
 
-    assert "Procurement fraud and corruption" in summary
+    assert "procurement fraud" in summary
     assert "procurement_fraud" in summary
     assert "Document type: indictment" in summary
 
@@ -362,7 +441,7 @@ def test_entity_review_description_includes_surface_forms_and_review_prompt():
 
     description = _entity_review_description(context, payload)
 
-    assert "Procurement fraud and corruption" in description
+    assert "procurement fraud" in description
     assert "Generated names:\nDefendants: Roswitha Fechner" in description
     assert "Person surface forms:\nDefendants: Roswitha Fechner:" in description
     assert "Roswitha Fechner, R.F., Mr Fechner" in description
@@ -371,22 +450,23 @@ def test_entity_review_description_includes_surface_forms_and_review_prompt():
 
 def test_case_setup_reads_prefect_person_rows():
     setup_response = ScenarioReviewInput(
-        scenario="Non-procurement expenditure fraud (subsidy fraud)",
+        scenario_family="Procurement fraud and corruption",
+        select_scenario="Czechish transport ministry sound surveillance procurement",
+        court="District Court of Example",
         doc_type="indictment",
-        person_entities=2,
-        charged_orgs=1,
-        associated_orgs=0,
     )
     person_model = _person_setup_review_input_model(
         [
             {
                 "group": "defendant",
+                "role": "Executive Director",
                 "nationality": "DE",
                 "title": "Dr",
                 "surface_forms": 2,
             },
             {
                 "group": "collateral",
+                "role": "Custom Ministry Role",
                 "nationality": "FR",
                 "title": "",
                 "surface_forms": 1,
@@ -395,21 +475,27 @@ def test_case_setup_reads_prefect_person_rows():
     )
     person_response = person_model(
         person_1_group="defendant",
+        person_1_role="Executive Director",
+        person_1_custom_role="",
         person_1_nationality="DE",
         person_1_title="Dr",
         person_1_surface_forms=2,
         person_2_group="collateral",
+        person_2_role="Custom role",
+        person_2_custom_role="Custom Ministry Role",
         person_2_nationality="FR",
         person_2_title="No title",
         person_2_surface_forms=1,
     )
-    scenario = {"fraud_type": "eu_subsidy_fraud"}
+    scenario = {"fraud_type": "procurement_fraud"}
     person_specs = _person_specs_from_review_response(person_response, 2)
     organisation_model = _organisation_setup_review_input_model(
-        [{"group": "charged", "country": "DE"}]
+        [{"group": "charged", "role": "Contractor", "country": "DE"}]
     )
     organisation_response = organisation_model(
         organisation_1_group="charged",
+        organisation_1_role="Custom role",
+        organisation_1_custom_role="Sole tenderer and awarded contractor",
         organisation_1_country="DE",
     )
     organisation_specs = _organisation_specs_from_review_response(
@@ -427,20 +513,29 @@ def test_case_setup_reads_prefect_person_rows():
     assert case_setup["person_specs"] == [
         {
             "group": "defendant",
+            "role": "Executive Director",
             "nationality": "DE",
             "title": "Dr",
             "surface_forms": 2,
         },
         {
             "group": "collateral",
+            "role": "Custom Ministry Role",
             "nationality": "FR",
             "title": "",
             "surface_forms": 1,
         },
     ]
+    assert case_setup["court"] == "District Court of Example"
     assert case_setup["charged_orgs"] == 1
     assert case_setup["associated_orgs"] == 0
-    assert case_setup["organisation_specs"] == [{"group": "charged", "country": "DE"}]
+    assert case_setup["organisation_specs"] == [
+        {
+            "group": "charged",
+            "role": "Sole tenderer and awarded contractor",
+            "country": "DE",
+        }
+    ]
 
 
 def test_address_surface_forms_limit_groundtruth_address_rows():
@@ -463,7 +558,7 @@ def test_address_surface_forms_limit_groundtruth_address_rows():
         charged_orgs=[],
         associated_orgs=[],
         metadata={
-            "court": "Crown Court at Manchester",
+            "court": "Test Synthetic Court",
             "case_number": "CPS/2026/1234",
             "cross_ref": "C/2026/5678",
             "filing_date": "3 March 2026",

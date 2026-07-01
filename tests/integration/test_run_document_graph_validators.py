@@ -156,7 +156,7 @@ def _document_inputs() -> DocumentInputs:
         charged_orgs=[org],
         associated_orgs=[],
         metadata={
-            "court": "Crown Court at Birmingham",
+            "court": "Test Synthetic Court",
             "case_number": "T202601050",
             "cross_ref": "C/2025/3254",
             "filing_date": "20 September 2025",

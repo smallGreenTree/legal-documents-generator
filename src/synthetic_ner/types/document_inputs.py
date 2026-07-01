@@ -11,3 +11,4 @@ class DocumentInputs:
     amounts: dict
     counts_list: list[dict]
     evidence_categories: list[str] = field(default_factory=list)
+    scenario_brief: dict = field(default_factory=dict)

@@ -34,6 +34,28 @@ def _format_explicit_evidence_categories(categories: list[str]) -> str:
     return "\n".join(lines) or "- none"
 
 
+def _format_scenario_brief(scenario_brief: dict) -> str:
+    if not scenario_brief:
+        return "- none"
+    return "\n".join(_format_scenario_item(key, value) for key, value in scenario_brief.items())
+
+
+def _format_scenario_item(key: str, value) -> str:
+    label = str(key).replace("_", " ").title()
+    if isinstance(value, list):
+        lines = [f"- {label}:"]
+        lines.extend(f"  - {item}" for item in value)
+        return "\n".join(lines)
+    if isinstance(value, dict):
+        lines = [f"- {label}:"]
+        lines.extend(
+            f"  - {str(item_key).replace('_', ' ').title()}: {item_value}"
+            for item_key, item_value in value.items()
+        )
+        return "\n".join(lines)
+    return f"- {label}: {value}"
+
+
 class CaseMemoryManager:
     def __init__(self, base_dir: Path, summary_chars: int) -> None:
         self.base_dir = base_dir
@@ -138,7 +160,10 @@ class CaseMemoryManager:
             for person in document.collateral
         ) or "- none"
         orgs = "\n".join(
-            f"- {org['name']} | VAT: {org['vat']} | address: {org['address']}"
+            (
+                f"- {org['name']} | role: {org.get('role') or 'organisation'} | "
+                f"VAT: {org['vat']} | address: {org['address']}"
+            )
             for org in (document.charged_orgs + document.associated_orgs)
         ) or "- none"
         counts = "\n".join(
@@ -148,6 +173,7 @@ class CaseMemoryManager:
             )
             for count in document.counts_list
         ) or "- none"
+        scenario_brief = _format_scenario_brief(document.scenario_brief)
         amounts = _format_amounts(document.amounts)
         evidence_categories = _format_explicit_evidence_categories(
             document.evidence_categories
@@ -164,10 +190,14 @@ class CaseMemoryManager:
 - Doc ID: {doc_id}
 - Document type: {doc_type}
 - Fraud type: {fraud_type}
+- Legal reference: {metadata.get('legal_reference', 'none')}
 - Court: {metadata['court']}
 - Case number: {metadata['case_number']}
 - Cross reference: {metadata['cross_ref']}
 - Filing date: {metadata['filing_date']}
+
+## Investigator Scenario Brief
+{scenario_brief}
 
 ## Defendants
 {defendants}
