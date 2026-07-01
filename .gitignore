@@ -6,6 +6,7 @@ __pycache__/
 .prefect/
 .env
 .env.langfuse
+config_case/generated/
 output/
 memory/*
 !memory/.gitkeep

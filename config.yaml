@@ -63,6 +63,12 @@ workflow:
   mode: langgraph
   max_revisions: 2
   memory_summary_chars: 900
+  prefect_dialogue:
+    generated_case_config: config_case/generated/case.yaml
+    default_scenario: procurement_fraud
+    scenario_options:
+      procurement_fraud: Procurement fraud and corruption
+      eu_subsidy_fraud: Non-procurement expenditure fraud (subsidy fraud)
 
   validators:
     # Necessary deterministic safety checks.

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from prefect import flow, get_run_logger
+
 from src.synthetic_ner.prefect_flows.utils import (
     _current_flow_run_id,
     audit_created_files,
     build_case_schema,
+    construct_case_yaml_from_setup,
     ingest_configs,
     resolve_entities,
     resolve_flow_project_root,
@@ -47,6 +49,10 @@ def generate_dataset(
             project_root=resolved_project_root,
             scenario=scenario,
             timeout_seconds=review_timeout_seconds,
+        )
+        scenario = construct_case_yaml_from_setup(
+            project_root=resolved_project_root,
+            scenario=scenario,
         )
     context = ingest_configs(
         project_root=resolved_project_root,

@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from langfuse import Langfuse
+
 from src.synthetic_ner.tasks.document_generation.trace_metrics import (
     build_langgraph_node_metadata,
     build_prompt_metadata,
@@ -303,7 +304,11 @@ class TraceStore:
         self,
         fallback_prompts: WorkflowPromptsConfig,
     ) -> ResolvedWorkflowPrompts:
-        prompt_templates = asdict(fallback_prompts)
+        prompt_templates = {
+            key: value
+            for key, value in asdict(fallback_prompts).items()
+            if isinstance(value, str) and value.strip()
+        }
         resolved_templates: dict[str, str] = dict(prompt_templates)
         prompt_clients: dict[str, Any] = {}
         managed_count = 0

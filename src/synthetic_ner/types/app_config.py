@@ -113,16 +113,16 @@ class CriticConfig:
 
 @dataclass(frozen=True)
 class WorkflowPromptsConfig:
-    document_planner_system: str
-    document_planner_user: str
-    section_planner_system: str
-    section_planner_user: str
     writer_system: str
     writer_user: str
     polisher_system: str
     polisher_user: str
     critic_system: str
     critic_user: str
+    document_planner_system: str = ""
+    document_planner_user: str = ""
+    section_planner_system: str = ""
+    section_planner_user: str = ""
 
 
 @dataclass(frozen=True)
@@ -174,6 +174,7 @@ class CaseCastConfig:
     collateral: list[PersonSpecConfig]
     charged_orgs: int
     associated_orgs: int
+    address_surface_forms: int = 3
 
 
 @dataclass(frozen=True)

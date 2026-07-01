@@ -279,6 +279,12 @@ def _build_workflow_config(
     config_path: Path | None = None,
 ) -> WorkflowConfig:
     prompts = _resolve_workflow_prompts(raw, config_path=config_path)
+    planner_cfg = _build_planner_config(
+        _require_mapping(raw["planner"], "workflow.planner")
+    )
+    critic_cfg = _build_critic_config(
+        _require_mapping(raw["critic"], "workflow.critic")
+    )
     writer = _require_mapping(raw["writer"], "workflow.writer")
     writer_max_output_tokens = _require_positive_int(
         writer["max_output_tokens"],
@@ -305,9 +311,7 @@ def _build_workflow_config(
             "workflow.memory_summary_chars",
         ),
         validators=_build_validator_config(raw.get("validators", {})),
-        planner=_build_planner_config(
-            _require_mapping(raw["planner"], "workflow.planner")
-        ),
+        planner=planner_cfg,
         writer=WriterConfig(
             active=_require_bool(
                 writer.get("active", True),
@@ -336,51 +340,94 @@ def _build_workflow_config(
                 "workflow.writer.min_completion_ratio",
             ),
         ),
-        critic=_build_critic_config(
-            _require_mapping(raw["critic"], "workflow.critic")
+        critic=critic_cfg,
+        prompts=_build_workflow_prompts_config(
+            prompts,
+            planner_active=planner_cfg.active,
         ),
-        prompts=WorkflowPromptsConfig(
-            document_planner_system=_require_string(
-                prompts["document_planner_system"],
-                "workflow.prompts.document_planner_system",
-            ),
-            document_planner_user=_require_string(
-                prompts["document_planner_user"],
-                "workflow.prompts.document_planner_user",
-            ),
-            section_planner_system=_require_string(
-                prompts["section_planner_system"],
-                "workflow.prompts.section_planner_system",
-            ),
-            section_planner_user=_require_string(
-                prompts["section_planner_user"],
-                "workflow.prompts.section_planner_user",
-            ),
-            writer_system=_require_string(
-                prompts["writer_system"],
-                "workflow.prompts.writer_system",
-            ),
-            writer_user=_require_string(
-                prompts["writer_user"],
-                "workflow.prompts.writer_user",
-            ),
-            polisher_system=_require_string(
-                prompts["polisher_system"],
-                "workflow.prompts.polisher_system",
-            ),
-            polisher_user=_require_string(
-                prompts["polisher_user"],
-                "workflow.prompts.polisher_user",
-            ),
-            critic_system=_require_string(
-                prompts["critic_system"],
-                "workflow.prompts.critic_system",
-            ),
-            critic_user=_require_string(
-                prompts["critic_user"],
-                "workflow.prompts.critic_user",
-            ),
+    )
+
+
+def _build_workflow_prompts_config(
+    prompts: dict[str, Any],
+    *,
+    planner_active: bool,
+) -> WorkflowPromptsConfig:
+    planner_path = "workflow.prompts"
+    if planner_active:
+        document_planner_system = _require_prompt(
+            prompts,
+            "document_planner_system",
+            planner_path,
+        )
+        document_planner_user = _require_prompt(
+            prompts,
+            "document_planner_user",
+            planner_path,
+        )
+        section_planner_system = _require_prompt(
+            prompts,
+            "section_planner_system",
+            planner_path,
+        )
+        section_planner_user = _require_prompt(
+            prompts,
+            "section_planner_user",
+            planner_path,
+        )
+    else:
+        document_planner_system = _optional_prompt_string(
+            prompts.get("document_planner_system"),
+            f"{planner_path}.document_planner_system",
+        )
+        document_planner_user = _optional_prompt_string(
+            prompts.get("document_planner_user"),
+            f"{planner_path}.document_planner_user",
+        )
+        section_planner_system = _optional_prompt_string(
+            prompts.get("section_planner_system"),
+            f"{planner_path}.section_planner_system",
+        )
+        section_planner_user = _optional_prompt_string(
+            prompts.get("section_planner_user"),
+            f"{planner_path}.section_planner_user",
+        )
+
+    return WorkflowPromptsConfig(
+        writer_system=_require_prompt(
+            prompts,
+            "writer_system",
+            planner_path,
         ),
+        writer_user=_require_prompt(
+            prompts,
+            "writer_user",
+            planner_path,
+        ),
+        polisher_system=_require_prompt(
+            prompts,
+            "polisher_system",
+            planner_path,
+        ),
+        polisher_user=_require_prompt(
+            prompts,
+            "polisher_user",
+            planner_path,
+        ),
+        critic_system=_require_prompt(
+            prompts,
+            "critic_system",
+            planner_path,
+        ),
+        critic_user=_require_prompt(
+            prompts,
+            "critic_user",
+            planner_path,
+        ),
+        document_planner_system=document_planner_system,
+        document_planner_user=document_planner_user,
+        section_planner_system=section_planner_system,
+        section_planner_user=section_planner_user,
     )
 
 
@@ -560,6 +607,10 @@ def _build_case_config(raw: dict[str, Any]) -> CaseConfig:
             associated_orgs=_require_non_negative_int(
                 cast["associated_orgs"],
                 "case.cast.associated_orgs",
+            ),
+            address_surface_forms=_require_positive_int(
+                cast.get("address_surface_forms", 3),
+                "case.cast.address_surface_forms",
             ),
         ),
         defendants=_build_auto_or_list(raw["defendants"], "case.defendants"),
@@ -742,6 +793,18 @@ def _require_string(
     if allow_empty or value.strip():
         return value
     raise ValueError(f"{path} must be a non-empty string")
+
+
+def _require_prompt(prompts: dict[str, Any], key: str, path: str) -> str:
+    if key not in prompts:
+        raise ValueError(f"{path}.{key} is required")
+    return _require_string(prompts[key], f"{path}.{key}")
+
+
+def _optional_prompt_string(value: Any, path: str) -> str:
+    if value is None:
+        return ""
+    return _require_string(value, path, allow_empty=True)
 
 
 def _require_positive_int(value: Any, path: str) -> int:

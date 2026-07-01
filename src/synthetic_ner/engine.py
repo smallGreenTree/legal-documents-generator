@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
+
 from src.synthetic_ner.case import (
     build_amounts,
     resolve_case_entities,
@@ -85,6 +86,7 @@ def build_groundtruth_rows(
     metadata: dict,
     counts_list: list[dict],
     amounts: dict | None = None,
+    address_surface_forms: int = 3,
 ) -> list[tuple[str, str, str, str, str]]:
     rows: list[tuple[str, str, str, str, str]] = []
     all_people = defendants + collateral
@@ -97,7 +99,7 @@ def build_groundtruth_rows(
     _append_amount_rows(rows, doc_id, counts_list, amounts or {})
     _append_initial_rows(rows, doc_id, all_people)
     _append_title_rows(rows, doc_id, all_people)
-    _append_all_address_rows(rows, doc_id, defendants, all_orgs)
+    _append_all_address_rows(rows, doc_id, defendants, all_orgs, address_surface_forms)
     _append_vat_rows(rows, doc_id, all_orgs)
     _append_row(rows, doc_id, PROSECUTION, "NEGATIVE_CONTROL", "no", "prosecution")
     _append_row(rows, doc_id, metadata["court"], "NEGATIVE_CONTROL", "no", "court")
@@ -239,11 +241,12 @@ def _append_all_address_rows(
     doc_id: str,
     defendants: list[dict],
     orgs: list[dict],
+    address_surface_forms: int,
 ) -> None:
     for person in defendants:
-        _append_address_rows(rows, doc_id, person, "defendant")
+        _append_address_rows(rows, doc_id, person, "defendant", address_surface_forms)
     for org in orgs:
-        _append_address_rows(rows, doc_id, org, "organisation")
+        _append_address_rows(rows, doc_id, org, "organisation", address_surface_forms)
 
 
 def _append_vat_rows(
@@ -292,25 +295,36 @@ def _append_address_rows(
     doc_id: str,
     record: dict,
     owner_type: str,
+    address_surface_forms: int,
 ) -> None:
     owner = record["name"]
-    _append_row(rows, doc_id, record.get("address"), "ADDRESS", "yes", f"{owner} full address")
-    _append_row(
-        rows,
-        doc_id,
-        record.get("street"),
-        "ADDRESS",
-        "yes",
-        f"{owner_type} building/street identifier for {owner}",
-    )
-    _append_row(
-        rows,
-        doc_id,
-        record.get("city_postcode"),
-        "ADDRESS",
-        "yes",
-        f"{owner_type} city/postcode for {owner}",
-    )
+    if address_surface_forms >= 1:
+        _append_row(
+            rows,
+            doc_id,
+            record.get("address"),
+            "ADDRESS",
+            "yes",
+            f"{owner} full address",
+        )
+    if address_surface_forms >= 2:
+        _append_row(
+            rows,
+            doc_id,
+            record.get("street"),
+            "ADDRESS",
+            "yes",
+            f"{owner_type} building/street identifier for {owner}",
+        )
+    if address_surface_forms >= 3:
+        _append_row(
+            rows,
+            doc_id,
+            record.get("city_postcode"),
+            "ADDRESS",
+            "yes",
+            f"{owner_type} city/postcode for {owner}",
+        )
 
 
 def build_template_environment(template_path: Path) -> Environment:
@@ -635,6 +649,7 @@ def save_document_artifacts(
         document.metadata,
         document.counts_list,
         document.amounts,
+        context.case_cfg.cast.address_surface_forms,
     )
     gt_rows = filter_groundtruth_rows_for_rendered_text(candidate_gt_rows, rendered_text)
     gt_path = doc_dir / "groundtruth.tsv"
