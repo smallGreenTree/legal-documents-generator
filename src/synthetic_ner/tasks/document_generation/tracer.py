@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from langfuse import Langfuse
+
 from src.synthetic_ner.tasks.document_generation.trace_metrics import (
     build_langgraph_node_metadata,
     build_prompt_metadata,
@@ -100,6 +101,7 @@ class TraceStore:
             trace_id=trace_id,
             trace_url=trace_url,
         )
+        self._flush()
         return self._current_session
 
     def end_document_run(self, *, output_payload: dict[str, Any] | None = None) -> None:
@@ -109,8 +111,7 @@ class TraceStore:
         if self._document_context is not None:
             self._document_context.__exit__(None, None, None)
 
-        if self.enabled and self.client is not None:
-            self.client.flush()
+        self._flush()
 
         self._document_context = None
         self._document_observation = None
@@ -242,6 +243,7 @@ class TraceStore:
             prompt=None,
             model_parameters=(metadata or {}).get("model_parameters"),
         )
+        self._flush()
         return TraceHandle(observation=observation, metadata=trace_metadata)
 
     def record_llm_call(
@@ -269,6 +271,7 @@ class TraceStore:
         if rubrics:
             self._record_rubric_scores(handle, rubrics)
         handle.observation.end()
+        self._flush()
 
     def record_error(
         self,
@@ -295,6 +298,7 @@ class TraceStore:
             status_message=error_message,
         )
         handle.observation.end()
+        self._flush()
 
     def get_trace_info(self) -> DocumentTraceSession:
         return self._current_session
@@ -303,7 +307,11 @@ class TraceStore:
         self,
         fallback_prompts: WorkflowPromptsConfig,
     ) -> ResolvedWorkflowPrompts:
-        prompt_templates = asdict(fallback_prompts)
+        prompt_templates = {
+            key: value
+            for key, value in asdict(fallback_prompts).items()
+            if isinstance(value, str) and value.strip()
+        }
         resolved_templates: dict[str, str] = dict(prompt_templates)
         prompt_clients: dict[str, Any] = {}
         managed_count = 0
@@ -540,6 +548,10 @@ class TraceStore:
         if self._document_trace_context is not None:
             return self._document_trace_context
         return {"trace_id": self.client.create_trace_id(seed=doc_id)}
+
+    def _flush(self) -> None:
+        if self.enabled and self.client is not None:
+            self.client.flush()
 
 
 def _flatten_rubrics(rubrics: dict[str, int]) -> dict[str, int | float]:

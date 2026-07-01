@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -113,16 +113,16 @@ class CriticConfig:
 
 @dataclass(frozen=True)
 class WorkflowPromptsConfig:
-    document_planner_system: str
-    document_planner_user: str
-    section_planner_system: str
-    section_planner_user: str
     writer_system: str
     writer_user: str
     polisher_system: str
     polisher_user: str
     critic_system: str
     critic_user: str
+    document_planner_system: str = ""
+    document_planner_user: str = ""
+    section_planner_system: str = ""
+    section_planner_user: str = ""
 
 
 @dataclass(frozen=True)
@@ -166,6 +166,14 @@ class PersonSpecConfig:
     title: str
     surface_forms: int
     variants: PersonVariantEligibilityConfig
+    role: str = ""
+
+
+@dataclass(frozen=True)
+class OrganisationSpecConfig:
+    group: str
+    country: str
+    role: str = ""
 
 
 @dataclass(frozen=True)
@@ -174,6 +182,8 @@ class CaseCastConfig:
     collateral: list[PersonSpecConfig]
     charged_orgs: int
     associated_orgs: int
+    organisation_specs: list[OrganisationSpecConfig] = field(default_factory=list)
+    address_surface_forms: int = 3
 
 
 @dataclass(frozen=True)
@@ -195,6 +205,7 @@ class CaseConfig:
     evidence_categories: list[str]
     prose: dict[str, str]
     counts: str | list[CountConfig]
+    scenario_brief: dict[str, Any]
 
 
 @dataclass(frozen=True)

@@ -7,7 +7,7 @@ profile:
 
 case:
   metadata:
-    court: auto
+    court: Test Synthetic Court
     case_number: auto
     cross_ref: auto
     filing_date: auto
@@ -37,15 +37,6 @@ case:
 
     charged_orgs: 2
     associated_orgs: 1
-
-  defendants: auto
-  collateral: auto
-  charged_orgs: auto
-  associated_orgs: auto
-  schema: auto
-  prose:
-    persons: auto
-  counts: auto
 
 nationality_locales:
   GB: en_GB

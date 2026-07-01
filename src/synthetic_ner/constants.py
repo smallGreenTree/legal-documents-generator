@@ -67,17 +67,6 @@ SECTION_DESCRIPTIONS = {
 
 PROSECUTION = "Serious Fraud Office"
 
-COURTS = [
-    "Crown Court at Manchester",
-    "Crown Court at Birmingham",
-    "Crown Court at Leeds",
-    "Crown Court at Southwark",
-    "Crown Court at Bristol",
-    "Crown Court at Newcastle",
-    "Crown Court at Liverpool",
-    "Crown Court at Sheffield",
-]
-
 PERSON_ROLES = [
     "company director",
     "managing director",
@@ -124,6 +113,10 @@ NATIONALITY_ADJECTIVES = {
     "HR": "Croatian",
     "SK": "Slovak",
     "SI": "Slovenian",
+    "RU": "Russian",
+    "UA": "Ukrainian",
+    "CN": "Chinese",
+    "EG": "Egyptian",
 }
 
 EN_LABELS = {

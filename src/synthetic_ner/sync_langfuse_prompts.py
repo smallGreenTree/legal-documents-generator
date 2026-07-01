@@ -8,6 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from langfuse import Langfuse
+
 from src.synthetic_ner.cli import load_env_files
 from src.synthetic_ner.config import load_app_config
 
@@ -79,7 +80,11 @@ def main() -> None:
         host=langfuse_cfg.host,
     )
 
-    prompt_templates = asdict(app_config.workflow.prompts)
+    prompt_templates = {
+        key: value
+        for key, value in asdict(app_config.workflow.prompts).items()
+        if isinstance(value, str) and value.strip()
+    }
     created = 0
     updated = 0
     unchanged = 0

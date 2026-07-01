@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from prefect import flow, get_run_logger
+
 from src.synthetic_ner.prefect_flows.utils import (
     _current_flow_run_id,
     audit_created_files,
     build_case_schema,
+    construct_case_yaml_from_setup,
     ingest_configs,
     resolve_entities,
     resolve_flow_project_root,
@@ -48,14 +50,27 @@ def generate_dataset(
             scenario=scenario,
             timeout_seconds=review_timeout_seconds,
         )
-    context = ingest_configs(
+    base_context = ingest_configs(
         project_root=resolved_project_root,
         scenario=scenario,
     )
     prefect_flow_run_id = _current_flow_run_id()
 
     doc_ids: list[str] = []
-    for document_index in range(context.documents):
+    for document_index in range(base_context.documents):
+        selected_doc_id = select_doc_id(base_context)
+        document_scenario = scenario
+        context = base_context
+        if review_scenario:
+            document_scenario = construct_case_yaml_from_setup(
+                project_root=resolved_project_root,
+                scenario=scenario,
+                doc_id=selected_doc_id,
+            )
+            context = ingest_configs(
+                project_root=resolved_project_root,
+                scenario=document_scenario,
+            )
         document = resolve_entities(context)
         if review_entities:
             document = review_document_entities(
@@ -63,7 +78,6 @@ def generate_dataset(
                 document,
                 review_timeout_seconds,
             )
-        selected_doc_id = select_doc_id(context)
         doc_id, schema = build_case_schema(
             context,
             document,

@@ -1,11 +1,18 @@
 """Person and organisation generation helpers for synthetic cases."""
-
+import logging
 import random
 import re
+import unicodedata
 
 from faker import Faker
-from src.synthetic_ner.constants import COMPANY_SUFFIXES, NATIONALITY_ADJECTIVES, PERSON_ROLES
+
+from src.synthetic_ner.constants import (
+    COMPANY_SUFFIXES,
+    NATIONALITY_ADJECTIVES,
+    PERSON_ROLES,
+)
 from src.synthetic_ner.types.app_config import (
+    OrganisationSpecConfig,
     PersonSpecConfig,
     PersonVariantGenerationConfig,
 )
@@ -36,9 +43,7 @@ def make_vat(prefix: str) -> str:
 
 def clean_person_part(value: str) -> str:
     cleaned = strip_titles(str(value or ""))
-    cleaned = re.sub(r"[^A-Za-zÀ-ÖØ-öø-ÿ' -]", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -'")
-    return cleaned
+    return _clean_unicode_text(cleaned, allowed_punctuation="' -")
 
 
 def build_clean_person_name(fake: Faker) -> str:
@@ -57,9 +62,36 @@ def build_clean_person_name(fake: Faker) -> str:
 
 
 def clean_company_token(value: str) -> str:
-    cleaned = re.sub(r"[^A-Za-zÀ-ÖØ-öø-ÿ0-9& -]", " ", str(value or ""))
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -&")
+    cleaned = _clean_unicode_text(
+        str(value or ""),
+        allowed_punctuation="& -",
+        allow_digits=True,
+    )
     return cleaned.upper()
+
+
+def _clean_unicode_text(
+    value: str,
+    *,
+    allowed_punctuation: str,
+    allow_digits: bool = False,
+) -> str:
+    cleaned_chars = []
+    for char in value:
+        if _is_unicode_letter_or_mark(char):
+            cleaned_chars.append(char)
+        elif allow_digits and char.isdigit():
+            cleaned_chars.append(char)
+        elif char.isspace() or char in allowed_punctuation:
+            cleaned_chars.append(char)
+        else:
+            cleaned_chars.append(" ")
+    cleaned = re.sub(r"\s+", " ", "".join(cleaned_chars))
+    return cleaned.strip(allowed_punctuation)
+
+
+def _is_unicode_letter_or_mark(char: str) -> bool:
+    return unicodedata.category(char)[0] in {"L", "M"}
 
 
 def build_company_base_name(fake: Faker) -> str:
@@ -88,7 +120,9 @@ def make_person(
     misspelling_variants: int,
     nat_locales: dict[str, str],
     is_defendant: bool = True,
+    role: str = "",
 ) -> dict:
+    logging.info(f"make person with local {nat}")
     locale = _resolve_locale(nat, nat_locales)
     fake = Faker(locale)
 
@@ -137,7 +171,7 @@ def make_person(
         "dob": date_of_birth,
         "birthplace": birthplace,
         "nationality": NATIONALITY_ADJECTIVES.get(nat, nat),
-        "role": random.choice(PERSON_ROLES),
+        "role": role or random.choice(PERSON_ROLES),
         "street": street,
         "city_postcode": city_postcode,
         "address": f"{street}, {city_postcode}",
@@ -185,6 +219,7 @@ def make_org(
     nat: str,
     nat_locales: dict[str, str],
     vat_prefixes: dict[str, str],
+    role: str = "",
 ) -> dict:
     locale = _resolve_locale(nat, nat_locales)
     fake = Faker(locale)
@@ -200,6 +235,7 @@ def make_org(
         "address": f"{street}, {city_postcode}",
         "vat": make_vat(vat_prefix),
         "nationality": nat,
+        "role": role,
     }
 
 
@@ -267,6 +303,7 @@ def normalize_org_record(org: dict, context: str) -> dict:
         "address": address or f"{street}, {city_postcode}",
         "vat": required["vat"],
         "nationality": org.get("nationality", ""),
+        "role": org.get("role", ""),
     }
 
 
@@ -291,6 +328,7 @@ def build_people_from_specs(
             ),
             nat_locales=nat_locales,
             is_defendant=is_defendant,
+            role=spec.role,
         )
         for spec in specs
     ]
@@ -310,6 +348,31 @@ def build_orgs_from_count(
         )
         for _ in range(count)
     ]
+
+
+def build_orgs_from_specs(
+    specs: list[OrganisationSpecConfig],
+    group: str,
+    count: int,
+    def_nats: list[str],
+    nat_locales: dict[str, str],
+    vat_prefixes: dict[str, str],
+) -> list[dict]:
+    group_specs = [spec for spec in specs if spec.group == group]
+    orgs = []
+    for index in range(count):
+        spec = group_specs[index] if index < len(group_specs) else None
+        nat = spec.country if spec else random.choice(def_nats)
+        role = spec.role if spec else ""
+        orgs.append(
+            make_org(
+                nat=nat,
+                nat_locales=nat_locales,
+                vat_prefixes=vat_prefixes,
+                role=role,
+            )
+        )
+    return orgs
 
 
 def _misspelling_variants(first_name: str, last_name: str) -> list[str]:

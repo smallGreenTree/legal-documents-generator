@@ -1,49 +1,4 @@
 prompts:
-  document_planner_system: |
-    You are the document planner for a synthetic legal document generator.
-    Use only facts provided in CASE_MEMORY. Never invent people, companies,
-    dates, invoices, statutes, or relationships.
-    Plan the document as a coherent legal narrative, not as a data inventory.
-    Your plan should help the writer avoid repetitive lists, memory dumping,
-    and formulaic section openings.
-
-  document_planner_user: |
-    CASE_MEMORY:
-    {{ memory_text }}
-
-    Create a high-level plan for a {{ doc_type }} document concerning {{ fraud_type }}.
-
-    Sections to cover:
-    {{ section_list }}
-
-    Return:
-    - Overall document arc in 3-5 sentences
-    - Chronology anchors that must remain consistent
-    - Section-by-section narrative purpose, explaining how each section should
-      avoid simply repeating CASE_MEMORY
-    - Facts that should be introduced once and then referred to naturally
-
-  section_planner_system: |
-    You are the section planner. Use only SECTION_CONTEXT and SECTION_CONTRACT.
-    Produce a short prose route for this section only. Do not add facts,
-    entities, dates, references, relationships, or conclusions beyond
-    SECTION_CONTEXT.
-
-  section_planner_user: |
-    SECTION_CONTEXT:
-    {{ section_context }}
-
-    SECTION_CONTRACT:
-    {{ section_contract }}
-
-    Plan the section "{{ section_name }}" (target ~{{ word_target }} words).
-    Description: {{ section_description }}
-
-    Return:
-    - Required coverage
-    - Safe expansion strategy for the word target
-    - Facts to avoid because they are not in SECTION_CONTEXT
-
   writer_system: |
     Write one section for synthetic legal NER/anonymization test data.
     Use only SECTION_CONTEXT and SECTION_CONTRACT.
@@ -52,6 +7,10 @@ prompts:
     Cover the facts required by SECTION_CONTRACT. Treat allowed references as
     boundaries, not as a checklist to repeat. Use only the context facts needed
     for this section's purpose.
+    If SECTION_CONTEXT contains an Investigator Scenario Brief, treat it as the
+    binding case theory. Use generated people, organisations, dates, amounts
+    and references to instantiate that scenario; do not replace it with a
+    generic fraud narrative.
     Use varied natural sentence contexts without repeating long phrases.
     Return exactly one JSON object and no surrounding text.
     The object must have exactly these fields:
@@ -170,6 +129,7 @@ prompts:
     You polish one generated section for NER/anonymization test data.
     Use only the JSON packet, SECTION_CONTEXT and SECTION_CONTRACT.
     Preserve required fact coverage and the required length band.
+    Preserve alignment with the Investigator Scenario Brief when it is present.
     Do not add facts or identifiers that are not listed in SECTION_CONTEXT.
     Return final polished prose only. Do not return JSON, markdown, headings,
     bullets, commentary, or explanations.
@@ -242,6 +202,8 @@ prompts:
     Add an edit if the draft copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
+    Add a blocking edit if the draft contradicts, ignores, or materially weakens
+    the Investigator Scenario Brief where that brief is relevant to the section.
     For evidence sections, add an edit if the draft mainly repeats relationship
     facts or identity particulars instead of explaining evidence categories and
     what those categories support.

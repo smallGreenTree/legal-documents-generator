@@ -94,11 +94,17 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
     if section == "persons":
         return [
             "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
+            "",
             "## Person Identity Facts",
             _person_identity_facts(memory_text),
         ]
     if section == "companies":
         return [
+            "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
             "",
             "## Organisations",
             _extract_markdown_block(memory_text, "Organisations"),
@@ -106,11 +112,17 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
     if section == "history":
         return [
             "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
+            "",
             "## Counts",
             _extract_markdown_block(memory_text, "Counts"),
         ]
     if section == "charges":
         return [
+            "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
             "",
             "## Defendants",
             _extract_markdown_block(memory_text, "Defendants"),
@@ -127,6 +139,9 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
     if section == "facts":
         return [
             "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
+            "",
             "## Counts",
             _extract_markdown_block(memory_text, "Counts"),
             "",
@@ -139,6 +154,9 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
     if section == "evidence":
         return [
             "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
+            "",
             "## Evidence Categories",
             _extract_markdown_block(memory_text, "Evidence Categories"),
             "",
@@ -148,6 +166,9 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
     if section == "assessment":
         return [
             "",
+            "## Investigator Scenario Brief",
+            _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
+            "",
             "## Counts",
             _extract_markdown_block(memory_text, "Counts"),
             "",
@@ -155,6 +176,9 @@ def _section_memory_parts(memory_text: str, section_name: str) -> list[str]:
             _extract_markdown_block(memory_text, "Relationship Graph"),
         ]
     return [
+        "",
+        "## Investigator Scenario Brief",
+        _extract_markdown_block(memory_text, "Investigator Scenario Brief"),
         "",
         "## Counts",
         _extract_markdown_block(memory_text, "Counts"),

@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
 from argparse import Namespace
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
+import yaml
 from prefect import get_run_logger, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.context import get_run_context
 from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
-from src.synthetic_ner.case import resolve_counts
+from pydantic import Field, create_model
+
+from src.synthetic_ner.case import resolve_counts, resolve_scenario_brief
 from src.synthetic_ner.cli import load_env_files
 from src.synthetic_ner.engine import (
     build_runtime_context,
@@ -41,6 +46,65 @@ from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.utils import load_config
 
 ARTIFACT_TEXT_LIMIT = 24_000
+DEFAULT_GENERATED_CASE_CONFIG_PATTERN = "config_case/generated/{doc_id}.yaml"
+MAX_PERSON_SETUP_ROWS = 8
+DocTypeChoice = Literal["indictment", "court_decision"]
+PersonCountChoice = Literal[1, 2, 3, 4, 5, 6, 7, 8]
+PersonGroupChoice = Literal["defendant", "collateral"]
+NationalityChoice = Literal[
+    "GB",
+    "DE",
+    "FR",
+    "IT",
+    "NL",
+    "CZ",
+    "PL",
+    "ES",
+    "PT",
+    "BE",
+    "AT",
+    "SE",
+    "DK",
+    "FI",
+    "HU",
+    "RO",
+    "BG",
+    "GR",
+    "HR",
+    "SK",
+    "SI",
+    "RU",
+    "UA",
+    "CN",
+    "EG",
+]
+TitleChoice = Literal["No title", "Dr", "Mr", "Ms", "Mrs", "Prof"]
+SurfaceFormsChoice = Literal[1, 2, 3, 4]
+OrgCountChoice = Literal[0, 1, 2, 3, 4, 5]
+OrganisationGroupChoice = Literal["charged", "associated"]
+OrganisationRoleChoice = Literal[
+    "Sole tenderer / contractor",
+    "Contractor",
+    "Awarded contractor",
+    "Contracting authority",
+    "Managing authority",
+    "Beneficiary company",
+    "Intermediary company",
+    "Associated organisation",
+    "Custom role",
+]
+PersonRoleChoice = Literal[
+    "Executive Director",
+    "Public official",
+    "Procurement officer",
+    "Tender committee chair",
+    "Tender committee member",
+    "Company director",
+    "Managing director",
+    "Beneficial owner",
+    "Accountant",
+    "Custom role",
+]
 
 
 def resolve_flow_project_root(project_root: str | None) -> Path:
@@ -53,29 +117,28 @@ def resolve_flow_project_root(project_root: str | None) -> Path:
 
 
 class ScenarioReviewInput(RunInput):
-    action: str = "continue"
-    scenario_summary: str = ""
-    document_type_details: str = ""
-    faker_generation_plan: str = ""
-    llm_language_plan: str = ""
-    fraud_type_details: str = ""
-    editable_fields_help: str = ""
-    case_config: str = ""
-    template: str = ""
-    documents: int | None = None
-    doc_type: str = ""
-    fraud_type: str = ""
-    from_schema: str = ""
+    scenario_family: str = ""
+    select_scenario: str = ""
+    scenario_template_preview: str = ""
+    court: str = ""
+    documents: int = 1
+    doc_type: DocTypeChoice = "indictment"
+
+
+class PersonSetupReviewInput(RunInput):
+    pass
+
+
+class OrganisationSetupReviewInput(RunInput):
+    pass
 
 
 class EntityReviewInput(RunInput):
-    action: str = "continue"
     document_json: str = ""
     refresh_counts: bool = True
 
 
 class QualityDocumentSelectionInput(RunInput):
-    action: str = "score"
     doc_id: str = ""
     candidate_documents: str = ""
 
@@ -176,7 +239,6 @@ def publish_scenario_review_request(
                 f"| Document type | `{scenario['doc_type']}` |",
                 f"| Fraud type | `{scenario['fraud_type']}` |",
                 f"| Documents | `{scenario['documents']}` |",
-                f"| Source schema | `{scenario['from_schema'] or 'none'}` |",
                 "",
                 "## Input Files",
                 "",
@@ -189,19 +251,19 @@ def publish_scenario_review_request(
                 "",
                 "## How To Continue",
                 "",
-                "Open the parent flow run page, use the resume control, and submit one of:",
-                "",
-                "- `action=continue` to proceed with these values.",
-                "- `action=reload` to apply edited fields from the resume form.",
-                "- `action=cancel` to stop the run.",
+                "Open the parent flow run page, use the resume control, review the "
+                "scenario selection fields, and submit the form to continue. The "
+                "next pauses will show the preconfigured person and organisation "
+                "rows for that scenario. Use the Prefect run controls if you need "
+                "to cancel the run.",
                 "",
                 f"The pause timeout is `{timeout_seconds}` seconds.",
             ]
         ),
     )
     get_run_logger().info(
-        "Human scenario review requested. Resume the parent flow run with "
-        "action=continue, action=reload, or action=cancel."
+        "Human scenario review requested. Resume the parent flow run with the "
+        "completed case setup form."
     )
 
 
@@ -213,22 +275,17 @@ def review_selected_scenario(
 ) -> dict[str, Any]:
     """Pause the flow so a reviewer can approve or alter the selected scenario."""
     publish_scenario_review_request(scenario, timeout_seconds)
-    review_details = _scenario_review_initial_data(scenario)
-    review_input = ScenarioReviewInput.with_initial_data(
+    review_input = _required_prefilled_input_model(
+        ScenarioReviewInput,
         description=(
-            "Review the selected scenario before Faker and the LLM run. The fields below "
-            "summarise the config, document shape, generated-data plan, and LLM language "
-            "plan. Use action='continue' to proceed, action='reload' after changing "
-            "editable fields, or action='cancel' to stop."
+            "Configure the case before Faker and the LLM run. Select the scenario "
+            "family and specific scenario. The selected scenario determines the "
+            "preconfigured people and organisations shown in the next steps."
         ),
-        action="continue",
-        **review_details,
-        case_config=scenario["case_config"],
-        template=scenario.get("template") or "",
+        field_types=_scenario_review_field_types(scenario),
+        **_case_setup_initial_data(scenario),
         documents=scenario["documents"],
-        doc_type=scenario["doc_type"] or "",
-        fraud_type=scenario["fraud_type"] or "",
-        from_schema=scenario["from_schema"] or "",
+        doc_type=_doc_type_choice(scenario.get("doc_type")),
     )
     response = pause_flow_run(
         wait_for_input=review_input,
@@ -238,27 +295,33 @@ def review_selected_scenario(
     if response is None:
         return scenario
 
-    action = response.action.strip().lower()
-    if action in {"cancel", "abort", "stop"}:
-        raise SystemExit("Scenario review cancelled the Prefect run.")
-    if action not in {"continue", "reload"}:
-        raise SystemExit(
-            "Scenario review action must be one of: continue, reload, cancel."
-        )
-
     reviewed_scenario = _build_scenario(
         project_root=project_root,
-        case_config=response.case_config.strip() or scenario["case_config"],
-        template=response.template.strip() or scenario.get("template") or None,
-        documents=(
-            response.documents
-            if response.documents is not None
-            else scenario["documents"]
-        ),
-        doc_type=response.doc_type.strip() or scenario["doc_type"],
-        fraud_type=response.fraud_type.strip() or scenario["fraud_type"],
-        from_schema=response.from_schema.strip() or None,
+        case_config=scenario["case_config"],
+        template=None,
+        documents=response.documents,
+        doc_type=response.doc_type,
+        fraud_type=_reviewed_fraud_type(response, scenario),
+        from_schema=scenario["from_schema"],
         quality_config=scenario.get("quality_config"),
+    )
+    person_specs = review_person_setup(
+        scenario=reviewed_scenario,
+        person_count=_scenario_person_count(reviewed_scenario),
+        timeout_seconds=timeout_seconds,
+    )
+    charged_count, associated_count = _scenario_organisation_counts(reviewed_scenario)
+    organisation_specs = review_organisation_setup(
+        scenario=reviewed_scenario,
+        charged_count=charged_count,
+        associated_count=associated_count,
+        timeout_seconds=timeout_seconds,
+    )
+    reviewed_scenario["case_setup"] = _case_setup_from_review_response(
+        response,
+        reviewed_scenario,
+        person_specs,
+        organisation_specs,
     )
     _publish_scenario_artifacts(reviewed_scenario)
     get_run_logger().info(
@@ -271,9 +334,172 @@ def review_selected_scenario(
     return reviewed_scenario
 
 
+def review_person_setup(
+    *,
+    scenario: dict[str, Any],
+    person_count: int,
+    timeout_seconds: int,
+) -> list[dict[str, Any]]:
+    """Pause with exactly one row per configured person entity."""
+    initial_specs = _initial_person_specs_for_setup(scenario, person_count)
+    review_input = _person_setup_review_input_model(initial_specs)
+    response = pause_flow_run(
+        wait_for_input=review_input,
+        timeout=timeout_seconds,
+        key="person-setup-review",
+    )
+    if response is None:
+        return initial_specs
+    return _person_specs_from_review_response(response, len(initial_specs))
+
+
+def review_organisation_setup(
+    *,
+    scenario: dict[str, Any],
+    charged_count: int,
+    associated_count: int,
+    timeout_seconds: int,
+) -> list[dict[str, Any]]:
+    """Pause with exactly one row per configured organisation entity."""
+    initial_specs = _initial_organisation_specs_for_setup(
+        scenario,
+        charged_count,
+        associated_count,
+    )
+    if not initial_specs:
+        return []
+    review_input = _organisation_setup_review_input_model(initial_specs)
+    response = pause_flow_run(
+        wait_for_input=review_input,
+        timeout=timeout_seconds,
+        key="organisation-setup-review",
+    )
+    if response is None:
+        return initial_specs
+    return _organisation_specs_from_review_response(response, len(initial_specs))
+
+
+def _required_prefilled_input_model(
+    base_cls: type[RunInput],
+    *,
+    description: str,
+    field_types: dict[str, Any] | None = None,
+    **initial_data: Any,
+) -> type[RunInput]:
+    fields: dict[str, tuple[Any, Any]] = {}
+    field_types = field_types or {}
+    for key, value in initial_data.items():
+        original_field = base_cls.model_fields.get(key)
+        field_type = (
+            field_types[key]
+            if key in field_types
+            else original_field.annotation
+            if original_field
+            else type(value)
+        )
+        fields[key] = (
+            field_type,
+            Field(..., json_schema_extra={"default": value}),
+        )
+
+    model = create_model(base_cls.__name__, **fields, __base__=base_cls)
+    model._description = description
+    return model
+
+
+def _scenario_review_field_types(scenario: dict[str, Any]) -> dict[str, Any]:
+    scenario_options = scenario.get("scenario_options", {})
+    specific_scenario_options = scenario.get("specific_scenario_options", {})
+    family_values = (
+        list(scenario_options.values()) if isinstance(scenario_options, dict) else []
+    )
+    specific_values = (
+        list(specific_scenario_options.values())
+        if isinstance(specific_scenario_options, dict)
+        else []
+    )
+    return {
+        "scenario_family": _str_enum_type("ScenarioFamilyChoice", family_values),
+        "select_scenario": _str_enum_type("SpecificScenarioChoice", specific_values),
+    }
+
+
+def _str_enum_type(name: str, values: list[Any]) -> Any:
+    members: dict[str, str] = {}
+    for index, raw_value in enumerate(values, start=1):
+        value = str(raw_value).strip()
+        if not value:
+            continue
+        member_name = re.sub(r"[^0-9A-Za-z_]+", "_", value).strip("_").upper()
+        if not member_name or member_name[0].isdigit():
+            member_name = f"OPTION_{index}"
+        original_name = member_name
+        suffix = 2
+        while member_name in members:
+            member_name = f"{original_name}_{suffix}"
+            suffix += 1
+        members[member_name] = value
+    return StrEnum(name, members) if members else str
+
+
+@task(name="case-yaml-construction")
+def construct_case_yaml_from_setup(
+    *,
+    project_root: Path,
+    scenario: dict[str, Any],
+    doc_id: str,
+) -> dict[str, Any]:
+    """Write the Stage 1 case setup into an effective case.yaml for Stage 2."""
+    case_setup = scenario.get("case_setup")
+    if not isinstance(case_setup, dict):
+        return scenario
+
+    source_case_config = scenario["case_config"]
+    source_path = resolve_project_path(project_root, source_case_config)
+    generated_case_config = _generated_case_config_from_scenario(scenario, doc_id)
+    generated_path = resolve_project_path(project_root, generated_case_config)
+    source_raw = load_config(source_path)
+    if not isinstance(source_raw, dict):
+        raise SystemExit(f"{source_path} must load into a top-level mapping")
+
+    generated_raw = _apply_case_setup_to_config(source_raw, scenario, case_setup)
+    generated_path.parent.mkdir(parents=True, exist_ok=True)
+    generated_path.write_text(
+        yaml.safe_dump(
+            generated_raw,
+            sort_keys=False,
+            allow_unicode=True,
+            width=88,
+        ),
+        encoding="utf-8",
+    )
+
+    rebuilt = _build_scenario(
+        project_root=project_root,
+        case_config=generated_case_config,
+        template=scenario.get("template") or None,
+        documents=scenario["documents"],
+        doc_type=scenario["doc_type"],
+        fraud_type=scenario["fraud_type"],
+        from_schema=scenario["from_schema"],
+        quality_config=scenario.get("quality_config"),
+    )
+    rebuilt["source_case_config"] = source_case_config
+    rebuilt["case_setup"] = case_setup
+    rebuilt["generated_doc_id"] = doc_id
+    _publish_generated_case_yaml_artifact(generated_path, rebuilt)
+    get_run_logger().info(
+        "Constructed generated case.yaml for %s at %s",
+        doc_id,
+        generated_path,
+    )
+    return rebuilt
+
+
 @task(name="entity-review-request")
 def publish_entity_review_request(
     document_payload: dict[str, Any],
+    scenario_summary: str,
     timeout_seconds: int,
 ) -> None:
     """Publish a visible human-review checkpoint before entity review pauses."""
@@ -320,6 +546,10 @@ def publish_entity_review_request(
                 "",
                 "The flow is about to pause for entity and document-input review.",
                 "",
+                "## Scenario",
+                "",
+                scenario_summary,
+                "",
                 "## Generated Names",
                 "",
                 names_summary,
@@ -338,19 +568,17 @@ def publish_entity_review_request(
                 "",
                 "## How To Continue",
                 "",
-                "Open the parent flow run page, use the resume control, and submit one of:",
-                "",
-                "- `action=continue` to proceed unchanged.",
-                "- `action=apply_json` to use edited `document_json` from the resume form.",
-                "- `action=cancel` to stop the run.",
+                "Open the parent flow run page, use the resume control, edit "
+                "`document_json` only if needed, and submit the form to accept. Use "
+                "the Prefect run controls if you need to cancel the run.",
                 "",
                 f"The pause timeout is `{timeout_seconds}` seconds.",
             ]
         ),
     )
     get_run_logger().info(
-        "Human entity review requested. Resume the parent flow run with "
-        "action=continue, action=apply_json, or action=cancel."
+        "Human entity review requested. Resume the parent flow run with the accepted "
+        "document input JSON."
     )
 
 
@@ -360,18 +588,15 @@ def review_document_entities(
     timeout_seconds: int,
 ) -> Any:
     """Pause the flow so a reviewer can approve or edit resolved document inputs."""
-    document_payload = _document_to_payload(document)
-    publish_entity_review_request(document_payload, timeout_seconds)
-    names_summary = _entity_names_summary(document_payload)
-    review_input = EntityReviewInput.with_initial_data(
-        description=(
-            "Review resolved people and organisations before document generation. "
-            f"Generated names: {names_summary} "
-            "Use action='continue' to proceed, action='apply_json' to use edited "
-            "document_json, or action='cancel' to stop."
-        ),
-        action="continue",
-        document_json=json.dumps(document_payload, indent=2, ensure_ascii=False),
+    document_payload = _document_to_payload(document, context=context)
+    initial_document_json = json.dumps(document_payload, indent=2, ensure_ascii=False)
+    initial_document_payload = json.loads(initial_document_json)
+    scenario_summary = _entity_review_scenario_summary(context)
+    publish_entity_review_request(document_payload, scenario_summary, timeout_seconds)
+    review_input = _required_prefilled_input_model(
+        EntityReviewInput,
+        description=_entity_review_description(context, document_payload),
+        document_json=initial_document_json,
         refresh_counts=True,
     )
     response = pause_flow_run(
@@ -382,15 +607,11 @@ def review_document_entities(
     if response is None:
         return document
 
-    action = response.action.strip().lower()
-    if action in {"cancel", "abort", "stop"}:
-        raise SystemExit("Entity review cancelled the Prefect run.")
-    if action == "continue":
+    if _document_json_matches_payload(
+        response.document_json,
+        initial_document_payload,
+    ):
         return document
-    if action != "apply_json":
-        raise SystemExit(
-            "Entity review action must be one of: continue, apply_json, cancel."
-        )
 
     reviewed_document = _document_from_review_json(response.document_json)
     if response.refresh_counts:
@@ -401,13 +622,23 @@ def review_document_entities(
             context.fraud_type,
             reviewed_document.defendants,
             reviewed_document.charged_orgs,
+            reviewed_document.amounts,
+            reviewed_document.metadata.get("offence_period"),
+            metadata=reviewed_document.metadata,
+        )
+        reviewed_document.scenario_brief = resolve_scenario_brief(
+            context.case_cfg,
+            reviewed_document.metadata,
+            reviewed_document.defendants,
+            reviewed_document.charged_orgs,
+            reviewed_document.amounts,
             reviewed_document.metadata.get("offence_period"),
         )
     _publish_entity_artifacts(reviewed_document)
     _publish_document_inputs_artifact(
         key=_artifact_key("entity-review-applied-document-inputs"),
         description="Document inputs after human entity review edits",
-        document_payload=_document_to_payload(reviewed_document),
+        document_payload=_document_to_payload(reviewed_document, context=context),
     )
     return reviewed_document
 
@@ -446,12 +677,12 @@ def select_quality_document(
             "No generated documents are available for this doc_type/fraud_type."
         )
 
-    review_input = QualityDocumentSelectionInput.with_initial_data(
+    review_input = _required_prefilled_input_model(
+        QualityDocumentSelectionInput,
         description=(
             "Select the generated document to analyze. Enter one doc_id from "
-            "candidate_documents, keep action='score', or use action='cancel' to stop."
+            "candidate_documents, then submit the form to score it."
         ),
-        action="score",
         doc_id=requested_doc_id,
         candidate_documents=_quality_candidate_summary(candidates),
     )
@@ -462,14 +693,6 @@ def select_quality_document(
     )
     if response is None:
         raise SystemExit("Document quality selection timed out without a doc_id.")
-
-    action = response.action.strip().lower()
-    if action in {"cancel", "abort", "stop"}:
-        raise SystemExit("Document quality selection cancelled the Prefect run.")
-    if action not in {"score", "continue"}:
-        raise SystemExit(
-            "Document quality selection action must be one of: score, continue, cancel."
-        )
 
     selected_doc_id = response.doc_id.strip()
     if not selected_doc_id:
@@ -643,13 +866,26 @@ def _build_scenario(
     root_raw = load_config(root_config_path)
     case_raw = load_config(case_config_path)
     profile = case_raw.get("profile", {}) if isinstance(case_raw, dict) else {}
+    scenario_meta = case_raw.get("scenario", {}) if isinstance(case_raw, dict) else {}
     case_section = case_raw.get("case", {}) if isinstance(case_raw, dict) else {}
+    fraud_statutes = _case_fraud_statutes(case_raw)
     workflow = root_raw.get("workflow", {}) if isinstance(root_raw, dict) else {}
     model_routing = root_raw.get("model_routing", {}) if isinstance(root_raw, dict) else {}
     generation = root_raw.get("generation", {}) if isinstance(root_raw, dict) else {}
+    scenario_options = _scenario_options(scenario_meta, profile, fraud_statutes)
+    specific_scenario_options = _specific_scenario_options(
+        scenario_meta,
+        scenario_options,
+    )
+    configured_fraud_type = _configured_scenario_id(scenario_meta, profile)
 
     selected_doc_type = doc_type or profile.get("doc_type")
-    selected_fraud_type = fraud_type or profile.get("fraud_type")
+    selected_fraud_type = _resolve_scenario_choice(
+        fraud_type or configured_fraud_type,
+        scenario_options,
+        specific_scenario_options,
+        configured_fraud_type,
+    )
     selected_documents = documents if documents is not None else profile.get("documents")
     prompts_config = workflow.get("prompts_config_path", "prompts/workflow_prompts.yaml")
     prompts_path = resolve_project_path(project_root, prompts_config)
@@ -704,14 +940,15 @@ def _build_scenario(
         "documents": selected_documents,
         "doc_type": selected_doc_type,
         "fraud_type": selected_fraud_type,
+        "scenario_name": scenario_options.get(selected_fraud_type, selected_fraud_type),
+        "scenario_options": scenario_options,
+        "specific_scenario_options": specific_scenario_options,
         "from_schema": from_schema,
         "quality_config": quality_config,
         "input_files": input_files,
         "profile": profile,
         "case": case_section,
-        "fraud_statutes": case_raw.get("fraud_statutes", {})
-        if isinstance(case_raw, dict)
-        else {},
+        "fraud_statutes": fraud_statutes,
         "workflow": workflow,
         "model_routing": model_routing,
         "generation": generation,
@@ -939,6 +1176,874 @@ def _template_preview(path: Path | None, max_lines: int = 18) -> str:
     return "\n".join(lines[:max_lines])
 
 
+def _scenario_options(
+    scenario_meta: Any,
+    profile: Any,
+    fraud_statutes: Any,
+) -> dict[str, str]:
+    available_statutes = set(fraud_statutes) if isinstance(fraud_statutes, dict) else set()
+    profile_fraud_type = ""
+    if isinstance(profile, dict):
+        profile_fraud_type = str(profile.get("fraud_type") or "").strip()
+    meta = scenario_meta if isinstance(scenario_meta, dict) else {}
+    scenario_id = str(meta.get("id") or profile_fraud_type).strip()
+    if not scenario_id:
+        return {}
+    if available_statutes and scenario_id not in available_statutes:
+        return {}
+    family = str(meta.get("family") or scenario_id.replace("_", " ")).strip()
+    return {scenario_id: family}
+
+
+def _configured_scenario_id(scenario_meta: Any, profile: Any) -> str:
+    meta = scenario_meta if isinstance(scenario_meta, dict) else {}
+    scenario_id = str(meta.get("id") or "").strip()
+    if scenario_id:
+        return scenario_id
+    if isinstance(profile, dict):
+        return str(profile.get("fraud_type") or "").strip()
+    return ""
+
+
+def _case_fraud_statutes(case_raw: Any) -> dict[str, Any]:
+    if not isinstance(case_raw, dict):
+        return {}
+    statutes = case_raw.get("fraud_statutes", {})
+    return statutes if isinstance(statutes, dict) else {}
+
+
+def _resolve_scenario_choice(
+    value: Any,
+    scenario_options: dict[str, str],
+    specific_scenario_options: dict[str, str] | None = None,
+    default_scenario: Any = None,
+) -> str | None:
+    if not scenario_options:
+        return _choice_text(value) or None
+
+    cleaned = _choice_text(value)
+    specific_scenario_options = specific_scenario_options or {}
+    if cleaned in scenario_options or cleaned in specific_scenario_options:
+        return cleaned
+
+    lowered = cleaned.casefold()
+    for key, label in scenario_options.items():
+        if lowered and lowered in {key.casefold(), label.casefold()}:
+            return key
+    for key, label in specific_scenario_options.items():
+        if lowered and lowered in {key.casefold(), label.casefold()}:
+            return key
+
+    default_scenario = _choice_text(default_scenario)
+    if default_scenario in scenario_options:
+        return str(default_scenario)
+    return next(iter(scenario_options))
+
+
+def _resolve_specific_scenario_choice(
+    value: Any,
+    scenario_options: dict[str, str],
+    specific_scenario_options: dict[str, str],
+    default_scenario: Any = None,
+) -> str | None:
+    cleaned = _choice_text(value)
+    if cleaned in specific_scenario_options:
+        return cleaned
+
+    lowered = cleaned.casefold()
+    for key, label in specific_scenario_options.items():
+        if lowered and lowered in {key.casefold(), label.casefold()}:
+            return key
+
+    return _resolve_scenario_choice(
+        value,
+        scenario_options,
+        specific_scenario_options,
+        default_scenario,
+    )
+
+
+def _choice_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, StrEnum):
+        return str(value.value).strip()
+    return str(value).strip()
+
+
+def _prefect_dialogue_config(workflow: Any) -> dict[str, Any]:
+    if not isinstance(workflow, dict):
+        return {}
+    dialogue = workflow.get("prefect_dialogue", {})
+    return dialogue if isinstance(dialogue, dict) else {}
+
+
+def _reviewed_fraud_type(response: ScenarioReviewInput, scenario: dict[str, Any]) -> str:
+    scenario_options = scenario.get("scenario_options", {})
+    if not isinstance(scenario_options, dict):
+        scenario_options = {}
+    specific_scenario_options = scenario.get("specific_scenario_options", {})
+    if not isinstance(specific_scenario_options, dict):
+        specific_scenario_options = {}
+    selected = _resolve_specific_scenario_choice(
+        getattr(response, "select_scenario", ""),
+        scenario_options,
+        specific_scenario_options,
+        scenario.get("fraud_type"),
+    )
+    if selected:
+        return selected
+    selected = _resolve_scenario_choice(
+        getattr(response, "scenario_family", ""),
+        scenario_options,
+        specific_scenario_options,
+        scenario.get("fraud_type"),
+    )
+    return selected or scenario["fraud_type"]
+
+
+def _case_setup_initial_data(scenario: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scenario_family": _scenario_family_choice_label(scenario),
+        "select_scenario": _specific_scenario_choice_label(scenario),
+        "scenario_template_preview": _scenario_template_preview(scenario),
+        "court": _scenario_court_value(scenario),
+    }
+
+
+def _case_setup_from_review_response(
+    response: ScenarioReviewInput,
+    scenario: dict[str, Any],
+    person_specs: list[dict[str, Any]],
+    organisation_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    person_count = len(person_specs)
+    charged_orgs, associated_orgs = _organisation_group_counts(
+        organisation_specs,
+    )
+    if (charged_orgs or associated_orgs) and not any(
+        spec["group"] == "defendant" for spec in person_specs
+    ):
+        raise SystemExit(
+            "At least one defendant PERSON spec is required when organisation "
+            "auto-generation is enabled."
+        )
+    court = _required_review_text(getattr(response, "court", ""), "Court")
+
+    return {
+        "scenario": scenario["fraud_type"],
+        "court": court,
+        "person_entities": person_count,
+        "person_specs": person_specs,
+        "charged_orgs": charged_orgs,
+        "associated_orgs": associated_orgs,
+        "organisation_entities": len(organisation_specs),
+        "organisation_specs": organisation_specs,
+    }
+
+
+def _generated_case_config_from_scenario(
+    scenario: dict[str, Any],
+    doc_id: str,
+) -> str:
+    dialogue = _prefect_dialogue_config(scenario.get("workflow", {}))
+    pattern = str(
+        dialogue.get("generated_case_config_pattern")
+        or dialogue.get("generated_case_config")
+        or DEFAULT_GENERATED_CASE_CONFIG_PATTERN
+    )
+    if "{doc_id}" not in pattern:
+        raise SystemExit(
+            "workflow.prefect_dialogue.generated_case_config_pattern must include "
+            "{doc_id} so generated case YAML files are document-specific."
+        )
+    return pattern.format(doc_id=doc_id)
+
+
+def _scenario_court_value(scenario: dict[str, Any]) -> str:
+    case = scenario.get("case", {})
+    metadata = case.get("metadata", {}) if isinstance(case, dict) else {}
+    court = metadata.get("court", "") if isinstance(metadata, dict) else ""
+    court_text = str(court).strip()
+    return "" if court_text == "auto" else court_text
+
+
+def _required_review_text(value: Any, label: str) -> str:
+    text = str(value).strip()
+    if not text:
+        raise SystemExit(f"{label} must be provided.")
+    return text
+
+
+def _scenario_family_choice_label(scenario: dict[str, Any]) -> str:
+    scenario_options = scenario.get("scenario_options", {})
+    if isinstance(scenario_options, dict):
+        label = scenario_options.get(scenario.get("fraud_type"))
+    else:
+        label = None
+    return str(label or scenario.get("scenario_name") or scenario.get("fraud_type") or "")
+
+
+def _specific_scenario_choice_label(scenario: dict[str, Any]) -> str:
+    specific_options = scenario.get("specific_scenario_options", {})
+    if not isinstance(specific_options, dict):
+        specific_options = {}
+    label = specific_options.get(scenario.get("fraud_type"))
+    return str(label or _scenario_family_choice_label(scenario))
+
+
+def _specific_scenario_options(
+    scenario_meta: Any,
+    scenario_options: dict[str, str],
+) -> dict[str, str]:
+    meta = scenario_meta if isinstance(scenario_meta, dict) else {}
+    scenario_id = str(meta.get("id") or next(iter(scenario_options), "")).strip()
+    if not scenario_id:
+        return {}
+    label = str(
+        meta.get("label")
+        or meta.get("name")
+        or scenario_options.get(scenario_id)
+        or scenario_id.replace("_", " ")
+    ).strip()
+    return {scenario_id: label}
+
+
+def _scenario_template_preview(scenario: dict[str, Any]) -> str:
+    case = scenario.get("case", {})
+    brief = case.get("scenario_brief", {}) if isinstance(case, dict) else {}
+    if not isinstance(brief, dict) or not brief:
+        return "No scenario template configured."
+
+    placeholders = _scenario_template_placeholders(brief)
+    preview = yaml.safe_dump(
+        brief,
+        sort_keys=False,
+        allow_unicode=True,
+        width=100,
+    ).strip()
+    lines = [
+        "Faker placeholders appear in {braces}. They are resolved after Faker "
+        "generates people, organisations, dates, amounts, and references.",
+    ]
+    if placeholders:
+        lines.append(f"Placeholders: {placeholders}")
+    lines.extend(["", preview])
+    return "\n".join(lines)
+
+
+def _scenario_template_placeholders(value: Any) -> str:
+    text = yaml.safe_dump(value, sort_keys=False, allow_unicode=True)
+    placeholders = sorted(set(re.findall(r"{([A-Za-z_][A-Za-z0-9_]*)}", text)))
+    return ", ".join(f"{{{placeholder}}}" for placeholder in placeholders)
+
+
+def _doc_type_choice(value: Any) -> DocTypeChoice:
+    return "court_decision" if value == "court_decision" else "indictment"
+
+
+def _scenario_person_count(scenario: dict[str, Any]) -> int:
+    case = scenario.get("case", {})
+    cast = case.get("cast", {}) if isinstance(case, dict) else {}
+    return len(_combined_person_specs(cast))
+
+
+def _scenario_organisation_counts(scenario: dict[str, Any]) -> tuple[int, int]:
+    case = scenario.get("case", {})
+    cast = case.get("cast", {}) if isinstance(case, dict) else {}
+    if not isinstance(cast, dict):
+        return 0, 0
+    return (
+        _non_negative_review_int(cast.get("charged_orgs", 0), "case.cast.charged_orgs"),
+        _non_negative_review_int(
+            cast.get("associated_orgs", 0),
+            "case.cast.associated_orgs",
+        ),
+    )
+
+
+def _initial_person_specs_for_setup(
+    scenario: dict[str, Any],
+    person_count: int,
+) -> list[dict[str, Any]]:
+    case = scenario.get("case", {})
+    cast = case.get("cast", {}) if isinstance(case, dict) else {}
+    person_specs = _combined_person_specs(cast)
+    return _resize_person_specs(person_specs, person_count)
+
+
+def _initial_organisation_specs_for_setup(
+    scenario: dict[str, Any],
+    charged_count: int,
+    associated_count: int,
+) -> list[dict[str, Any]]:
+    case = scenario.get("case", {})
+    cast = case.get("cast", {}) if isinstance(case, dict) else {}
+    organisation_specs = _combined_organisation_specs(cast)
+    return _resize_organisation_specs(
+        organisation_specs,
+        charged_count,
+        associated_count,
+        default_country=_default_organisation_country(cast),
+    )
+
+
+def _person_setup_review_input_model(
+    person_specs: list[dict[str, Any]],
+) -> type[RunInput]:
+    person_count = len(person_specs)
+    return _required_prefilled_input_model(
+        PersonSetupReviewInput,
+        description=(
+            f"Configure {person_count} PERSON entit"
+            f"{'y' if person_count == 1 else 'ies'}. Each row will become one "
+            "Faker-generated person in case.yaml."
+        ),
+        field_types=_person_row_field_types(person_count),
+        **_person_row_initial_data(person_specs, person_count),
+    )
+
+
+def _organisation_setup_review_input_model(
+    organisation_specs: list[dict[str, Any]],
+) -> type[RunInput]:
+    organisation_count = len(organisation_specs)
+    return _required_prefilled_input_model(
+        OrganisationSetupReviewInput,
+        description=(
+            f"Configure {organisation_count} organisation entit"
+            f"{'y' if organisation_count == 1 else 'ies'}. Each row captures the "
+            "backend group, scenario role and country."
+        ),
+        field_types=_organisation_row_field_types(organisation_count),
+        **_organisation_row_initial_data(organisation_specs, organisation_count),
+    )
+
+
+def _person_row_field_types(person_count: int) -> dict[str, Any]:
+    field_types: dict[str, Any] = {}
+    for index in range(1, person_count + 1):
+        field_types[f"person_{index}_group"] = PersonGroupChoice
+        field_types[f"person_{index}_role"] = PersonRoleChoice
+        field_types[f"person_{index}_custom_role"] = str
+        field_types[f"person_{index}_nationality"] = NationalityChoice
+        field_types[f"person_{index}_title"] = TitleChoice
+        field_types[f"person_{index}_surface_forms"] = SurfaceFormsChoice
+    return field_types
+
+
+def _organisation_row_field_types(organisation_count: int) -> dict[str, Any]:
+    field_types: dict[str, Any] = {}
+    for index in range(1, organisation_count + 1):
+        field_types[f"organisation_{index}_group"] = OrganisationGroupChoice
+        field_types[f"organisation_{index}_role"] = OrganisationRoleChoice
+        field_types[f"organisation_{index}_custom_role"] = str
+        field_types[f"organisation_{index}_country"] = NationalityChoice
+    return field_types
+
+
+def _person_row_initial_data(
+    person_specs: list[dict[str, Any]],
+    person_count: int,
+) -> dict[str, Any]:
+    rows: dict[str, Any] = {}
+    for index in range(1, person_count + 1):
+        spec = (
+            person_specs[index - 1]
+            if index <= len(person_specs)
+            else _default_person_spec(person_specs)
+        )
+        rows[f"person_{index}_group"] = _group_choice(spec.get("group"))
+        role_choice, custom_role = _person_role_initial_values(spec.get("role"))
+        rows[f"person_{index}_role"] = role_choice
+        rows[f"person_{index}_custom_role"] = custom_role
+        rows[f"person_{index}_nationality"] = _nationality_choice(
+            spec.get("nationality")
+        )
+        rows[f"person_{index}_title"] = _title_choice(spec.get("title"))
+        rows[f"person_{index}_surface_forms"] = _surface_forms_choice(
+            spec.get("surface_forms")
+        )
+    return rows
+
+
+def _organisation_row_initial_data(
+    organisation_specs: list[dict[str, Any]],
+    organisation_count: int,
+) -> dict[str, Any]:
+    rows: dict[str, Any] = {}
+    for index in range(1, organisation_count + 1):
+        spec = organisation_specs[index - 1]
+        rows[f"organisation_{index}_group"] = _organisation_group_choice(
+            spec.get("group")
+        )
+        role_choice, custom_role = _organisation_role_initial_values(spec.get("role"))
+        rows[f"organisation_{index}_role"] = role_choice
+        rows[f"organisation_{index}_custom_role"] = custom_role
+        rows[f"organisation_{index}_country"] = _nationality_choice(
+            spec.get("country")
+        )
+    return rows
+
+
+def _person_specs_from_review_response(
+    response: ScenarioReviewInput,
+    person_count: int,
+) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for index in range(1, person_count + 1):
+        specs.append(
+            {
+                "group": getattr(response, f"person_{index}_group"),
+                "role": _person_role_config(
+                    getattr(response, f"person_{index}_role"),
+                    getattr(response, f"person_{index}_custom_role"),
+                    f"person_{index}",
+                ),
+                "nationality": getattr(response, f"person_{index}_nationality"),
+                "title": _title_config(getattr(response, f"person_{index}_title")),
+                "surface_forms": _positive_review_int(
+                    getattr(response, f"person_{index}_surface_forms"),
+                    f"person_{index}_surface_forms",
+                ),
+            }
+        )
+    return specs
+
+
+def _organisation_specs_from_review_response(
+    response: Any,
+    organisation_count: int,
+) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for index in range(1, organisation_count + 1):
+        specs.append(
+            {
+                "group": _organisation_group_choice(
+                    getattr(response, f"organisation_{index}_group")
+                ),
+                "role": _organisation_role_config(
+                    getattr(response, f"organisation_{index}_role"),
+                    getattr(response, f"organisation_{index}_custom_role"),
+                    f"organisation_{index}",
+                ),
+                "country": _nationality_choice(
+                    getattr(response, f"organisation_{index}_country")
+                ),
+            }
+        )
+    return specs
+
+
+def _group_choice(value: Any) -> PersonGroupChoice:
+    return "collateral" if value == "collateral" else "defendant"
+
+
+def _organisation_group_choice(value: Any) -> OrganisationGroupChoice:
+    cleaned = str(value or "").strip().lower()
+    if cleaned in {"associated", "associated_org", "associated_orgs"}:
+        return "associated"
+    return "charged"
+
+
+def _organisation_role_initial_values(value: Any) -> tuple[OrganisationRoleChoice, str]:
+    role = str(value or "").strip()
+    allowed = set(OrganisationRoleChoice.__args__)
+    if role in allowed and role != "Custom role":
+        return role, ""
+    if role:
+        return "Custom role", role
+    return "Sole tenderer / contractor", ""
+
+
+def _organisation_role_config(
+    choice: Any,
+    custom_role: Any,
+    path: str,
+) -> str:
+    selected = _organisation_role_choice(choice)
+    custom = str(custom_role or "").strip()
+    if selected == "Custom role":
+        if not custom:
+            raise SystemExit(f"{path}_custom_role is required for Custom role.")
+        return custom
+    return selected
+
+
+def _organisation_role_choice(value: Any) -> OrganisationRoleChoice:
+    allowed = set(OrganisationRoleChoice.__args__)
+    return value if value in allowed else "Sole tenderer / contractor"
+
+
+def _nationality_choice(value: Any) -> NationalityChoice:
+    allowed = set(NationalityChoice.__args__)
+    return value if value in allowed else "GB"
+
+
+def _title_choice(value: Any) -> TitleChoice:
+    return value if value in set(TitleChoice.__args__) else "No title"
+
+
+def _title_config(value: TitleChoice) -> str:
+    return "" if value == "No title" else value
+
+
+def _person_role_initial_values(value: Any) -> tuple[PersonRoleChoice, str]:
+    role = str(value or "").strip()
+    allowed = set(PersonRoleChoice.__args__)
+    if role in allowed and role != "Custom role":
+        return role, ""
+    if role:
+        return "Custom role", role
+    return "Public official", ""
+
+
+def _person_role_config(
+    choice: Any,
+    custom_role: Any,
+    path: str,
+) -> str:
+    selected = _person_role_choice(choice)
+    custom = str(custom_role or "").strip()
+    if selected == "Custom role":
+        if not custom:
+            raise SystemExit(f"{path}_custom_role is required for Custom role.")
+        return custom
+    return selected
+
+
+def _person_role_choice(value: Any) -> PersonRoleChoice:
+    return value if value in set(PersonRoleChoice.__args__) else "Public official"
+
+
+def _surface_forms_choice(value: Any) -> SurfaceFormsChoice:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return min(max(parsed, 1), 4)
+
+
+def _person_count_choice(value: Any) -> PersonCountChoice:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return min(max(parsed, 1), MAX_PERSON_SETUP_ROWS)
+
+
+def _org_count_choice(value: Any) -> OrgCountChoice:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return min(max(parsed, 0), 5)
+
+
+def _combined_person_specs(cast: Any) -> list[dict[str, Any]]:
+    if not isinstance(cast, dict):
+        return []
+    specs: list[dict[str, Any]] = []
+    for group, key in (("defendant", "defendants"), ("collateral", "collateral")):
+        records = cast.get(key, [])
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            spec = {"group": group, **record}
+            specs.append(spec)
+    return specs
+
+
+def _combined_organisation_specs(cast: Any) -> list[dict[str, Any]]:
+    if not isinstance(cast, dict):
+        return []
+    records = cast.get("organisation_specs", [])
+    if not isinstance(records, list):
+        return []
+    specs: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        specs.append(
+            {
+                "group": _organisation_group_choice(record.get("group")),
+                "role": str(record.get("role", "")).strip(),
+                "country": _nationality_choice(record.get("country")),
+            }
+        )
+    return specs
+
+
+def _person_specs_yaml(person_specs: list[dict[str, Any]]) -> str:
+    return yaml.safe_dump(
+        person_specs,
+        sort_keys=False,
+        allow_unicode=True,
+        width=80,
+    ).strip()
+
+
+def _parse_person_specs_yaml(value: str) -> list[dict[str, Any]]:
+    try:
+        loaded = yaml.safe_load(value) if value.strip() else []
+    except yaml.YAMLError as exc:
+        raise SystemExit(f"person_specs_yaml is invalid YAML: {exc}") from exc
+    if not isinstance(loaded, list):
+        raise SystemExit("person_specs_yaml must be a YAML list of person specs.")
+
+    specs: list[dict[str, Any]] = []
+    for index, item in enumerate(loaded):
+        path = f"person_specs_yaml[{index}]"
+        if not isinstance(item, dict):
+            raise SystemExit(f"{path} must be a mapping.")
+        group = str(item.get("group", "defendant")).strip().lower()
+        if group not in {"defendant", "collateral"}:
+            raise SystemExit(f"{path}.group must be defendant or collateral.")
+        nationality = str(item.get("nationality", "")).strip()
+        if not nationality:
+            raise SystemExit(f"{path}.nationality is required.")
+        surface_forms = _positive_review_int(
+            item.get("surface_forms"),
+            f"{path}.surface_forms",
+        )
+        spec: dict[str, Any] = {
+            "group": group,
+            "nationality": nationality,
+            "title": str(item.get("title", "")),
+            "surface_forms": surface_forms,
+        }
+        role = str(item.get("role", "")).strip()
+        if role:
+            spec["role"] = role
+        if "variants" in item:
+            spec["variants"] = item["variants"]
+        specs.append(spec)
+    return specs
+
+
+def _resize_person_specs(
+    person_specs: list[dict[str, Any]],
+    person_count: int,
+) -> list[dict[str, Any]]:
+    count = _positive_review_int(person_count, "person_entities")
+    resized = list(person_specs[:count])
+    while len(resized) < count:
+        resized.append(_default_person_spec(resized))
+    return resized
+
+
+def _resize_organisation_specs(
+    organisation_specs: list[dict[str, Any]],
+    charged_count: int,
+    associated_count: int,
+    *,
+    default_country: NationalityChoice,
+) -> list[dict[str, Any]]:
+    charged_total = _non_negative_review_int(charged_count, "charged_orgs")
+    associated_total = _non_negative_review_int(associated_count, "associated_orgs")
+    charged_specs = [
+        spec
+        for spec in organisation_specs
+        if _organisation_group_choice(spec.get("group")) == "charged"
+    ]
+    associated_specs = [
+        spec
+        for spec in organisation_specs
+        if _organisation_group_choice(spec.get("group")) == "associated"
+    ]
+    return [
+        *_resize_organisation_group_specs(charged_specs, "charged", charged_total, default_country),
+        *_resize_organisation_group_specs(
+            associated_specs,
+            "associated",
+            associated_total,
+            default_country,
+        ),
+    ]
+
+
+def _resize_organisation_group_specs(
+    organisation_specs: list[dict[str, Any]],
+    group: OrganisationGroupChoice,
+    count: int,
+    default_country: NationalityChoice,
+) -> list[dict[str, Any]]:
+    resized = [
+        {
+            "group": group,
+            "role": str(spec.get("role", "")).strip()
+            or _default_organisation_role(group),
+            "country": _nationality_choice(spec.get("country")),
+        }
+        for spec in organisation_specs[:count]
+    ]
+    while len(resized) < count:
+        resized.append(
+            {
+                "group": group,
+                "role": _default_organisation_role(group),
+                "country": default_country,
+            }
+        )
+    return resized
+
+
+def _default_organisation_role(group: OrganisationGroupChoice) -> OrganisationRoleChoice:
+    if group == "associated":
+        return "Associated organisation"
+    return "Sole tenderer / contractor"
+
+
+def _default_person_spec(existing_specs: list[dict[str, Any]]) -> dict[str, Any]:
+    nationality = existing_specs[0].get("nationality", "GB") if existing_specs else "GB"
+    return {
+        "group": "defendant",
+        "role": "Public official",
+        "nationality": nationality,
+        "title": "",
+        "surface_forms": 1,
+    }
+
+
+def _default_organisation_country(cast: Any) -> NationalityChoice:
+    person_specs = _combined_person_specs(cast)
+    if person_specs:
+        return _nationality_choice(person_specs[0].get("nationality"))
+    return "GB"
+
+
+def _organisation_group_counts(
+    organisation_specs: list[dict[str, Any]],
+) -> tuple[int, int]:
+    charged_orgs = 0
+    associated_orgs = 0
+    for spec in organisation_specs:
+        if _organisation_group_choice(spec.get("group")) == "associated":
+            associated_orgs += 1
+        else:
+            charged_orgs += 1
+    return charged_orgs, associated_orgs
+
+
+def _positive_review_int(value: Any, path: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"{path} must be a positive integer.") from exc
+    if parsed <= 0:
+        raise SystemExit(f"{path} must be a positive integer.")
+    return parsed
+
+
+def _non_negative_review_int(value: Any, path: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"{path} must be a non-negative integer.") from exc
+    if parsed < 0:
+        raise SystemExit(f"{path} must be a non-negative integer.")
+    return parsed
+
+
+def _apply_case_setup_to_config(
+    source_raw: dict[str, Any],
+    scenario: dict[str, Any],
+    case_setup: dict[str, Any],
+) -> dict[str, Any]:
+    generated = copy.deepcopy(source_raw)
+    profile = generated.setdefault("profile", {})
+    if not isinstance(profile, dict):
+        raise SystemExit("profile must be a mapping in the source case config.")
+    profile["doc_type"] = scenario["doc_type"]
+    profile.pop("fraud_type", None)
+    profile["documents"] = scenario["documents"]
+
+    scenario_meta = generated.setdefault("scenario", {})
+    if not isinstance(scenario_meta, dict):
+        raise SystemExit("scenario must be a mapping in the source case config.")
+    scenario_meta["id"] = scenario["fraud_type"]
+
+    case = generated.setdefault("case", {})
+    if not isinstance(case, dict):
+        raise SystemExit("case must be a mapping in the source case config.")
+    metadata = case.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        raise SystemExit("case.metadata must be a mapping in the source case config.")
+    metadata["court"] = case_setup["court"]
+    if scenario["fraud_type"] != "procurement_fraud":
+        case.pop("scenario_brief", None)
+    cast = case.setdefault("cast", {})
+    if not isinstance(cast, dict):
+        raise SystemExit("case.cast must be a mapping in the source case config.")
+
+    defendants, collateral = _split_person_specs(case_setup["person_specs"])
+    cast["defendants"] = defendants
+    cast["collateral"] = collateral
+    cast["charged_orgs"] = case_setup["charged_orgs"]
+    cast["associated_orgs"] = case_setup["associated_orgs"]
+    cast["organisation_specs"] = case_setup["organisation_specs"]
+    cast.pop("address_surface_forms", None)
+
+    return generated
+
+
+def _split_person_specs(
+    person_specs: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    defendants: list[dict[str, Any]] = []
+    collateral: list[dict[str, Any]] = []
+    for spec in person_specs:
+        record = {key: value for key, value in spec.items() if key != "group"}
+        if spec["group"] == "collateral":
+            collateral.append(record)
+        else:
+            defendants.append(record)
+    return defendants, collateral
+
+
+def _scenario_options_text(options: Any) -> str:
+    if not isinstance(options, dict) or not options:
+        return "No configured scenario options."
+    return "\n".join(f"{key}: {label}" for key, label in options.items())
+
+
+def _publish_generated_case_yaml_artifact(
+    generated_path: Path,
+    scenario: dict[str, Any],
+) -> None:
+    generated_person_count = len(
+        _combined_person_specs(scenario.get("case", {}).get("cast", {}))
+    )
+    _publish_file_markdown(
+        key=_artifact_key("generated-case-yaml"),
+        description="Generated case.yaml constructed from Prefect Stage 1 inputs",
+        path=generated_path,
+        language="yaml",
+    )
+    create_markdown_artifact(
+        key=_artifact_key("generated-case-summary"),
+        description="Summary of the generated Stage 1 case YAML",
+        markdown="\n".join(
+            [
+                "# Generated Case YAML",
+                "",
+                "| Field | Value |",
+                "| --- | --- |",
+                f"| Source case config | `{scenario.get('source_case_config')}` |",
+                f"| Generated case config | `{scenario.get('case_config')}` |",
+                f"| Scenario | `{scenario.get('scenario_name')}` |",
+                f"| Fraud type | `{scenario.get('fraud_type')}` |",
+                f"| Person entities | `{generated_person_count}` |",
+                "",
+                "Stage 2 will load this generated case config before Faker resolves "
+                "names, organisations, addresses, dates, and counts.",
+            ]
+        ),
+    )
+
+
 def _scenario_review_initial_data(scenario: dict[str, Any]) -> dict[str, str]:
     return {
         "scenario_summary": _scenario_summary_text(scenario),
@@ -947,9 +2052,9 @@ def _scenario_review_initial_data(scenario: dict[str, Any]) -> dict[str, str]:
         "llm_language_plan": _llm_language_plan_text(scenario),
         "fraud_type_details": _fraud_type_details_text(scenario),
         "editable_fields_help": (
-            "Only edit case_config, documents, doc_type, fraud_type, or from_schema. "
-            "Use action=reload to re-read those choices, action=continue to accept, "
-            "or action=cancel to stop."
+            "Edit scenario, documents, doc_type, person_entities, organisation counts, "
+            "and organisation countries. The next pauses collect exactly one row per "
+            "selected PERSON and ORG entity."
         ),
     }
 
@@ -962,7 +2067,8 @@ def _scenario_summary_text(scenario: dict[str, Any]) -> str:
     auto_prose = _auto_keys(prose)
     return (
         f"Create {scenario.get('documents')} English `{scenario.get('doc_type')}` "
-        f"document(s) for `{scenario.get('fraud_type')}` using "
+        f"document(s) for `{scenario.get('scenario_name')}` "
+        f"(`{scenario.get('fraud_type')}`) using "
         f"`{scenario.get('case_config')}`. Metadata auto fields: "
         f"{_join_or_none(auto_metadata)}. Prose sections set to auto: "
         f"{_join_or_none(auto_prose)}."
@@ -1026,8 +2132,12 @@ def _fraud_type_details_text(scenario: dict[str, Any]) -> str:
     fraud_type = scenario.get("fraud_type")
     statutes = scenario.get("fraud_statutes", {})
     selected = statutes.get(fraud_type, []) if isinstance(statutes, dict) else []
+    options_text = _scenario_options_text(scenario.get("scenario_options", {}))
     if not isinstance(selected, list) or not selected:
-        return f"`fraud_type={fraud_type}` has no statute entries in this config."
+        return (
+            f"`fraud_type={fraud_type}` is selected for this scenario.\n\n"
+            f"Available Stage 1 scenario options:\n{options_text}"
+        )
     offences = [
         f"{item.get('offence', 'unknown offence')} ({item.get('statute', 'unknown statute')})"
         for item in selected
@@ -1036,7 +2146,8 @@ def _fraud_type_details_text(scenario: dict[str, Any]) -> str:
     return (
         f"`fraud_type={fraud_type}` loads these count/offence templates: "
         f"{_join_or_none(offences)}. Particulars are filled after Faker resolves "
-        "defendant names, company names, and offence dates."
+        "defendant names, company names, and offence dates.\n\n"
+        f"Available Stage 1 scenario options:\n{options_text}"
     )
 
 
@@ -1053,9 +2164,9 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
             "meaning": "Selects the document template and section structure.",
         },
         {
-            "field": "profile.fraud_type",
+            "field": "scenario.id",
             "current_value": scenario.get("fraud_type"),
-            "meaning": "Selects offence/count templates from fraud_statutes.",
+            "meaning": "Internal scenario id used for document ids and routing.",
         },
         {
             "field": "profile.documents",
@@ -1080,18 +2191,6 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
             if isinstance(case, dict)
             else "",
             "meaning": "Case refs and dates; auto values are generated before document writing.",
-        },
-        {
-            "field": "case.prose",
-            "current_value": _review_value(case.get("prose", {}))
-            if isinstance(case, dict)
-            else "",
-            "meaning": "Controls which sections are LLM-generated.",
-        },
-        {
-            "field": "case.counts",
-            "current_value": case.get("counts") if isinstance(case, dict) else "",
-            "meaning": "Controls whether legal counts are generated from fraud_statutes.",
         },
         {
             "field": "workflow",
@@ -1171,7 +2270,6 @@ def _publish_scenario_artifacts(scenario: dict[str, Any]) -> None:
                 f"| Document type | `{scenario['doc_type']}` |",
                 f"| Fraud type | `{scenario['fraud_type']}` |",
                 f"| Documents | `{scenario['documents']}` |",
-                f"| Source schema | `{scenario['from_schema'] or 'none'}` |",
                 f"| Quality config | `{scenario['quality_config'] or 'none'}` |",
                 "",
                 "## Input Files",
@@ -1187,18 +2285,80 @@ def _publish_scenario_artifacts(scenario: dict[str, Any]) -> None:
     )
 
 
-def _document_to_payload(document: Any) -> dict[str, Any]:
-    return {
+def _document_to_payload(document: Any, *, context: Any | None = None) -> dict[str, Any]:
+    payload = {
         "defendants": document.defendants,
         "collateral": document.collateral,
         "charged_orgs": document.charged_orgs,
         "associated_orgs": document.associated_orgs,
         "metadata": document.metadata,
+        "amounts": document.amounts,
         "counts_list": document.counts_list,
+        "evidence_categories": document.evidence_categories,
+        "scenario_brief": document.scenario_brief,
+    }
+    scenario = _document_payload_scenario(context)
+    if scenario:
+        return {"scenario": scenario, **payload}
+    return payload
+
+
+def _document_payload_scenario(context: Any | None) -> dict[str, str]:
+    if context is None:
+        return {}
+    fraud_type = str(getattr(context, "fraud_type", "") or "")
+    doc_type = str(getattr(context, "doc_type", "") or "")
+    if not fraud_type and not doc_type:
+        return {}
+    return {
+        "id": fraud_type,
+        "label": _scenario_label_for_fraud_type(fraud_type),
+        "doc_type": doc_type,
     }
 
 
-def _entity_names_summary(document_payload: dict[str, Any]) -> str:
+def _entity_review_scenario_summary(context: Any) -> str:
+    fraud_type = str(getattr(context, "fraud_type", "") or "")
+    doc_type = str(getattr(context, "doc_type", "") or "")
+    scenario_label = _scenario_label_for_fraud_type(fraud_type)
+    doc_label = doc_type.replace("_", " ") if doc_type else "unknown document type"
+    return "\n".join(
+        [
+            f"Scenario: {scenario_label} ({fraud_type or 'unknown scenario id'})",
+            f"Document type: {doc_label}",
+        ]
+    )
+
+
+def _entity_review_description(context: Any, document_payload: dict[str, Any]) -> str:
+    names_summary = _entity_names_summary(document_payload, separator="\n")
+    surface_forms_summary = _entity_surface_forms_summary(
+        document_payload,
+        separator="\n",
+    )
+    return "\n\n".join(
+        [
+            "Review resolved people and organisations before document generation.",
+            _entity_review_scenario_summary(context),
+            f"Generated names:\n{names_summary}",
+            f"Person surface forms:\n{surface_forms_summary}",
+            (
+                "Review the specifics below. Submit the form to accept the current "
+                "document_json, or edit it before submitting."
+            ),
+        ]
+    )
+
+
+def _scenario_label_for_fraud_type(fraud_type: str) -> str:
+    return fraud_type.replace("_", " ") if fraud_type else "unknown scenario"
+
+
+def _entity_names_summary(
+    document_payload: dict[str, Any],
+    *,
+    separator: str = " | ",
+) -> str:
     parts = [
         _names_for_group("Defendants", document_payload.get("defendants", [])),
         _names_for_group("Collateral", document_payload.get("collateral", [])),
@@ -1208,7 +2368,36 @@ def _entity_names_summary(document_payload: dict[str, Any]) -> str:
             document_payload.get("associated_orgs", []),
         ),
     ]
-    return " | ".join(part for part in parts if part)
+    return separator.join(part for part in parts if part)
+
+
+def _entity_surface_forms_summary(
+    document_payload: dict[str, Any],
+    *,
+    separator: str = " | ",
+) -> str:
+    parts = [
+        _surface_forms_for_group("Defendants", document_payload.get("defendants", [])),
+        _surface_forms_for_group("Collateral", document_payload.get("collateral", [])),
+    ]
+    return separator.join(part for part in parts if part)
+
+
+def _surface_forms_for_group(label: str, records: Any) -> str:
+    if not isinstance(records, list) or not records:
+        return f"{label}: none"
+    people: list[str] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        name = str(record.get("name") or "unnamed")
+        forms = record.get("surface_forms_list", [])
+        if isinstance(forms, list) and forms:
+            form_text = ", ".join(str(form) for form in forms if form)
+        else:
+            form_text = "none"
+        people.append(f"{name}: {form_text}")
+    return f"{label}: {'; '.join(people) if people else 'none'}"
 
 
 def _names_for_group(label: str, records: Any) -> str:
@@ -1310,7 +2499,7 @@ def _review_value(value: Any) -> str:
 
 def _document_from_review_json(document_json: str) -> DocumentInputs:
     if not document_json.strip():
-        raise SystemExit("Entity review action apply_json requires document_json.")
+        raise SystemExit("Entity review requires document_json.")
     try:
         payload = json.loads(document_json)
     except json.JSONDecodeError as exc:
@@ -1330,6 +2519,18 @@ def _document_from_review_json(document_json: str) -> DocumentInputs:
             raise SystemExit(f"Entity review document_json.{key} must be a list.")
     if not isinstance(payload.get("metadata"), dict):
         raise SystemExit("Entity review document_json.metadata must be an object.")
+    if not isinstance(payload.get("amounts"), dict):
+        raise SystemExit("Entity review document_json.amounts must be an object.")
+    scenario_brief = payload.get("scenario_brief", {})
+    if not isinstance(scenario_brief, dict):
+        raise SystemExit("Entity review document_json.scenario_brief must be an object.")
+    evidence_categories = payload.get("evidence_categories", [])
+    if not isinstance(evidence_categories, list) or not all(
+        isinstance(category, str) for category in evidence_categories
+    ):
+        raise SystemExit(
+            "Entity review document_json.evidence_categories must be a string list."
+        )
 
     return DocumentInputs(
         defendants=payload["defendants"],
@@ -1337,8 +2538,19 @@ def _document_from_review_json(document_json: str) -> DocumentInputs:
         charged_orgs=payload["charged_orgs"],
         associated_orgs=payload["associated_orgs"],
         metadata=payload["metadata"],
+        amounts=payload["amounts"],
         counts_list=payload["counts_list"],
+        evidence_categories=evidence_categories,
+        scenario_brief=scenario_brief,
     )
+
+
+def _document_json_matches_payload(document_json: str, payload: dict[str, Any]) -> bool:
+    try:
+        loaded = json.loads(document_json)
+    except json.JSONDecodeError:
+        return False
+    return loaded == payload
 
 
 def _publish_document_inputs_artifact(
@@ -1417,6 +2629,14 @@ def _artifact_doc_ids(context: Any) -> set[str]:
         doc_ids.update(
             path.stem
             for path in context.schema_dir.glob(f"{prefix}*.json")
+            if path.is_file()
+        )
+
+    generated_case_dir = context.project_root / "config_case" / "generated"
+    if generated_case_dir.exists():
+        doc_ids.update(
+            path.stem
+            for path in generated_case_dir.glob(f"{prefix}*.yaml")
             if path.is_file()
         )
 

@@ -1,6 +1,5 @@
 profile:
   doc_type: indictment
-  fraud_type: financial_fraud
   documents: 1
   section_words:
     persons: 450
@@ -11,9 +10,14 @@ profile:
     evidence: 650
     assessment: 650
 
+scenario:
+  id: procurement_fraud
+  family: Procurement fraud and corruption
+  label: Czechish transport ministry sound surveillance procurement
+
 case:
   metadata:
-    court: auto
+    court: Czechish District Court
     case_number: auto
     cross_ref: auto
     filing_date: auto
@@ -23,41 +27,71 @@ case:
 
   cast:
     defendants:
-      - nationality: DE
+      - nationality: CZ
         title: Dr
-        surface_forms: 2
-      - nationality: IT
-        title: Mr
-        surface_forms: 2
-      - nationality: FR
-        title: Ms
-        surface_forms: 1
+        surface_forms: 3
+        role: Executive Director
 
     collateral:
+      - nationality: CZ
+        title: ""
+        surface_forms: 1
+        role: Tender committee chair
+      - nationality: GR
+        title: ""
+        surface_forms: 1
+        role: Tender committee member
       - nationality: DE
         title: ""
         surface_forms: 1
-      - nationality: DE
+        role: Managing authority official
+      - nationality: BG
         title: ""
         surface_forms: 1
+        role: Company director
 
-    charged_orgs: 2
-    associated_orgs: 1
+    charged_orgs: 1
+    associated_orgs: 0
+    organisation_specs:
+      - group: charged
+        country: CZ
+        role: Sole tenderer / contractor
 
-  defendants: auto
-  collateral: auto
-  charged_orgs: auto
-  associated_orgs: auto
-  schema: auto
-  prose:
-    persons: auto
-    companies: auto
-    history: auto
-    charges: auto
-    facts: auto
-    evidence: auto
-    assessment: auto
-  counts: auto
+  scenario_brief:
+    title: "case {legal_reference} - procurement fraud and corruption"
+    offence: "procurement fraud and corruption"
+    legal_basis:
+      - "Article 2(2)(b) and Article 4(3) PIF Directive"
+      - "Article 90(9)(1) of the Czechish Public Procurement Act"
+      - "Article 282(2) of the Czechish Criminal Code"
+    particulars: >
+      The present case deals with alleged misconduct in office by
+      {first_defendant}, the {first_defendant_role} of the Czechish Transport
+      Ministry. The alleged misconduct happened in a public procurement
+      procedure for the construction, implementation and maintenance of a sound
+      surveillance system in 80 branches of the transport ministry, partly
+      funded by the European Social Fund. The conduct, if proved, would
+      constitute misconduct in office under Article 282(2) of the Czechish
+      Criminal Code. {first_defendant} launched the public tender. Only one
+      tender was submitted to the platform, by {first_company}, acting as the
+      {first_company_role}, and that tender was evaluated by a committee
+      appointed by {first_defendant}. The ranking was announced and the contract
+      was signed with the sole participating company.
+    procurement_irregularity: >
+      The managing authority imposed a financial correction of 10% of the
+      contract value, represented in this synthetic case as {total_loss}, based
+      on the alleged lack of sufficient description of the severity of the
+      award criteria. The tender weighting gave 10 points to the price for
+      construction and implementation of the sound surveillance system and 90
+      points to the monthly maintenance subscription fee. The managing
+      authority treated that weighting as a breach of Article 90(9)(1) of the
+      Czechish Public Procurement Act.
+    fixed_facts:
+      - "The procurement concerned a sound surveillance system."
+      - "The system covered 80 branches of the Czechish Transport Ministry."
+      - "The project was partly funded by the European Social Fund."
+      - "Only one tender was submitted to the platform."
+      - "The financial correction was 10% of the contract value."
 
 nationality_locales:
   GB: en_GB
@@ -81,6 +115,10 @@ nationality_locales:
   HR: hr_HR
   SK: sk_SK
   SI: sl_SI
+  RU: ru_RU
+  UA: uk_UA
+  CN: zh_CN
+  EG: ar_EG
 
 vat_prefixes:
   GB: GB
@@ -104,125 +142,7 @@ vat_prefixes:
   HR: HR
   SK: SK
   SI: SI
-
-fraud_statutes:
-  financial_fraud:
-    - offence: "FRAUD BY FALSE REPRESENTATION"
-      statute: "section 1 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly made false
-        representations, namely by submitting fabricated financial documentation
-        and inflated invoices valued at {inflated_invoice_value} through {companies},
-        causing an alleged loss of {total_loss}, intending thereby to make a
-        gain for themselves and to cause loss to others.
-    - offence: "CONSPIRACY TO DEFRAUD"
-      statute: "common law"
-      particulars: >
-        {defendants} between {start_date} and {end_date} conspired together and
-        with others to defraud by dishonestly causing {companies} to enter into
-        transactions on the basis of false and misleading information, causing an
-        alleged loss of {total_loss}.
-
-  procurement_fraud:
-    - offence: "FRAUD BY FALSE REPRESENTATION"
-      statute: "section 1 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly made false
-        representations to a public contracting authority, namely by presenting
-        fabricated delivery records and manipulated approval documents through
-        {companies}, intending thereby to obtain public funds to which they were
-        not entitled.
-    - offence: "FRAUDULENT TRADING"
-      statute: "section 9 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} were knowingly party to
-        the carrying on of the business of {companies} with intent to defraud
-        creditors and for other fraudulent purposes.
-
-  eu_subsidy_fraud:
-    - offence: "FRAUD BY FALSE REPRESENTATION"
-      statute: "section 1 of the Fraud Act 2006"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly made false
-        representations to a public authority administering European Union
-        recovery funds, namely by submitting false reimbursement claims and
-        fabricated supporting documents through {companies}, intending thereby
-        to obtain subsidy payments to which they were not entitled.
-    - offence: "FALSE ACCOUNTING"
-      statute: "section 17 of the Theft Act 1968"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly falsified
-        accounts and records belonging to {companies} with a view to gain for
-        themselves and with intent to cause loss to another.
-
-  customs_evasion:
-    - offence: "FRAUDULENT EVASION OF DUTY"
-      statute: "section 170 of the Customs and Excise Management Act 1979"
-      particulars: >
-        {defendants} between {start_date} and {end_date} were knowingly concerned
-        in the fraudulent evasion of customs duty chargeable on goods imported
-        through {companies} by deliberately understating the customs value of
-        consignments in declarations submitted to His Majesty's Revenue and Customs.
-    - offence: "FALSE ACCOUNTING"
-      statute: "section 17 of the Theft Act 1968"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dishonestly falsified
-        import documentation and valuation records belonging to {companies}
-        with intent to evade duty and to cause loss to the revenue.
-
-  money_laundering:
-    - offence: "CONCEALING CRIMINAL PROPERTY"
-      statute: "section 327 of the Proceeds of Crime Act 2002"
-      particulars: >
-        {defendants} between {start_date} and {end_date} concealed, disguised,
-        converted and transferred criminal property, namely the proceeds of fraud,
-        by routing funds through {companies} and a series of nominee accounts,
-        knowing or suspecting that the property constituted or represented a
-        person's benefit from criminal conduct.
-    - offence: "ACQUIRING CRIMINAL PROPERTY"
-      statute: "section 329 of the Proceeds of Crime Act 2002"
-      particulars: >
-        {defendants} between {start_date} and {end_date} acquired, used and
-        possessed criminal property, namely funds derived from fraud, transferred
-        through {companies}, knowing or suspecting the same to be criminal property.
-
-  tax_evasion:
-    - offence: "CHEATING THE PUBLIC REVENUE"
-      statute: "common law"
-      particulars: >
-        {defendants} between {start_date} and {end_date} cheated His Majesty's
-        Revenue and Customs by dishonestly concealing income and profits generated
-        through {companies}, thereby evading payment of income tax, corporation
-        tax and value added tax lawfully due.
-    - offence: "FRAUDULENT EVASION OF VALUE ADDED TAX"
-      statute: "section 72 of the Value Added Tax Act 1994"
-      particulars: >
-        {defendants} between {start_date} and {end_date} were knowingly concerned
-        in the fraudulent evasion of value added tax in connection with supplies
-        made through {companies} by submitting false VAT returns and suppressing
-        taxable turnover.
-
-  bribery:
-    - offence: "BRIBING ANOTHER PERSON"
-      statute: "section 1 of the Bribery Act 2010"
-      particulars: >
-        {defendants} between {start_date} and {end_date} offered, promised and
-        gave financial advantages to public officials and private individuals,
-        intending to induce those persons to perform relevant functions improperly
-        for the benefit of {companies}.
-    - offence: "FAILURE OF A COMMERCIAL ORGANISATION TO PREVENT BRIBERY"
-      statute: "section 7 of the Bribery Act 2010"
-      particulars: >
-        {companies} between {start_date} and {end_date} failed to prevent persons
-        associated with them from bribing another person, intending to obtain
-        or retain business and to obtain or retain an advantage in the conduct
-        of business.
-
-  insider_trading:
-    - offence: "INSIDER DEALING"
-      statute: "section 52 of the Criminal Justice Act 1993"
-      particulars: >
-        {defendants} between {start_date} and {end_date} dealt in price-affected
-        securities on a regulated market while in possession of inside information
-        relating to {companies}, which they had obtained through their positions
-        as insiders, and which was not generally available at the time of dealing.
+  RU: RU
+  UA: UA
+  CN: CN
+  EG: EG

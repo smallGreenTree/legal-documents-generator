@@ -8,7 +8,7 @@ MEMORY_TEXT = "\n".join(
         "- Doc ID: test_doc",
         "- Document type: persons_test",
         "- Fraud type: financial_fraud",
-        "- Court: Crown Court at Birmingham",
+        "- Court: Test Synthetic Court",
         "- Case number: T202601050",
         "- Cross reference: C/2025/3254",
         "- Filing date: 20 September 2025",
@@ -36,7 +36,8 @@ MEMORY_TEXT = "\n".join(
         "",
         "## Evidence Categories",
         "- Corporate identity records identify PAVAROTTI SERVICES LTD.",
-        "- Control relationship records support: Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD.",
+        "- Control relationship records support: "
+        "Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD.",
         "- Amount records support the listed monetary values: Total alleged loss: £559,822.",
         "",
         "## Relationship Graph",
