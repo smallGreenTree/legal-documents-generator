@@ -124,6 +124,10 @@ NATIONALITY_ADJECTIVES = {
     "HR": "Croatian",
     "SK": "Slovak",
     "SI": "Slovenian",
+    "RU": "Russian",
+    "UA": "Ukrainian",
+    "CN": "Chinese",
+    "EG": "Egyptian",
 }
 
 EN_LABELS = {

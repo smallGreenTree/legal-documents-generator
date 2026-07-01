@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from src.synthetic_ner.constants import NATIONALITY_ADJECTIVES
 from src.synthetic_ner.engine import build_groundtruth_rows
 from src.synthetic_ner.prefect_flows.utils import (
     EntityReviewInput,
@@ -25,6 +26,7 @@ from src.synthetic_ner.prefect_flows.utils import (
     _required_prefilled_input_model,
 )
 from src.synthetic_ner.types.document_inputs import DocumentInputs
+from src.synthetic_ner.utils import load_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -187,6 +189,12 @@ def test_prefect_stage_one_b_person_setup_has_exact_selected_rows():
         "FR",
         "IT",
     ]
+    assert schema["properties"]["person_1_nationality"]["enum"][-4:] == [
+        "RU",
+        "UA",
+        "CN",
+        "EG",
+    ]
     assert set(schema["required"]) == set(schema["properties"])
     assert all(field.is_required() for field in input_model.model_fields.values())
 
@@ -223,8 +231,33 @@ def test_prefect_stage_one_c_organisation_setup_has_exact_selected_rows():
         "FR",
         "IT",
     ]
+    assert schema["properties"]["organisation_1_country"]["enum"][-4:] == [
+        "RU",
+        "UA",
+        "CN",
+        "EG",
+    ]
     assert set(schema["required"]) == set(schema["properties"])
     assert all(field.is_required() for field in input_model.model_fields.values())
+
+
+def test_new_nationality_choices_have_faker_locales_and_labels():
+    case_config = load_config(PROJECT_ROOT / "config_case" / "case_1.yaml")
+
+    assert {key: NATIONALITY_ADJECTIVES[key] for key in ("RU", "UA", "CN", "EG")} == {
+        "RU": "Russian",
+        "UA": "Ukrainian",
+        "CN": "Chinese",
+        "EG": "Egyptian",
+    }
+    assert case_config["nationality_locales"]["RU"] == "ru_RU"
+    assert case_config["nationality_locales"]["UA"] == "uk_UA"
+    assert case_config["nationality_locales"]["CN"] == "zh_CN"
+    assert case_config["nationality_locales"]["EG"] == "ar_EG"
+    assert case_config["vat_prefixes"]["RU"] == "RU"
+    assert case_config["vat_prefixes"]["UA"] == "UA"
+    assert case_config["vat_prefixes"]["CN"] == "CN"
+    assert case_config["vat_prefixes"]["EG"] == "EG"
 
 
 def test_prefect_review_pause_forms_do_not_expose_action():

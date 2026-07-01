@@ -81,6 +81,10 @@ NationalityChoice = Literal[
     "HR",
     "SK",
     "SI",
+    "RU",
+    "UA",
+    "CN",
+    "EG",
 ]
 TitleChoice = Literal["No title", "Dr", "Mr", "Ms", "Mrs", "Prof"]
 SurfaceFormsChoice = Literal[1, 2, 3, 4]

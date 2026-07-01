@@ -81,6 +81,10 @@ nationality_locales:
   HR: hr_HR
   SK: sk_SK
   SI: sl_SI
+  RU: ru_RU
+  UA: uk_UA
+  CN: zh_CN
+  EG: ar_EG
 
 vat_prefixes:
   GB: GB
@@ -104,6 +108,10 @@ vat_prefixes:
   HR: HR
   SK: SK
   SI: SI
+  RU: RU
+  UA: UA
+  CN: CN
+  EG: EG
 
 fraud_statutes:
   procurement_fraud:
