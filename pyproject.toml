@@ -9,7 +9,7 @@ package-mode = false
 python = "^3.11"
 faker = ">=24.0.0"
 jinja2 = ">=3.1.0"
-langfuse = ">=4.0.0"
+mlflow = "3.14.0"
 langgraph = ">=0.2.0"
 prefect = { version = "3.4.24", python = ">=3.11,<3.14" }
 pyyaml = ">=6.0"

@@ -42,11 +42,15 @@ model_routing:
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated- ERROR dude]"
 
-langfuse:
+mlflow:
   enabled: true
-  host: http://localhost:3000
-  public_key_env: LANGFUSE_PUBLIC_KEY
-  secret_key_env: LANGFUSE_SECRET_KEY
+  tracking_uri: http://localhost:5000
+  experiment_name: ner-platform
+  service_name: synthetic-dataset-generation
+  pipeline_stage: synthetic_dataset_generation
+  trace_name: document-workflow
+  prompt_name_prefix: synthetic_ner
+  prompt_alias: production
 
 generation:
   words_per_page: 500

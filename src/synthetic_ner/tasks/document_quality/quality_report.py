@@ -229,8 +229,8 @@ def _top_failures(sections: list[dict[str, Any]]) -> list[str]:
 
 
 def format_markdown_report(report: dict[str, Any]) -> str:
-    include_langfuse = any(
-        section.get("langfuse_url") for section in report["sections"]
+    include_mlflow = any(
+        section.get("mlflow_url") for section in report["sections"]
     )
     lines = [
         f"# Quality Report: {report['doc_id']}",
@@ -241,12 +241,12 @@ def format_markdown_report(report: dict[str, Any]) -> str:
         "## Section Scores",
         "",
     ]
-    if include_langfuse:
+    if include_mlflow:
         lines.extend(
             [
                 (
                     "| Section | Score | Verdict | Revision | Words | "
-                    "Expected words | Issues | Langfuse |"
+                    "Expected words | Issues | MLflow |"
                 ),
                 "| --- | ---: | --- | ---: | ---: | ---: | ---: | --- |",
             ]
@@ -270,8 +270,8 @@ def format_markdown_report(report: dict[str, Any]) -> str:
             f"{section.get('expected_words', 'n/a')} | "
             f"{len(section['issues'])} |"
         )
-        if include_langfuse:
-            row += f" {_quality_link_or_na(section.get('langfuse_url'))} |"
+        if include_mlflow:
+            row += f" {_quality_link_or_na(section.get('mlflow_url'))} |"
         lines.append(row)
 
     lines.extend(_score_explanation_lines(report))

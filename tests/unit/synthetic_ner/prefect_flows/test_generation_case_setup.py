@@ -23,6 +23,7 @@ from src.synthetic_ner.prefect_flows.utils import (
     _parse_person_specs_yaml,
     _person_setup_review_input_model,
     _person_specs_from_review_response,
+    _person_variant_generation_from_review_response,
     _required_prefilled_input_model,
     _scenario_review_field_types,
     _used_doc_counters,
@@ -84,6 +85,14 @@ def test_case_setup_builds_generated_case_config():
     case_setup = {
         "court": "District Court of Example",
         "person_specs": person_specs,
+        "person_variant_generation": {
+            "enabled": True,
+            "generation": {
+                "nickname_variants": 1,
+                "misspelling_variants": 3,
+                "locale_aware": False,
+            },
+        },
         "charged_orgs": 2,
         "associated_orgs": 1,
         "organisation_specs": [
@@ -113,6 +122,16 @@ def test_case_setup_builds_generated_case_config():
     assert generated["case"]["cast"]["collateral"] == [
         {"nationality": "FR", "title": "Ms", "surface_forms": 1}
     ]
+    assert generated["entity_variants"] == {
+        "persons": {
+            "enabled": True,
+            "generation": {
+                "nickname_variants": 1,
+                "misspelling_variants": 3,
+                "locale_aware": False,
+            },
+        }
+    }
 
 
 def test_generated_case_yaml_reserves_document_id(tmp_path):
@@ -224,10 +243,36 @@ def test_prefect_stage_one_b_person_setup_has_exact_selected_rows():
         from_schema=None,
     )
     specs = _initial_person_specs_for_setup(scenario, 3)
-    input_model = _person_setup_review_input_model(specs)
+    input_model = _person_setup_review_input_model(scenario, specs)
 
     schema = input_model.model_json_schema()
 
+    assert schema["properties"]["nickname_variants"]["enum"] == [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+    ]
+    assert schema["properties"]["misspelling_variants"]["enum"] == [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+    ]
     assert "person_1_group" in schema["properties"]
     assert "person_1_role" in schema["properties"]
     assert "person_1_custom_role" in schema["properties"]
@@ -455,7 +500,21 @@ def test_case_setup_reads_prefect_person_rows():
         court="District Court of Example",
         doc_type="indictment",
     )
+    scenario = {
+        "fraud_type": "procurement_fraud",
+        "entity_variants": {
+            "persons": {
+                "enabled": True,
+                "generation": {
+                    "nickname_variants": 2,
+                    "misspelling_variants": 2,
+                    "locale_aware": False,
+                },
+            }
+        },
+    }
     person_model = _person_setup_review_input_model(
+        scenario,
         [
             {
                 "group": "defendant",
@@ -474,6 +533,8 @@ def test_case_setup_reads_prefect_person_rows():
         ]
     )
     person_response = person_model(
+        nickname_variants=1,
+        misspelling_variants=0,
         person_1_group="defendant",
         person_1_role="Executive Director",
         person_1_custom_role="",
@@ -487,8 +548,11 @@ def test_case_setup_reads_prefect_person_rows():
         person_2_title="No title",
         person_2_surface_forms=1,
     )
-    scenario = {"fraud_type": "procurement_fraud"}
     person_specs = _person_specs_from_review_response(person_response, 2)
+    person_variant_generation = _person_variant_generation_from_review_response(
+        person_response,
+        scenario,
+    )
     organisation_model = _organisation_setup_review_input_model(
         [{"group": "charged", "role": "Contractor", "country": "DE"}]
     )
@@ -507,6 +571,7 @@ def test_case_setup_reads_prefect_person_rows():
         setup_response,
         scenario,
         person_specs,
+        person_variant_generation,
         organisation_specs,
     )
 
@@ -527,6 +592,14 @@ def test_case_setup_reads_prefect_person_rows():
         },
     ]
     assert case_setup["court"] == "District Court of Example"
+    assert case_setup["person_variant_generation"] == {
+        "enabled": True,
+        "generation": {
+            "nickname_variants": 1,
+            "misspelling_variants": 0,
+            "locale_aware": False,
+        },
+    }
     assert case_setup["charged_orgs"] == 1
     assert case_setup["associated_orgs"] == 0
     assert case_setup["organisation_specs"] == [

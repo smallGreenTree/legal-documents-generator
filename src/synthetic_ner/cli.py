@@ -66,7 +66,7 @@ def resolve_workflow_mode(project_root: Path, args: argparse.Namespace) -> str:
 
 
 def load_env_files(project_root: Path) -> None:
-    for env_name in (".env", ".env.langfuse"):
+    for env_name in (".env", ".env.mlflow"):
         _load_env_file(project_root / env_name)
 
 

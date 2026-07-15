@@ -90,7 +90,7 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         max_revisions=2,
         validators=validators,
     )
-    langfuse_cfg = replace(app_config.langfuse, enabled=False)
+    mlflow_cfg = replace(app_config.mlflow, enabled=False)
     template_path = tmp_path / "facts_test.j2"
     template_path.write_text(
         "FACTS TEST\n\n{{ llm_sections[0] }}\n",
@@ -110,7 +110,7 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         generation_cfg=app_config.generation,
         profile=replace(app_config.profile, doc_type="facts_test"),
         case_cfg=app_config.case,
-        langfuse_cfg=langfuse_cfg,
+        mlflow_cfg=mlflow_cfg,
         model_routing_cfg=app_config.model_routing,
         workflow_cfg=workflow_cfg,
         nat_locales=app_config.nationality_locales,

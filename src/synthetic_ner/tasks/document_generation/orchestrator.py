@@ -5,11 +5,13 @@ from __future__ import annotations
 from argparse import Namespace
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from functools import wraps
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+
 from src.synthetic_ner.engine import (
     build_runtime_context,
     build_size_label,
@@ -69,7 +71,7 @@ def run_document_graph(
         raise ValueError("workflow.writer.active must be true for document generation.")
 
     trace_store = TraceStore(
-        context.langfuse_cfg,
+        context.mlflow_cfg,
         run_metadata={
             "doc_id": doc_id,
             "workflow_run_id": workflow_run_id or doc_id,
@@ -161,7 +163,6 @@ def run_document_graph(
 
     trace_info = trace_store.start_document_run(
         doc_id=doc_id,
-        name="document-workflow",
         input_payload={
             "doc_id": doc_id,
             "doc_type": context.doc_type,
@@ -391,6 +392,7 @@ class DocumentWorkflow:
                 ) as executor:
                     futures = {
                         executor.submit(
+                            copy_context().run,
                             self._run_section_workflow,
                             state,
                             section_name,

@@ -410,7 +410,7 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         generation_cfg=app_config.generation,
         profile=profile,
         case_cfg=app_config.case,
-        langfuse_cfg=app_config.langfuse,
+        mlflow_cfg=app_config.mlflow,
         model_routing_cfg=app_config.model_routing,
         workflow_cfg=app_config.workflow,
         nat_locales=app_config.nationality_locales,

@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment
+
 from src.synthetic_ner.types.app_config import (
     AppConfig,
     CaseConfig,
     GenerationConfig,
-    LangfuseConfig,
+    MlflowConfig,
     ModelRoutingConfig,
     PathsConfig,
     ProfileConfig,
@@ -24,7 +25,7 @@ class RuntimeContext:
     generation_cfg: GenerationConfig
     profile: ProfileConfig
     case_cfg: CaseConfig
-    langfuse_cfg: LangfuseConfig
+    mlflow_cfg: MlflowConfig
     model_routing_cfg: ModelRoutingConfig
     workflow_cfg: WorkflowConfig
     nat_locales: dict[str, str]

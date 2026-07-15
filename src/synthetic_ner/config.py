@@ -15,7 +15,7 @@ from src.synthetic_ner.types.app_config import (
     CriticConfig,
     EntityVariantsConfig,
     GenerationConfig,
-    LangfuseConfig,
+    MlflowConfig,
     ModelProviderConfig,
     ModelRoutingConfig,
     OffencePeriodConfig,
@@ -95,17 +95,18 @@ def build_app_config(
 ) -> AppConfig:
     profile_cfg = _require_mapping(case_cfg["profile"], "profile")
     scenario_cfg = _require_mapping(case_cfg.get("scenario", {}), "scenario")
+    entity_variants_cfg = case_cfg.get("entity_variants", cfg["entity_variants"])
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
         model_routing=_build_model_routing_config(
             _require_mapping(cfg["model_routing"], "model_routing"),
         ),
-        langfuse=_build_langfuse_config(_require_mapping(cfg["langfuse"], "langfuse")),
+        mlflow=_build_mlflow_config(_require_mapping(cfg["mlflow"], "mlflow")),
         generation=_build_generation_config(
             _require_mapping(cfg["generation"], "generation")
         ),
         entity_variants=_build_entity_variants_config(
-            _require_mapping(cfg["entity_variants"], "entity_variants")
+            _require_mapping(entity_variants_cfg, "entity_variants")
         ),
         workflow=_build_workflow_config(
             _require_mapping(cfg["workflow"], "workflow"),
@@ -222,18 +223,22 @@ def _build_model_provider_config(
     )
 
 
-def _build_langfuse_config(raw: dict[str, Any]) -> LangfuseConfig:
-    return LangfuseConfig(
-        enabled=_require_bool(raw["enabled"], "langfuse.enabled"),
-        host=_require_string(raw["host"], "langfuse.host"),
-        public_key_env=_require_string(
-            raw["public_key_env"],
-            "langfuse.public_key_env",
+def _build_mlflow_config(raw: dict[str, Any]) -> MlflowConfig:
+    return MlflowConfig(
+        enabled=_require_bool(raw["enabled"], "mlflow.enabled"),
+        tracking_uri=_require_string(raw["tracking_uri"], "mlflow.tracking_uri"),
+        experiment_name=_require_string(
+            raw["experiment_name"],
+            "mlflow.experiment_name",
         ),
-        secret_key_env=_require_string(
-            raw["secret_key_env"],
-            "langfuse.secret_key_env",
+        service_name=_require_string(raw["service_name"], "mlflow.service_name"),
+        pipeline_stage=_require_string(raw["pipeline_stage"], "mlflow.pipeline_stage"),
+        trace_name=_require_string(raw["trace_name"], "mlflow.trace_name"),
+        prompt_name_prefix=_require_string(
+            raw["prompt_name_prefix"],
+            "mlflow.prompt_name_prefix",
         ),
+        prompt_alias=_require_string(raw["prompt_alias"], "mlflow.prompt_alias"),
     )
 
 

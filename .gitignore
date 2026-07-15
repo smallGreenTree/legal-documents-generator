@@ -5,7 +5,8 @@ __pycache__/
 .ruff_cache/
 .prefect/
 .env
-.env.langfuse
+.env.mlflow
+.env.platform
 config_case/generated/
 output/
 memory/*
