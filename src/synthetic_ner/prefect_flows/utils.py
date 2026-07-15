@@ -415,9 +415,7 @@ def _required_prefilled_input_model(
 def _scenario_review_field_types(scenario: dict[str, Any]) -> dict[str, Any]:
     scenario_options = scenario.get("scenario_options", {})
     specific_scenario_options = scenario.get("specific_scenario_options", {})
-    family_values = (
-        list(scenario_options.values()) if isinstance(scenario_options, dict) else []
-    )
+    family_values = list(scenario_options.values()) if isinstance(scenario_options, dict) else []
     specific_values = (
         list(specific_scenario_options.values())
         if isinstance(specific_scenario_options, dict)
@@ -678,9 +676,7 @@ def select_quality_document(
 
     candidates = publish_quality_document_selection(context, timeout_seconds)
     if not candidates:
-        raise SystemExit(
-            "No generated documents are available for this doc_type/fraud_type."
-        )
+        raise SystemExit("No generated documents are available for this doc_type/fraud_type.")
 
     review_input = _required_prefilled_input_model(
         QualityDocumentSelectionInput,
@@ -730,15 +726,12 @@ def _quality_document_candidates(context: Any) -> list[dict[str, Any]]:
         doc_ids.update(
             path.name.removeprefix("case_")
             for path in context.memory_dir.iterdir()
-            if path.is_dir()
-            and path.name.startswith(f"case_{prefix}")
+            if path.is_dir() and path.name.startswith(f"case_{prefix}")
         )
 
     if context.schema_dir.exists():
         doc_ids.update(
-            path.stem
-            for path in context.schema_dir.glob(f"{prefix}*.json")
-            if path.is_file()
+            path.stem for path in context.schema_dir.glob(f"{prefix}*.json") if path.is_file()
         )
 
     return [
@@ -1588,13 +1581,9 @@ def _person_row_initial_data(
         role_choice, custom_role = _person_role_initial_values(spec.get("role"))
         rows[f"person_{index}_role"] = role_choice
         rows[f"person_{index}_custom_role"] = custom_role
-        rows[f"person_{index}_nationality"] = _nationality_choice(
-            spec.get("nationality")
-        )
+        rows[f"person_{index}_nationality"] = _nationality_choice(spec.get("nationality"))
         rows[f"person_{index}_title"] = _title_choice(spec.get("title"))
-        rows[f"person_{index}_surface_forms"] = _surface_forms_choice(
-            spec.get("surface_forms")
-        )
+        rows[f"person_{index}_surface_forms"] = _surface_forms_choice(spec.get("surface_forms"))
     return rows
 
 
@@ -1602,12 +1591,8 @@ def _person_variant_initial_data(scenario: dict[str, Any]) -> dict[str, Any]:
     variants = _person_variant_generation_from_scenario(scenario)
     generation = variants["generation"]
     return {
-        "nickname_variants": _variant_count_choice(
-            generation.get("nickname_variants")
-        ),
-        "misspelling_variants": _variant_count_choice(
-            generation.get("misspelling_variants")
-        ),
+        "nickname_variants": _variant_count_choice(generation.get("nickname_variants")),
+        "misspelling_variants": _variant_count_choice(generation.get("misspelling_variants")),
     }
 
 
@@ -1618,15 +1603,11 @@ def _organisation_row_initial_data(
     rows: dict[str, Any] = {}
     for index in range(1, organisation_count + 1):
         spec = organisation_specs[index - 1]
-        rows[f"organisation_{index}_group"] = _organisation_group_choice(
-            spec.get("group")
-        )
+        rows[f"organisation_{index}_group"] = _organisation_group_choice(spec.get("group"))
         role_choice, custom_role = _organisation_role_initial_values(spec.get("role"))
         rows[f"organisation_{index}_role"] = role_choice
         rows[f"organisation_{index}_custom_role"] = custom_role
-        rows[f"organisation_{index}_country"] = _nationality_choice(
-            spec.get("country")
-        )
+        rows[f"organisation_{index}_country"] = _nationality_choice(spec.get("country"))
     return rows
 
 
@@ -1683,17 +1664,9 @@ def _person_variant_generation_from_scenario(
     scenario: dict[str, Any],
 ) -> dict[str, Any]:
     entity_variants = scenario.get("entity_variants", {})
-    persons = (
-        entity_variants.get("persons", {})
-        if isinstance(entity_variants, dict)
-        else {}
-    )
+    persons = entity_variants.get("persons", {}) if isinstance(entity_variants, dict) else {}
     generation = persons.get("generation", {}) if isinstance(persons, dict) else {}
-    enabled = (
-        bool(persons.get("enabled", True))
-        if isinstance(persons, dict)
-        else True
-    )
+    enabled = bool(persons.get("enabled", True)) if isinstance(persons, dict) else True
     nickname_variants = _non_negative_review_int(
         generation.get("nickname_variants", 0),
         "entity_variants.persons.generation.nickname_variants",
@@ -1731,9 +1704,7 @@ def _organisation_specs_from_review_response(
                     getattr(response, f"organisation_{index}_custom_role"),
                     f"organisation_{index}",
                 ),
-                "country": _nationality_choice(
-                    getattr(response, f"organisation_{index}_country")
-                ),
+                "country": _nationality_choice(getattr(response, f"organisation_{index}_country")),
             }
         )
     return specs
@@ -1985,8 +1956,7 @@ def _resize_organisation_group_specs(
     resized = [
         {
             "group": group,
-            "role": str(spec.get("role", "")).strip()
-            or _default_organisation_role(group),
+            "role": str(spec.get("role", "")).strip() or _default_organisation_role(group),
             "country": _nationality_choice(spec.get("country")),
         }
         for spec in organisation_specs[:count]
@@ -2158,9 +2128,7 @@ def _publish_generated_case_yaml_artifact(
     generated_path: Path,
     scenario: dict[str, Any],
 ) -> None:
-    generated_person_count = len(
-        _combined_person_specs(scenario.get("case", {}).get("cast", {}))
-    )
+    generated_person_count = len(_combined_person_specs(scenario.get("case", {}).get("cast", {})))
     _publish_file_markdown(
         key=_artifact_key("generated-case-yaml"),
         description="Generated case.yaml constructed from Prefect Stage 1 inputs",
@@ -2223,9 +2191,7 @@ def _scenario_summary_text(scenario: dict[str, Any]) -> str:
 def _document_type_details_text(scenario: dict[str, Any]) -> str:
     profile = scenario.get("profile", {})
     section_words = profile.get("section_words", {}) if isinstance(profile, dict) else {}
-    sections = [
-        f"{name} (~{words} words)" for name, words in section_words.items()
-    ]
+    sections = [f"{name} (~{words} words)" for name, words in section_words.items()]
     template_path = scenario.get("template_path") or "not resolved"
     preview = scenario.get("template_preview") or "Template preview unavailable."
     return (
@@ -2548,11 +2514,7 @@ def _surface_forms_for_group(label: str, records: Any) -> str:
 def _names_for_group(label: str, records: Any) -> str:
     if not isinstance(records, list) or not records:
         return f"{label}: none"
-    names = [
-        str(record.get("name", "unnamed"))
-        for record in records
-        if isinstance(record, dict)
-    ]
+    names = [str(record.get("name", "unnamed")) for record in records if isinstance(record, dict)]
     return f"{label}: {', '.join(names) if names else 'none'}"
 
 
@@ -2614,10 +2576,7 @@ def _entity_org_review_rows(document_payload: dict[str, Any]) -> list[dict[str, 
 def _key_value_rows(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
-    return [
-        {"field": key, "value": _review_value(value)}
-        for key, value in payload.items()
-    ]
+    return [{"field": key, "value": _review_value(value)} for key, value in payload.items()]
 
 
 def _counts_review_rows(counts_list: Any) -> list[dict[str, Any]]:
@@ -2673,9 +2632,7 @@ def _document_from_review_json(document_json: str) -> DocumentInputs:
     if not isinstance(evidence_categories, list) or not all(
         isinstance(category, str) for category in evidence_categories
     ):
-        raise SystemExit(
-            "Entity review document_json.evidence_categories must be a string list."
-        )
+        raise SystemExit("Entity review document_json.evidence_categories must be a string list.")
 
     return DocumentInputs(
         defendants=payload["defendants"],
@@ -2735,9 +2692,7 @@ def _collect_document_files(
         if not root.exists():
             continue
         paths = (
-            [root]
-            if root.is_file()
-            else sorted(path for path in root.rglob("*") if path.is_file())
+            [root] if root.is_file() else sorted(path for path in root.rglob("*") if path.is_file())
         )
         for path in paths:
             resolved = path.resolve()
@@ -2765,24 +2720,18 @@ def _artifact_doc_ids(context: Any) -> set[str]:
         if not root.exists():
             continue
         doc_ids.update(
-            path.name
-            for path in root.iterdir()
-            if path.is_dir() and path.name.startswith(prefix)
+            path.name for path in root.iterdir() if path.is_dir() and path.name.startswith(prefix)
         )
 
     if context.schema_dir.exists():
         doc_ids.update(
-            path.stem
-            for path in context.schema_dir.glob(f"{prefix}*.json")
-            if path.is_file()
+            path.stem for path in context.schema_dir.glob(f"{prefix}*.json") if path.is_file()
         )
 
     generated_case_dir = context.project_root / "config_case" / "generated"
     if generated_case_dir.exists():
         doc_ids.update(
-            path.stem
-            for path in generated_case_dir.glob(f"{prefix}*.yaml")
-            if path.is_file()
+            path.stem for path in generated_case_dir.glob(f"{prefix}*.yaml") if path.is_file()
         )
 
     memory_prefix = f"case_{prefix}"
@@ -2887,9 +2836,7 @@ def _publish_entity_artifacts(document: Any) -> None:
                 "name": org["name"],
                 "vat": org["vat"],
                 "address": org["address"],
-                "group": "charged"
-                if org in document.charged_orgs
-                else "associated",
+                "group": "charged" if org in document.charged_orgs else "associated",
             }
             for org in [*document.charged_orgs, *document.associated_orgs]
         ],
@@ -3014,15 +2961,18 @@ def _quality_analysis_markdown(
     overview: dict[str, Any],
 ) -> str:
     report_with_links = _quality_report_with_mlflow_links(report, overview)
-    return "\n\n".join(
-        [
-            f"# Document Quality Analysis: `{doc_id}`",
-            _demote_markdown_headings(format_run_health_markdown(overview)),
-            _demote_markdown_headings(format_model_workflow_markdown(overview)),
-            _demote_markdown_headings(format_audit_confidence_markdown(overview)),
-            _demote_markdown_headings(format_markdown_report(report_with_links)),
-        ]
-    ).rstrip() + "\n"
+    return (
+        "\n\n".join(
+            [
+                f"# Document Quality Analysis: `{doc_id}`",
+                _demote_markdown_headings(format_run_health_markdown(overview)),
+                _demote_markdown_headings(format_model_workflow_markdown(overview)),
+                _demote_markdown_headings(format_audit_confidence_markdown(overview)),
+                _demote_markdown_headings(format_markdown_report(report_with_links)),
+            ]
+        ).rstrip()
+        + "\n"
+    )
 
 
 def _quality_report_with_mlflow_links(
@@ -3048,9 +2998,7 @@ def _quality_report_with_mlflow_links(
         rubric = rubric_by_section.get(section_name, {})
         enriched_section = dict(section)
         enriched_section["mlflow_url"] = (
-            reference.get("text_url")
-            or reference.get("critic_url")
-            or rubric.get("mlflow_url")
+            reference.get("text_url") or reference.get("critic_url") or rubric.get("mlflow_url")
         )
         enriched_sections.append(enriched_section)
     enriched["sections"] = enriched_sections

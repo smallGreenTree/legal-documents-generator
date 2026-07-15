@@ -77,9 +77,7 @@ def load_app_config(
     )
     case_raw = load_config(resolved_case_config_path)
     if not isinstance(case_raw, dict):
-        raise ValueError(
-            f"{resolved_case_config_path} must load into a top-level mapping"
-        )
+        raise ValueError(f"{resolved_case_config_path} must load into a top-level mapping")
     return build_app_config(
         raw,
         case_cfg=case_raw,
@@ -102,9 +100,7 @@ def build_app_config(
             _require_mapping(cfg["model_routing"], "model_routing"),
         ),
         mlflow=_build_mlflow_config(_require_mapping(cfg["mlflow"], "mlflow")),
-        generation=_build_generation_config(
-            _require_mapping(cfg["generation"], "generation")
-        ),
+        generation=_build_generation_config(_require_mapping(cfg["generation"], "generation")),
         entity_variants=_build_entity_variants_config(
             _require_mapping(entity_variants_cfg, "entity_variants")
         ),
@@ -150,13 +146,10 @@ def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
 def _build_model_routing_config(raw: dict[str, Any]) -> ModelRoutingConfig:
     stages_raw = _require_mapping(raw["stages"], "model_routing.stages")
     required_stages = ("planner", "writer", "critic")
-    missing_stages = [
-        stage_name for stage_name in required_stages if stage_name not in stages_raw
-    ]
+    missing_stages = [stage_name for stage_name in required_stages if stage_name not in stages_raw]
     if missing_stages:
         raise ValueError(
-            "model_routing.stages must explicitly configure: "
-            + ", ".join(missing_stages)
+            "model_routing.stages must explicitly configure: " + ", ".join(missing_stages)
         )
     stages = {
         stage_name: _build_model_provider_config(
@@ -183,17 +176,9 @@ def _build_model_provider_config(
         else None
     )
     think_value = raw.get("think")
-    think = (
-        _require_bool(think_value, f"{path}.think")
-        if think_value is not None
-        else None
-    )
+    think = _require_bool(think_value, f"{path}.think") if think_value is not None else None
     top_p_value = raw.get("top_p")
-    top_p = (
-        _require_ratio(top_p_value, f"{path}.top_p")
-        if top_p_value is not None
-        else None
-    )
+    top_p = _require_ratio(top_p_value, f"{path}.top_p") if top_p_value is not None else None
     recovery = _require_mapping(raw["recovery"], f"{path}.recovery")
     max_generate_attempts = _require_positive_int(
         recovery["max_generate_attempts"],
@@ -287,12 +272,8 @@ def _build_workflow_config(
     config_path: Path | None = None,
 ) -> WorkflowConfig:
     prompts = _resolve_workflow_prompts(raw, config_path=config_path)
-    planner_cfg = _build_planner_config(
-        _require_mapping(raw["planner"], "workflow.planner")
-    )
-    critic_cfg = _build_critic_config(
-        _require_mapping(raw["critic"], "workflow.critic")
-    )
+    planner_cfg = _build_planner_config(_require_mapping(raw["planner"], "workflow.planner"))
+    critic_cfg = _build_critic_config(_require_mapping(raw["critic"], "workflow.critic"))
     writer = _require_mapping(raw["writer"], "workflow.writer")
     writer_max_output_tokens = _require_positive_int(
         writer["max_output_tokens"],
@@ -476,9 +457,7 @@ def _resolve_workflow_prompts(
     )
     prompts_raw = load_config(prompts_config_path)
     if not isinstance(prompts_raw, dict):
-        raise ValueError(
-            f"{prompts_config_path} must contain a top-level mapping"
-        )
+        raise ValueError(f"{prompts_config_path} must contain a top-level mapping")
     if "prompts" in prompts_raw:
         return _require_mapping(
             prompts_raw["prompts"],
@@ -798,10 +777,7 @@ def _build_required_int_mapping(
     path: str,
 ) -> dict[str, int]:
     raw = _require_mapping(value, path)
-    return {
-        key: _require_positive_int(item, f"{path}.{key}")
-        for key, item in raw.items()
-    }
+    return {key: _require_positive_int(item, f"{path}.{key}") for key, item in raw.items()}
 
 
 def _build_string_mapping(
@@ -900,8 +876,6 @@ def _require_non_negative_int(value: Any, path: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{path} must be a non-negative integer")
     return value
-
-
 
 
 def _require_number(value: Any, path: str) -> float:

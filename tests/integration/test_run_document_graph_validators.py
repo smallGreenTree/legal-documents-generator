@@ -65,12 +65,8 @@ def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
         doc_id=DOC_ID,
         workflow_run_id=f"test-{unknown_amounts}",
     )
-    report_text = (context.output_dir / DOC_ID / "generation_report.md").read_text(
-        encoding="utf-8"
-    )
-    document_text = (context.output_dir / DOC_ID / f"{DOC_ID}.txt").read_text(
-        encoding="utf-8"
-    )
+    report_text = (context.output_dir / DOC_ID / "generation_report.md").read_text(encoding="utf-8")
+    document_text = (context.output_dir / DOC_ID / f"{DOC_ID}.txt").read_text(encoding="utf-8")
     return SimpleNamespace(
         calls=calls,
         report_text=report_text,
@@ -168,8 +164,7 @@ def _document_inputs() -> DocumentInputs:
                 "offence": "FRAUD BY FALSE REPRESENTATION",
                 "statute": "section 1 of the Fraud Act 2006",
                 "particulars": (
-                    "Ann-Kathrin Dietz caused loss of £559,822 through "
-                    "PAVAROTTI SERVICES LTD."
+                    "Ann-Kathrin Dietz caused loss of £559,822 through PAVAROTTI SERVICES LTD."
                 ),
             }
         ],

@@ -72,9 +72,7 @@ def _section_reference_parts(memory_text: str, section_name: str) -> list[str]:
 
     parts = ["## Allowed References"]
     for heading in headings:
-        parts.extend(
-            ["", f"### {heading}", _extract_markdown_subsection(memory_text, heading)]
-        )
+        parts.extend(["", f"### {heading}", _extract_markdown_subsection(memory_text, heading)])
     return parts
 
 
@@ -210,9 +208,7 @@ def _extract_markdown_subsection(memory_text: str, heading: str) -> str:
     start_index = start + len(marker)
     tail = memory_text[start_index:]
     next_heading_positions = [
-        position
-        for position in (tail.find("\n### "), tail.find("\n## "))
-        if position != -1
+        position for position in (tail.find("\n### "), tail.find("\n## ")) if position != -1
     ]
     end = min(next_heading_positions) if next_heading_positions else len(tail)
     block = tail[:end]
@@ -249,11 +245,7 @@ def _allowed_person_details(memory_text: str) -> dict[str, dict[str, str]]:
 
 
 def _iter_bullet_lines(block: str) -> list[str]:
-    return [
-        line[2:].strip()
-        for line in block.splitlines()
-        if line.strip().startswith("- ")
-    ]
+    return [line[2:].strip() for line in block.splitlines() if line.strip().startswith("- ")]
 
 
 def _parse_pipe_fields(line: str) -> dict[str, str]:

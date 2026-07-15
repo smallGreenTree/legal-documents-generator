@@ -282,12 +282,14 @@ class TraceStore:
         error_message: str,
         metadata: dict[str, Any],
     ) -> None:
-        enriched_metadata = self._metadata({
-            **handle.metadata,
-            **metadata,
-            "error": True,
-            "error_message": error_message,
-        })
+        enriched_metadata = self._metadata(
+            {
+                **handle.metadata,
+                **metadata,
+                "error": True,
+                "error_message": error_message,
+            }
+        )
         self._record_llm_call_metadata(enriched_metadata)
         if handle.observation is None:
             return
@@ -450,11 +452,7 @@ class TraceStore:
                 "doc_id": metadata.get("doc_id"),
                 "mlflow_session_id": metadata.get("mlflow_session_id"),
                 "critic_rubrics": metadata.get("critic_rubrics"),
-                **{
-                    key: value
-                    for key, value in metadata.items()
-                    if key.startswith("rubric_")
-                },
+                **{key: value for key, value in metadata.items() if key.startswith("rubric_")},
             }
         )
 

@@ -47,7 +47,6 @@ _AMOUNT_RE = re.compile(
 )
 
 
-
 def build_section_word_targets(
     profile: ProfileConfig,
 ) -> dict[str, int]:
@@ -57,8 +56,7 @@ def build_section_word_targets(
     invalid = [
         name
         for name in section_order
-        if name in configured
-        and (not isinstance(configured[name], int) or configured[name] <= 0)
+        if name in configured and (not isinstance(configured[name], int) or configured[name] <= 0)
     ]
 
     problems = []
@@ -67,9 +65,7 @@ def build_section_word_targets(
     if not section_order:
         problems.append("at least one section is required")
     if problems:
-        raise ValueError(
-            f"Invalid profile.section_words: {'; '.join(problems)}"
-        )
+        raise ValueError(f"Invalid profile.section_words: {'; '.join(problems)}")
 
     return {name: configured[name] for name in section_order}
 
@@ -112,11 +108,7 @@ def filter_groundtruth_rows_for_rendered_text(
     rendered_text: str,
 ) -> list[tuple[str, str, str, str, str]]:
     searchable_text = _normalize_groundtruth_surface(rendered_text)
-    return [
-        row
-        for row in rows
-        if _normalize_groundtruth_surface(row[1]) in searchable_text
-    ]
+    return [row for row in rows if _normalize_groundtruth_surface(row[1]) in searchable_text]
 
 
 def _normalize_groundtruth_surface(value: str) -> str:
@@ -329,7 +321,8 @@ def _append_address_rows(
 
 
 def build_template_environment(template_path: Path) -> Environment:
-    return Environment(
+    # Templates produce plain-text legal documents, never HTML.
+    return Environment(  # nosec B701
         loader=FileSystemLoader(str(template_path.parent)),
         trim_blocks=True,
         lstrip_blocks=True,
@@ -398,9 +391,7 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         raise SystemExit(str(exc)) from exc
 
     schema_source_path = (
-        resolve_project_path(project_root, args.from_schema)
-        if args.from_schema
-        else None
+        resolve_project_path(project_root, args.from_schema) if args.from_schema else None
     )
 
     return RuntimeContext(
@@ -559,7 +550,6 @@ def resolve_schema_for_document(
     return doc_id, schema
 
 
-
 def collect_section_output_problems(
     section_targets: dict[str, int],
     section_texts: list[str],
@@ -569,9 +559,7 @@ def collect_section_output_problems(
     section_names = list(section_targets.keys())
 
     if len(section_texts) != len(section_names):
-        problems.append(
-            f"expected {len(section_names)} sections, got {len(section_texts)}"
-        )
+        problems.append(f"expected {len(section_names)} sections, got {len(section_texts)}")
 
     for index, section_name in enumerate(section_names):
         if index >= len(section_texts):
@@ -624,13 +612,9 @@ def ensure_target_paths_available(
     schema_path: Path,
 ) -> None:
     if context.schema_source_path and doc_dir.exists():
-        raise SystemExit(
-            f"Target output folder already exists for schema-derived run: {doc_dir}"
-        )
+        raise SystemExit(f"Target output folder already exists for schema-derived run: {doc_dir}")
     if context.schema_source_path and schema_path.exists():
-        raise SystemExit(
-            f"Target schema file already exists for schema-derived run: {schema_path}"
-        )
+        raise SystemExit(f"Target schema file already exists for schema-derived run: {schema_path}")
 
 
 def save_document_artifacts(

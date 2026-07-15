@@ -87,10 +87,7 @@ def main() -> None:
             errors += 1
             print(f"[error] {name}: {exc}")
 
-    print(
-        "Summary: "
-        f"created={created}, updated={updated}, unchanged={unchanged}, errors={errors}"
-    )
+    print(f"Summary: created={created}, updated={updated}, unchanged={unchanged}, errors={errors}")
     if errors:
         raise SystemExit(1)
 

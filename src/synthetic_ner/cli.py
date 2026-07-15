@@ -99,4 +99,5 @@ def main(project_root: Path | None = None) -> None:
     load_env_files(resolved_project_root)
     args = build_parser(resolved_project_root).parse_args()
     from src.synthetic_ner.tasks.document_generation.orchestrator import run_langgraph_workflow
+
     run_langgraph_workflow(args, resolved_project_root)

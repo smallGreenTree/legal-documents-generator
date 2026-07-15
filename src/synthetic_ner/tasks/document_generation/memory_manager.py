@@ -19,8 +19,7 @@ def _format_amounts(amounts: dict) -> str:
         if not isinstance(transfer, dict) or not transfer.get("amount"):
             continue
         lines.append(
-            "- Transfer from "
-            f"{transfer.get('from')} to {transfer.get('to')}: {transfer['amount']}"
+            f"- Transfer from {transfer.get('from')} to {transfer.get('to')}: {transfer['amount']}"
         )
     return "\n".join(lines) or "- none"
 
@@ -111,11 +110,7 @@ class CaseMemoryManager:
             summary = summary[: self.summary_chars].rstrip() + "..."
 
         issue_lines = "\n".join(f"- {issue}" for issue in issues) if issues else "- none"
-        content = (
-            f"Plan:\n{section_plan.strip()}\n\n"
-            f"Summary:\n{summary}\n\n"
-            f"Issues:\n{issue_lines}"
-        )
+        content = f"Plan:\n{section_plan.strip()}\n\nSummary:\n{summary}\n\nIssues:\n{issue_lines}"
         self._append_runtime_block(
             memory_path,
             f"## Section Memory: {section_name}",
@@ -145,43 +140,47 @@ class CaseMemoryManager:
         section_order: list[str],
     ) -> str:
         metadata = document.metadata
-        defendants = "\n".join(
-            (
-                f"- {person['name']} | role: {person['role']} | "
-                f"nationality: {person['nationality']} | address: {person['address']}"
+        defendants = (
+            "\n".join(
+                (
+                    f"- {person['name']} | role: {person['role']} | "
+                    f"nationality: {person['nationality']} | address: {person['address']}"
+                )
+                for person in document.defendants
             )
-            for person in document.defendants
-        ) or "- none"
-        collateral = "\n".join(
-            (
-                f"- {person['name']} | role: {person['role']} | "
-                f"nationality: {person['nationality']}"
+            or "- none"
+        )
+        collateral = (
+            "\n".join(
+                (
+                    f"- {person['name']} | role: {person['role']} | "
+                    f"nationality: {person['nationality']}"
+                )
+                for person in document.collateral
             )
-            for person in document.collateral
-        ) or "- none"
-        orgs = "\n".join(
-            (
-                f"- {org['name']} | role: {org.get('role') or 'organisation'} | "
-                f"VAT: {org['vat']} | address: {org['address']}"
+            or "- none"
+        )
+        orgs = (
+            "\n".join(
+                (
+                    f"- {org['name']} | role: {org.get('role') or 'organisation'} | "
+                    f"VAT: {org['vat']} | address: {org['address']}"
+                )
+                for org in (document.charged_orgs + document.associated_orgs)
             )
-            for org in (document.charged_orgs + document.associated_orgs)
-        ) or "- none"
-        counts = "\n".join(
-            (
-                f"- {count['offence']} | {count['statute']} | "
-                f"{count['particulars']}"
+            or "- none"
+        )
+        counts = (
+            "\n".join(
+                (f"- {count['offence']} | {count['statute']} | {count['particulars']}")
+                for count in document.counts_list
             )
-            for count in document.counts_list
-        ) or "- none"
+            or "- none"
+        )
         scenario_brief = _format_scenario_brief(document.scenario_brief)
         amounts = _format_amounts(document.amounts)
-        evidence_categories = _format_explicit_evidence_categories(
-            document.evidence_categories
-        )
-        edges = "\n".join(
-            f"- {edge['label']}"
-            for edge in schema.get("edges", [])
-        ) or "- none"
+        evidence_categories = _format_explicit_evidence_categories(document.evidence_categories)
+        edges = "\n".join(f"- {edge['label']}" for edge in schema.get("edges", [])) or "- none"
         sections = "\n".join(f"- {section_name}" for section_name in section_order)
 
         return f"""# CASE_MEMORY
@@ -190,11 +189,11 @@ class CaseMemoryManager:
 - Doc ID: {doc_id}
 - Document type: {doc_type}
 - Fraud type: {fraud_type}
-- Legal reference: {metadata.get('legal_reference', 'none')}
-- Court: {metadata['court']}
-- Case number: {metadata['case_number']}
-- Cross reference: {metadata['cross_ref']}
-- Filing date: {metadata['filing_date']}
+- Legal reference: {metadata.get("legal_reference", "none")}
+- Court: {metadata["court"]}
+- Case number: {metadata["case_number"]}
+- Cross reference: {metadata["cross_ref"]}
+- Filing date: {metadata["filing_date"]}
 
 ## Investigator Scenario Brief
 {scenario_brief}

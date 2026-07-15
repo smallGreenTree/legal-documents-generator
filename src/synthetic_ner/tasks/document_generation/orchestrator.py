@@ -126,12 +126,8 @@ def run_document_graph(
             client=planner_client,
             prompts=prompts,
             planner_temperature=context.workflow_cfg.planner.temperature,
-            document_max_output_tokens=(
-                context.workflow_cfg.planner.document_max_output_tokens
-            ),
-            section_max_output_tokens=(
-                context.workflow_cfg.planner.section_max_output_tokens
-            ),
+            document_max_output_tokens=(context.workflow_cfg.planner.document_max_output_tokens),
+            section_max_output_tokens=(context.workflow_cfg.planner.section_max_output_tokens),
             prompt_clients=resolved_prompts.prompt_clients,
         )
     writer = SectionWriter(
@@ -243,7 +239,7 @@ def build_document_graph(
     writer: SectionWriter,
     critic: SectionCritic | None,
     trace_store: TraceStore,
-) ->CompiledStateGraph:
+) -> CompiledStateGraph:
     workflow = DocumentWorkflow(
         context=context,
         document=document,
@@ -328,6 +324,7 @@ class DocumentWorkflow:
     ) -> Callable[[WorkflowState], WorkflowState]:
         resolver = next_node_resolver
         if resolver is None and next_node is not None:
+
             def resolve_fixed_next_node(_state: WorkflowState) -> str | None:
                 return next_node
 
@@ -542,9 +539,7 @@ class DocumentWorkflow:
         )
         if not self.context.workflow_cfg.validators.get("minimum_length", True):
             problems = [
-                problem
-                for problem in problems
-                if " is too short for its target " not in problem
+                problem for problem in problems if " is too short for its target " not in problem
             ]
         if problems:
             raise RuntimeError(
@@ -571,6 +566,7 @@ class DocumentWorkflow:
             trace_store=self.trace_store,
         )
         return {"final_text": rendered_text}
+
 
 def _parallel_section_groups(section_order: list[str]) -> list[list[str]]:
     dependencies = {

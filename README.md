@@ -302,5 +302,35 @@ Visualize entity coverage:
 Check code quality:
 
 ```bash
-poetry run ruff check .
+make check
 ```
+
+## Code quality and CI
+
+The repository applies the same engineering-quality controls as the NER evaluation
+pipeline. Install the local commit and push hooks once after installing dependencies:
+
+```bash
+make pre-commit-install
+```
+
+The main local checks are:
+
+```bash
+make check       # formatting, lint, and tests
+make ci-quality  # coverage, complexity, and maintainability gates
+make security    # Bandit SAST and dependency audit
+make docker-build
+```
+
+The initial branch-coverage floor is 59% and the cyclomatic-complexity ceiling is 23,
+matching the current measured baselines. Override `COVERAGE_MIN` or `COMPLEXITY_MAX` locally
+or in CI to ratchet the thresholds upward as orchestration and external-service coverage
+and refactoring improve.
+
+Pull requests and pushes to `main` run separate GitHub Actions jobs for deterministic
+quality gates, security/configuration scanning, and a non-root container build and smoke
+test. Dependabot monitors Python, Docker, and GitHub Actions dependencies weekly. The
+dependency audit and container vulnerability scan remain visible but advisory so that
+upstream Prefect or MLflow findings do not hide regressions in the blocking source,
+configuration, secret, test, coverage, lint, complexity, and image-build checks.

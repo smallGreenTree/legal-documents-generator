@@ -192,12 +192,10 @@ def test_prompt_response_references_use_latest_polisher_and_critic_observations(
         {
             "section": "history",
             "text_url": (
-                "http://localhost:5000/#/experiments/1/traces/trace-1"
-                "?span=obs-history-polish-r2-c1"
+                "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-history-polish-r2-c1"
             ),
             "critic_url": (
-                "http://localhost:5000/#/experiments/1/traces/trace-1"
-                "?span=obs-history-critic-r2"
+                "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-history-critic-r2"
             ),
             "text_links": (
                 "[r2 chunk 01](http://localhost:5000/#/experiments/1/traces/trace-1"

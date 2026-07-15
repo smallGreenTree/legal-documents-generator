@@ -29,15 +29,9 @@ def build_quality_overview(
     current_version = get_version_provenance(getattr(context, "project_root", None))
     sections = quality_report.get("sections", [])
     missing_sections = [
-        section["section"]
-        for section in sections
-        if section.get("verdict") == "missing"
+        section["section"] for section in sections if section.get("verdict") == "missing"
     ]
-    sections_with_issues = [
-        section["section"]
-        for section in sections
-        if section.get("issues")
-    ]
+    sections_with_issues = [section["section"] for section in sections if section.get("issues")]
     revision_count = sum(_int_value(section.get("revision")) for section in sections)
     final_document_exists = _final_document_path(context, doc_id).exists()
     readiness = _readiness(
@@ -268,10 +262,7 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
                 "| Section | Quality | Words | Expected words | Rubric avg | Grounding | "
                 "Completeness | Chronology | Revision | MLflow | Main issue |"
             ),
-            (
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-                "---: | --- | --- |"
-            ),
+            ("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |"),
         ]
     )
     for row in workflow.get("section_rubrics", []):
@@ -322,12 +313,7 @@ def format_audit_confidence_markdown(overview: dict[str, Any]) -> str:
         "| --- | --- | --- |",
     ]
     for item in overview["audit_confidence"]:
-        lines.append(
-            "| "
-            f"{item['evidence']} | "
-            f"{item['status']} | "
-            f"{item['meaning']} |"
-        )
+        lines.append(f"| {item['evidence']} | {item['status']} | {item['meaning']} |")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -517,22 +503,15 @@ def _rubric_summary_from_scores(
             call_bucket["metrics"].setdefault(metric, []).append(score_value)
 
     if not overall_values and metric_values:
-        overall_values = [
-            score
-            for values in metric_values.values()
-            for score in values
-        ]
+        overall_values = [score for values in metric_values.values() for score in values]
     metric_averages = {
-        metric: round(sum(values) / len(values), 2)
-        for metric, values in metric_values.items()
+        metric: round(sum(values) / len(values), 2) for metric, values in metric_values.items()
     }
     lowest_metric = min(metric_averages.items(), key=lambda item: item[1], default=None)
     if not overall_values and not metric_averages:
         return _empty_rubric_summary("no rubric scores found")
     return {
-        "overall": round(sum(overall_values) / len(overall_values), 2)
-        if overall_values
-        else None,
+        "overall": round(sum(overall_values) / len(overall_values), 2) if overall_values else None,
         "lowest_metric": {
             "metric": lowest_metric[0],
             "score": lowest_metric[1],
@@ -595,9 +574,7 @@ def _section_rubric_summary_from_calls(
         overall = metric_averages.get("overall")
         if overall is None:
             dimensional_values = [
-                value
-                for metric, value in metric_averages.items()
-                if metric != "overall"
+                value for metric, value in metric_averages.items() if metric != "overall"
             ]
             overall = (
                 round(sum(dimensional_values) / len(dimensional_values), 2)
@@ -655,11 +632,7 @@ def _latest_stage_observations(
     observations: list[dict[str, Any]],
     stage: str,
 ) -> list[dict[str, Any]]:
-    matching = [
-        observation
-        for observation in observations
-        if observation.get("stage") == stage
-    ]
+    matching = [observation for observation in observations if observation.get("stage") == stage]
     revisions = [
         _optional_int(observation.get("revision_round"))
         for observation in matching
@@ -724,18 +697,12 @@ def _first_observation_url(
 def _latest_rubric_calls(calls: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     values = list(calls.values())
     revisions = [
-        call.get("revision_round")
-        for call in values
-        if call.get("revision_round") is not None
+        call.get("revision_round") for call in values if call.get("revision_round") is not None
     ]
     if not revisions:
         return values
     latest_revision = max(revisions)
-    return [
-        call
-        for call in values
-        if call.get("revision_round") == latest_revision
-    ]
+    return [call for call in values if call.get("revision_round") == latest_revision]
 
 
 def _first_value(rows: list[dict[str, Any]], key: str) -> Any:

@@ -47,10 +47,7 @@ class TracedOllamaClient:
         prompt_object: Any | None = None,
         on_partial_text: Callable[[str], None] | None = None,
     ) -> OllamaCallResult:
-        full_prompt = (
-            f"[SYSTEM]\n{system_prompt.strip()}\n\n"
-            f"[USER]\n{user_prompt.strip()}\n"
-        )
+        full_prompt = f"[SYSTEM]\n{system_prompt.strip()}\n\n[USER]\n{user_prompt.strip()}\n"
         prompt_payload = {
             "system_prompt": system_prompt.strip(),
             "user_prompt": user_prompt.strip(),
@@ -212,10 +209,7 @@ class TracedOllamaClient:
                 )
             except Exception as exc:
                 last_error = exc
-                if (
-                    attempt >= self.recovery.max_generate_attempts
-                    or not _is_retryable_error(exc)
-                ):
+                if attempt >= self.recovery.max_generate_attempts or not _is_retryable_error(exc):
                     break
                 sleep(self.recovery.retry_backoff_seconds * attempt)
         if last_error is not None:
@@ -269,9 +263,7 @@ class TracedOllamaClient:
                 continue
             payload = json.loads(raw_line)
             if payload.get("thinking"):
-                final_payload["thinking"] = (
-                    final_payload.get("thinking", "") + payload["thinking"]
-                )
+                final_payload["thinking"] = final_payload.get("thinking", "") + payload["thinking"]
             piece = payload.get("response", "")
             if piece:
                 chunks.append(piece)

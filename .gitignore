@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .DS_Store
 .ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 .prefect/
 .env
 .env.mlflow

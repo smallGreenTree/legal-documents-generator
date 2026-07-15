@@ -61,8 +61,7 @@ def test_groundtruth_rows_are_structured_in_required_order():
         counts_list=[
             {
                 "particulars": (
-                    "Olivia Price caused loss of EUR 10,000 between "
-                    "4 April 2025 and 5 May 2025."
+                    "Olivia Price caused loss of EUR 10,000 between 4 April 2025 and 5 May 2025."
                 )
             }
         ],

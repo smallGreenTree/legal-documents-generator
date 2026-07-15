@@ -37,8 +37,7 @@ def summarize_node_runs(runs: list[NodeExecutionRecord]) -> list[dict[str, Any]]
         _add_node_run(bucket, run)
 
     return [
-        _node_summary_row(node_name, summary_by_node[node_name])
-        for node_name in execution_order
+        _node_summary_row(node_name, summary_by_node[node_name]) for node_name in execution_order
     ]
 
 
@@ -53,9 +52,7 @@ def summarize_llm_calls(calls: list[dict[str, Any]]) -> dict[str, Any]:
         "total_llm_calls": len(calls),
         "total_latency_ms": sum(_int_value(call.get("latency_ms")) for call in calls),
         "total_prompt_tokens": sum(_int_value(call.get("tokens_prompt")) for call in calls),
-        "total_response_tokens": sum(
-            _int_value(call.get("tokens_response")) for call in calls
-        ),
+        "total_response_tokens": sum(_int_value(call.get("tokens_response")) for call in calls),
         "empty_responses": sum(1 for call in calls if call.get("response_empty") is True),
         "truncated_calls": sum(1 for call in calls if call.get("done_reason") == "length"),
         "error_calls": sum(1 for call in calls if call.get("error") is True),
@@ -276,9 +273,7 @@ def _stage_rows(by_stage: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     for stage in sorted(by_stage):
         row = by_stage[stage]
         calls_count = row["calls"]
-        row["avg_latency_ms"] = (
-            round(row["total_latency_ms"] / calls_count) if calls_count else 0
-        )
+        row["avg_latency_ms"] = round(row["total_latency_ms"] / calls_count) if calls_count else 0
         rows.append(row)
     return rows
 
@@ -340,9 +335,7 @@ def _summarize_mapping(value: dict[Any, Any]) -> dict[str, Any]:
         "keys": [str(key) for key, _ in items[:8]],
     }
     string_values = {
-        str(key): len(item_value)
-        for key, item_value in items[:8]
-        if isinstance(item_value, str)
+        str(key): len(item_value) for key, item_value in items[:8] if isinstance(item_value, str)
     }
     if string_values:
         summary["value_chars"] = string_values

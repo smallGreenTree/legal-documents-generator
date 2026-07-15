@@ -66,10 +66,7 @@ def load_quality_scoring_config(path: Path | str) -> dict[str, int]:
     scoring = raw.get("quality_scoring")
     if not isinstance(scoring, dict):
         raise ValueError("config_quality.yaml must contain a quality_scoring mapping")
-    return {
-        key: _positive_int(scoring.get(key), key)
-        for key in DEFAULT_SCORING_CONFIG
-    }
+    return {key: _positive_int(scoring.get(key), key) for key in DEFAULT_SCORING_CONFIG}
 
 
 def _score_section(
@@ -223,15 +220,12 @@ def _top_failures(sections: list[dict[str, Any]]) -> list[str]:
         for issue in section["issues"]:
             counts[issue] = counts.get(issue, 0) + 1
     return [
-        issue
-        for issue, _count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+        issue for issue, _count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:8]
     ]
 
 
 def format_markdown_report(report: dict[str, Any]) -> str:
-    include_mlflow = any(
-        section.get("mlflow_url") for section in report["sections"]
-    )
+    include_mlflow = any(section.get("mlflow_url") for section in report["sections"])
     lines = [
         f"# Quality Report: {report['doc_id']}",
         "",

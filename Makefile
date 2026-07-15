@@ -11,13 +11,18 @@ PREFECT_DEPLOYMENT ?= document-generation
 PREFECT_QUALITY_DEPLOYMENT ?= document-quality
 PLATFORM_ENV ?= .env.platform
 PLATFORM_COMPOSE ?= docker compose --env-file $(PLATFORM_ENV) -f docker-compose.platform.yml
+COVERAGE_MIN ?= 59
+COMPLEXITY_MAX ?= 23
+QUALITY_PATHS ?= src tests main.py prefect_pipeline.py scripts/smoke_model_routes.py scripts/smoke_prompt_contract.py scripts/check_complexity.py
 
 .PHONY: help install setup
 .PHONY: platform-up platform-down platform-status platform-db-init platform-health platform-check-config
 .PHONY: mlflow-up mlflow-down mlflow-status
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
 .PHONY: ollama-health ollama-pull sync-mlflow
-.PHONY: generate smoke-model-routes smoke-prompt-contract apple-studio-run check mi
+.PHONY: generate smoke-model-routes smoke-prompt-contract apple-studio-run
+.PHONY: format format-check test coverage lint complexity sast dependency-audit security
+.PHONY: check ci-quality pre-commit-install pre-commit docker-build mi
 
 help:
 	@echo "Common targets:"
@@ -26,6 +31,11 @@ help:
 	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
 	@echo "  make smoke-prompt-contract Check writer prompt format and content"
 	@echo "  make apple-studio-run Deploy, smoke-test, then queue 10 scenario runs"
+	@echo "  make check          Run formatting, lint, and tests"
+	@echo "  make ci-quality     Run deterministic CI quality gates"
+	@echo "  make security       Run Python SAST and dependency audit"
+	@echo "  make pre-commit-install Install local Git hooks"
+	@echo "  make docker-build   Build the non-root generator image"
 	@echo "  make mi             Show radon maintainability index for src and tests"
 	@echo "  make platform-up    Start PostgreSQL, Prefect server, and MLflow server"
 	@echo "  make platform-health Check Prefect and MLflow HTTP health endpoints"
@@ -149,8 +159,48 @@ smoke-prompt-contract:
 apple-studio-run:
 	CASE_CONFIG=$(CASE_CONFIG) TEMPLATE=$(TEMPLATE) DOCUMENTS=10 scripts/apple_studio_prefect_run.sh
 
-check:
-	poetry run ruff check .
+format:
+	poetry run ruff format $(QUALITY_PATHS)
+
+format-check:
+	poetry run ruff format --check $(QUALITY_PATHS)
+
+test:
+	poetry run pytest -q
+
+coverage:
+	poetry run pytest -q --cov=src.synthetic_ner --cov-branch \
+		--cov-report=term-missing --cov-report=xml --cov-fail-under=$(COVERAGE_MIN)
+
+lint:
+	poetry run ruff check $(QUALITY_PATHS)
+
+complexity:
+	$(PYTHON) scripts/check_complexity.py --max $(COMPLEXITY_MAX) src
+	poetry run radon cc src -s -a
+	poetry run radon mi src -s
+
+sast:
+	poetry run bandit -q -r src main.py prefect_pipeline.py -lll -iii
+
+dependency-audit:
+	poetry run pip-audit
+
+security: sast dependency-audit
+
+check: format-check lint test
+
+ci-quality: format-check lint coverage complexity
+
+pre-commit-install:
+	poetry run pre-commit install --install-hooks
+	poetry run pre-commit install --hook-type pre-push
+
+pre-commit:
+	poetry run pre-commit run --all-files
+
+docker-build:
+	docker build --tag synthetic-ner:local .
 
 mi:
 	poetry run radon mi src tests

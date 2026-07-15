@@ -170,9 +170,7 @@ def _required_person_fact_issues(text: str, memory_text: str) -> list[str]:
         for field in ("name", "dob", "nationality", "role", "address"):
             value = person.get(field)
             if value and value not in text:
-                issues.append(
-                    f"Section is missing required person {field} '{value}'."
-                )
+                issues.append(f"Section is missing required person {field} '{value}'.")
     return issues
 
 
@@ -183,9 +181,7 @@ def _required_company_fact_issues(text: str, memory_text: str) -> list[str]:
         for field in ("name", "vat", "address"):
             value = company.get(field)
             if value and value not in text:
-                issues.append(
-                    f"Section is missing required company {field} '{value}'."
-                )
+                issues.append(f"Section is missing required company {field} '{value}'.")
     return issues
 
 
@@ -351,9 +347,7 @@ def _memory_companies(memory_text: str) -> list[dict[str, str]]:
 def _memory_bullet_lines(memory_text: str, heading: str) -> list[str]:
     block = _memory_section(memory_text, heading)
     return [
-        line.strip()[2:].strip()
-        for line in block.splitlines()
-        if line.strip().startswith("- ")
+        line.strip()[2:].strip() for line in block.splitlines() if line.strip().startswith("- ")
     ]
 
 
@@ -381,9 +375,7 @@ def _entity_presence_issues(
     if not validators["known_entity_presence"] or section_name not in _SECTION_ENTITY_CHECK:
         return []
     known_entities = [
-        entity
-        for entity in (allowed.person_surface_forms | allowed.org_names)
-        if len(entity) >= 4
+        entity for entity in (allowed.person_surface_forms | allowed.org_names) if len(entity) >= 4
     ]
     if known_entities and not any(entity in text for entity in known_entities):
         return ["Section does not mention any known case entity."]
@@ -424,11 +416,7 @@ def _normalise_validator_config(
     validators = dict(DEFAULT_VALIDATORS)
     if enabled_validators:
         validators.update(
-            {
-                key: bool(value)
-                for key, value in enabled_validators.items()
-                if key in validators
-            }
+            {key: bool(value) for key, value in enabled_validators.items() if key in validators}
         )
     return validators
 

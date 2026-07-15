@@ -168,12 +168,9 @@ def test_prefect_stage_one_selects_family_and_specific_scenario_before_rows():
 
     assert initial["scenario_family"] == "Procurement fraud and corruption"
     assert (
-        initial["select_scenario"]
-        == "Czechish transport ministry sound surveillance procurement"
+        initial["select_scenario"] == "Czechish transport ministry sound surveillance procurement"
     )
-    assert "Faker placeholders appear in {braces}" in initial[
-        "scenario_template_preview"
-    ]
+    assert "Faker placeholders appear in {braces}" in initial["scenario_template_preview"]
     assert "{first_defendant}" in initial["scenario_template_preview"]
     assert "{first_company}" in initial["scenario_template_preview"]
     assert initial["court"] == "Czechish District Court"
@@ -530,7 +527,7 @@ def test_case_setup_reads_prefect_person_rows():
                 "title": "",
                 "surface_forms": 1,
             },
-        ]
+        ],
     )
     person_response = person_model(
         nickname_variants=1,
@@ -641,6 +638,4 @@ def test_address_surface_forms_limit_groundtruth_address_rows():
         address_surface_forms=1,
     )
 
-    assert [row[1] for row in rows if row[2] == "ADDRESS"] == [
-        "10 Legal Street, London EC1A 1AA"
-    ]
+    assert [row[1] for row in rows if row[2] == "ADDRESS"] == ["10 Legal Street, London EC1A 1AA"]
