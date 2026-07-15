@@ -1,3 +1,13 @@
 FROM ghcr.io/mlflow/mlflow:v3.14.0-full
 
 RUN pip install --no-cache-dir psycopg2-binary==2.9.11
+
+RUN groupadd --gid 10001 mlflow \
+    && useradd --uid 10001 --gid mlflow --create-home mlflow \
+    && mkdir -p /mlartifacts \
+    && chown -R mlflow:mlflow /mlartifacts /home/mlflow
+
+ENV HOME=/home/mlflow
+
+USER mlflow
+WORKDIR /home/mlflow
