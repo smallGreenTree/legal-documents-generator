@@ -5,11 +5,13 @@ from __future__ import annotations
 from argparse import Namespace
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from functools import wraps
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+
 from src.synthetic_ner.engine import (
     build_runtime_context,
     build_size_label,
@@ -69,7 +71,7 @@ def run_document_graph(
         raise ValueError("workflow.writer.active must be true for document generation.")
 
     trace_store = TraceStore(
-        context.langfuse_cfg,
+        context.mlflow_cfg,
         run_metadata={
             "doc_id": doc_id,
             "workflow_run_id": workflow_run_id or doc_id,
@@ -124,12 +126,8 @@ def run_document_graph(
             client=planner_client,
             prompts=prompts,
             planner_temperature=context.workflow_cfg.planner.temperature,
-            document_max_output_tokens=(
-                context.workflow_cfg.planner.document_max_output_tokens
-            ),
-            section_max_output_tokens=(
-                context.workflow_cfg.planner.section_max_output_tokens
-            ),
+            document_max_output_tokens=(context.workflow_cfg.planner.document_max_output_tokens),
+            section_max_output_tokens=(context.workflow_cfg.planner.section_max_output_tokens),
             prompt_clients=resolved_prompts.prompt_clients,
         )
     writer = SectionWriter(
@@ -161,7 +159,6 @@ def run_document_graph(
 
     trace_info = trace_store.start_document_run(
         doc_id=doc_id,
-        name="document-workflow",
         input_payload={
             "doc_id": doc_id,
             "doc_type": context.doc_type,
@@ -242,7 +239,7 @@ def build_document_graph(
     writer: SectionWriter,
     critic: SectionCritic | None,
     trace_store: TraceStore,
-) ->CompiledStateGraph:
+) -> CompiledStateGraph:
     workflow = DocumentWorkflow(
         context=context,
         document=document,
@@ -327,6 +324,7 @@ class DocumentWorkflow:
     ) -> Callable[[WorkflowState], WorkflowState]:
         resolver = next_node_resolver
         if resolver is None and next_node is not None:
+
             def resolve_fixed_next_node(_state: WorkflowState) -> str | None:
                 return next_node
 
@@ -391,6 +389,7 @@ class DocumentWorkflow:
                 ) as executor:
                     futures = {
                         executor.submit(
+                            copy_context().run,
                             self._run_section_workflow,
                             state,
                             section_name,
@@ -540,9 +539,7 @@ class DocumentWorkflow:
         )
         if not self.context.workflow_cfg.validators.get("minimum_length", True):
             problems = [
-                problem
-                for problem in problems
-                if " is too short for its target " not in problem
+                problem for problem in problems if " is too short for its target " not in problem
             ]
         if problems:
             raise RuntimeError(
@@ -569,6 +566,7 @@ class DocumentWorkflow:
             trace_store=self.trace_store,
         )
         return {"final_text": rendered_text}
+
 
 def _parallel_section_groups(section_order: list[str]) -> list[list[str]]:
     dependencies = {

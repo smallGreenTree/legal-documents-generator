@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from src.synthetic_ner.constants import COMPANY_SUFFIXES
 
 MONTH_PATTERN = (
-    "January|February|March|April|May|June|July|August|September|October|"
-    "November|December"
+    "January|February|March|April|May|June|July|August|September|October|November|December"
 )
 DATE_RE = re.compile(rf"\b\d{{1,2}} (?:{MONTH_PATTERN}) \d{{4}}\b")
 AMOUNT_RE = re.compile(
@@ -17,9 +16,7 @@ AMOUNT_RE = re.compile(
     re.IGNORECASE,
 )
 VAT_RE = re.compile(r"\b[A-Z]{2}(?=[A-Z0-9]{8,14}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b")
-CASE_REF_RE = re.compile(
-    r"\b(?:CPS/\d{4}/\d{4}|C/\d{4}/\d{1,4}|T\d{9,10}|\d{7}/\d{3})\b"
-)
+CASE_REF_RE = re.compile(r"\b(?:CPS/\d{4}/\d{4}|C/\d{4}/\d{1,4}|T\d{9,10}|\d{7}/\d{3})\b")
 INITIALS_RE = re.compile(r"\b(?:[A-Z]\.){2,4}\b")
 TITLE_NAME_RE = re.compile(r"\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Sir|Lord)\.? [A-Z][A-Za-z'-]+\b")
 
@@ -30,6 +27,7 @@ ORG_NAME_RE = re.compile(
     rf"\b[A-Z0-9][A-Z0-9&'/-]*(?: [A-Z0-9][A-Z0-9&'/-]*)* "
     rf"(?:{_ORG_SUFFIX_PATTERN})\b"
 )
+
 
 @dataclass(slots=True)
 class AllowedFacts:
@@ -140,11 +138,7 @@ def collect_allowed_facts(document) -> AllowedFacts:
         for person in people
         if person.get("title_surname")
     }
-    initials = {
-        normalize_phrase(person["initials"])
-        for person in people
-        if person.get("initials")
-    }
+    initials = {normalize_phrase(person["initials"]) for person in people if person.get("initials")}
     org_names = {
         normalize_phrase(org["name"])
         for org in (document.charged_orgs + document.associated_orgs)
@@ -155,10 +149,7 @@ def collect_allowed_facts(document) -> AllowedFacts:
         for org in (document.charged_orgs + document.associated_orgs)
         if org.get("vat")
     }
-    amounts = {
-        normalize_phrase(amount)
-        for amount in _amount_values(document.amounts)
-    }
+    amounts = {normalize_phrase(amount) for amount in _amount_values(document.amounts)}
 
     case_refs = {
         normalize_phrase(metadata["case_number"]),
@@ -175,11 +166,7 @@ def collect_allowed_facts(document) -> AllowedFacts:
             if metadata.get("offence_period")
             else set()
         ),
-        *{
-            normalize_phrase(person["dob"])
-            for person in people
-            if person.get("dob")
-        },
+        *{normalize_phrase(person["dob"]) for person in people if person.get("dob")},
         *{
             normalize_phrase(date_text)
             for count in document.counts_list
@@ -208,9 +195,7 @@ def collect_allowed_facts_from_memory(memory_text: str) -> AllowedFacts:
     counts_block = _extract_markdown_section(seed_memory, "## Counts")
 
     case_refs, dates = _parse_case_refs_and_dates(refs_block)
-    person_surface_forms, titled_people, initials, people_dates = _parse_people_block(
-        people_block
-    )
+    person_surface_forms, titled_people, initials, people_dates = _parse_people_block(people_block)
     dates.update(people_dates)
     dates.update({normalize_phrase(match) for match in DATE_RE.findall(counts_block)})
     case_refs.update({normalize_phrase(match) for match in CASE_REF_RE.findall(counts_block)})
@@ -259,14 +244,8 @@ def _parse_people_block(block: str) -> tuple[set[str], set[str], set[str], set[s
         _add_person_parts(parts, person_surface_forms, dates)
 
     person_blob = "\n".join(sorted(person_surface_forms))
-    titled_people = {
-        normalize_title_phrase(match)
-        for match in TITLE_NAME_RE.findall(person_blob)
-    }
-    initials = {
-        normalize_phrase(match)
-        for match in INITIALS_RE.findall(person_blob)
-    }
+    titled_people = {normalize_title_phrase(match) for match in TITLE_NAME_RE.findall(person_blob)}
+    initials = {normalize_phrase(match) for match in INITIALS_RE.findall(person_blob)}
     return person_surface_forms, titled_people, initials, dates
 
 
@@ -304,15 +283,9 @@ def _parse_orgs_block(block: str) -> tuple[set[str], set[str]]:
         _add_org_parts(parts, org_names, vat_numbers)
 
     if not org_names:
-        org_names = {
-            normalize_phrase(match)
-            for match in ORG_NAME_RE.findall(block)
-        }
+        org_names = {normalize_phrase(match) for match in ORG_NAME_RE.findall(block)}
     if not vat_numbers:
-        vat_numbers = {
-            normalize_phrase(match)
-            for match in VAT_RE.findall(block)
-        }
+        vat_numbers = {normalize_phrase(match) for match in VAT_RE.findall(block)}
     return org_names, vat_numbers
 
 

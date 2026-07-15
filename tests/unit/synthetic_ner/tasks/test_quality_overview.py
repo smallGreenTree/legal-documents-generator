@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
 from src.synthetic_ner.tasks.document_quality.quality_overview import (
-    _fetch_langfuse_observation_metadata,
-    _fetch_langfuse_scores,
+    _fetch_mlflow_scores,
+    _fetch_mlflow_span_metadata,
     _prompt_response_reference_rows,
     _rubric_summary_from_scores,
     build_quality_overview,
@@ -43,7 +43,7 @@ def test_quality_overview_uses_existing_report_and_quality_score(tmp_path):
         rubric_summary={
             "overall": 3.5,
             "lowest_metric": {"metric": "grounding", "score": 2.5},
-            "trace_url": "http://localhost:3000/project/x/traces/trace-1",
+            "trace_url": "http://localhost:5000/#/experiments/1/traces/trace-1",
             "sections": [
                 {
                     "section": "persons",
@@ -65,10 +65,10 @@ def test_quality_overview_uses_existing_report_and_quality_score(tmp_path):
             "prompt_response_refs": [
                 {
                     "section": "persons",
-                    "text_url": "http://localhost:3000/project/x/traces/trace-1?observation=obs-persons-polish",
-                    "critic_url": "http://localhost:3000/project/x/traces/trace-1?observation=obs-persons-r0",
-                    "text_links": "[r0 chunk 01](http://localhost:3000/project/x/traces/trace-1?observation=obs-persons-polish)",
-                    "critic_link": "[critic r0](http://localhost:3000/project/x/traces/trace-1?observation=obs-persons-r0)",
+                    "text_url": "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-persons-polish",
+                    "critic_url": "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-persons-r0",
+                    "text_links": "[r0 chunk 01](http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-persons-polish)",
+                    "critic_link": "[critic r0](http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-persons-r0)",
                 }
             ],
             "status": "available",
@@ -88,7 +88,7 @@ def test_quality_overview_uses_existing_report_and_quality_score(tmp_path):
     assert "Quality analyzer version | 0.1.0" in run_health
     assert "Quality analyzer reference | generator-v0.1.0" in run_health
     assert "`Total latency` is the sum of all LLM calls" in model_workflow
-    assert "[open trace](http://localhost:3000/project/x/traces/trace-1)" in model_workflow
+    assert "[open trace](http://localhost:5000/#/experiments/1/traces/trace-1)" in model_workflow
     assert "writer" in model_workflow
     assert "3.5 / 5" in model_workflow
     assert "grounding (2.5 / 5)" in model_workflow
@@ -98,11 +98,11 @@ def test_quality_overview_uses_existing_report_and_quality_score(tmp_path):
     assert "obs-persons-polish" in model_workflow
     assert (
         "| persons | 90 | 120 | 120 | 4.25 | 4 | 5 | 4 | 0 | "
-        "[trace](http://localhost:3000/project/x/traces/trace-1) | none |"
+        "[trace](http://localhost:5000/#/experiments/1/traces/trace-1) | none |"
     ) in model_workflow
     assert (
         "| history | 66 | 220 | 120 | 2.75 | 2 | 3 | 3 | 2 | "
-        "[trace](http://localhost:3000/project/x/traces/trace-1) | "
+        "[trace](http://localhost:5000/#/experiments/1/traces/trace-1) | "
         "Section contains repeated sentence fragments. |"
     ) in model_workflow
     assert str(tmp_path) not in run_health
@@ -130,7 +130,7 @@ def test_rubric_summary_groups_latest_scores_by_section():
     summary = _rubric_summary_from_scores(
         scores,
         observation_metadata,
-        trace_url="http://localhost:3000/project/x/traces/trace-1",
+        trace_url="http://localhost:5000/#/experiments/1/traces/trace-1",
     )
 
     sections = {section["section"]: section for section in summary["sections"]}
@@ -138,8 +138,8 @@ def test_rubric_summary_groups_latest_scores_by_section():
     assert sections["history"]["grounding"] == 4
     assert sections["history"]["overall"] == 4.33
     assert (
-        sections["history"]["langfuse_url"]
-        == "http://localhost:3000/project/x/traces/trace-1?observation=obs-history-r2"
+        sections["history"]["mlflow_url"]
+        == "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-history-r2"
     )
     assert sections["persons"]["overall"] == 4.67
 
@@ -185,96 +185,58 @@ def test_prompt_response_references_use_latest_polisher_and_critic_observations(
 
     rows = _prompt_response_reference_rows(
         observation_metadata,
-        "http://localhost:3000/project/x/traces/trace-1",
+        "http://localhost:5000/#/experiments/1/traces/trace-1",
     )
 
     assert rows == [
         {
             "section": "history",
             "text_url": (
-                "http://localhost:3000/project/x/traces/trace-1"
-                "?observation=obs-history-polish-r2-c1"
+                "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-history-polish-r2-c1"
             ),
             "critic_url": (
-                "http://localhost:3000/project/x/traces/trace-1"
-                "?observation=obs-history-critic-r2"
+                "http://localhost:5000/#/experiments/1/traces/trace-1?span=obs-history-critic-r2"
             ),
             "text_links": (
-                "[r2 chunk 01](http://localhost:3000/project/x/traces/trace-1"
-                "?observation=obs-history-polish-r2-c1), "
-                "[r2 chunk 02](http://localhost:3000/project/x/traces/trace-1"
-                "?observation=obs-history-polish-r2-c2)"
+                "[r2 chunk 01](http://localhost:5000/#/experiments/1/traces/trace-1"
+                "?span=obs-history-polish-r2-c1), "
+                "[r2 chunk 02](http://localhost:5000/#/experiments/1/traces/trace-1"
+                "?span=obs-history-polish-r2-c2)"
             ),
             "critic_link": (
-                "[critic r2](http://localhost:3000/project/x/traces/trace-1"
-                "?observation=obs-history-critic-r2)"
+                "[critic r2](http://localhost:5000/#/experiments/1/traces/trace-1"
+                "?span=obs-history-critic-r2)"
             ),
         }
     ]
 
 
-def test_langfuse_score_fetch_uses_api_limit_pages():
-    client = _FakeLangfuseClient(
-        [
-            _FakeScorePage([_score("rubric.grounding", 4, "obs-1")], total_pages=2),
-            _FakeScorePage([_score("rubric.grounding", 5, "obs-2")], total_pages=2),
-        ]
+def test_mlflow_trace_extracts_rubrics_and_span_metadata():
+    trace = SimpleNamespace(
+        data=SimpleNamespace(
+            spans=[
+                SimpleNamespace(
+                    span_id="span-1",
+                    name="critic_persons_r0",
+                    attributes={
+                        "section_name": "persons",
+                        "revision_round": 0,
+                        "stage": "critic",
+                        "task_id": "critic_persons_r0",
+                        "rubric.grounding": 4.0,
+                    },
+                )
+            ]
+        )
     )
 
-    scores = _fetch_langfuse_scores(client, "trace-1")
+    scores = _fetch_mlflow_scores(trace)
+    spans = _fetch_mlflow_span_metadata(trace)
 
-    assert [score.value for score in scores] == [4, 5]
-    assert client.api.scores.calls == [
-        {"trace_id": "trace-1", "limit": 100, "page": 1},
-        {"trace_id": "trace-1", "limit": 100, "page": 2},
+    assert [(score.name, score.value, score.span_id) for score in scores] == [
+        ("rubric.grounding", 4.0, "span-1")
     ]
-
-
-def test_langfuse_observation_fetch_uses_legacy_v1_pages():
-    client = _FakeLangfuseClient(
-        score_pages=[],
-        observation_pages=[
-            _FakeObservationPage(
-                [
-                    _observation(
-                        "obs-1",
-                        "polish_persons_r0_chunk_01",
-                        {
-                            "section_name": "persons",
-                            "revision_round": 0,
-                            "stage": "polisher",
-                            "task_id": "polish_persons_r0_chunk_01",
-                        },
-                    )
-                ],
-                total_pages=2,
-            ),
-            _FakeObservationPage(
-                [
-                    _observation(
-                        "obs-2",
-                        "critic_persons_r0",
-                        {
-                            "section_name": "persons",
-                            "revision_round": 0,
-                            "stage": "critic",
-                            "task_id": "critic_persons_r0",
-                        },
-                    )
-                ],
-                total_pages=2,
-            ),
-        ],
-    )
-
-    observations = _fetch_langfuse_observation_metadata(client, "trace-1")
-
-    assert observations["obs-1"]["stage"] == "polisher"
-    assert observations["obs-2"]["task_id"] == "critic_persons_r0"
-    assert client.api.legacy.observations_v1.calls == [
-        {"trace_id": "trace-1", "limit": 100, "page": 1},
-        {"trace_id": "trace-1", "limit": 100, "page": 2},
-    ]
+    assert spans["span-1"]["task_id"] == "critic_persons_r0"
 
 
 def _write_existing_artifacts(context, doc_id):
@@ -302,8 +264,8 @@ def _write_existing_artifacts(context, doc_id):
                 "- Generator git branch: test-branch",
                 "- Generator git dirty: false",
                 "- Workflow mode: langgraph",
-                "- Langfuse trace id: trace-1",
-                "- Langfuse trace url: http://localhost:3000/project/x/traces/trace-1",
+                "- MLflow trace id: trace-1",
+                "- MLflow trace url: http://localhost:5000/#/experiments/1/traces/trace-1",
                 "- Total LLM calls: 5",
                 "- Total LLM latency ms: 400000",
                 "- Empty LLM responses: 0",
@@ -357,52 +319,6 @@ def _score(name, value, observation_id):
     return SimpleNamespace(
         name=name,
         value=value,
-        observation_id=observation_id,
+        span_id=observation_id,
         metadata={},
     )
-
-
-class _FakeLangfuseClient:
-    def __init__(self, score_pages, observation_pages=None):
-        self.api = SimpleNamespace(
-            scores=_FakeScoresClient(score_pages),
-            legacy=SimpleNamespace(
-                observations_v1=_FakeObservationsClient(observation_pages or [])
-            ),
-        )
-
-
-class _FakeScoresClient:
-    def __init__(self, pages):
-        self._pages = list(pages)
-        self.calls = []
-
-    def get_many(self, **kwargs):
-        self.calls.append(kwargs)
-        return self._pages[kwargs["page"] - 1]
-
-
-class _FakeScorePage:
-    def __init__(self, data, total_pages):
-        self.data = data
-        self.meta = SimpleNamespace(total_pages=total_pages)
-
-
-class _FakeObservationsClient:
-    def __init__(self, pages):
-        self._pages = list(pages)
-        self.calls = []
-
-    def get_many(self, **kwargs):
-        self.calls.append(kwargs)
-        return self._pages[kwargs["page"] - 1]
-
-
-class _FakeObservationPage:
-    def __init__(self, data, total_pages):
-        self.data = data
-        self.meta = SimpleNamespace(total_pages=total_pages)
-
-
-def _observation(observation_id, name, metadata):
-    return SimpleNamespace(id=observation_id, name=name, metadata=metadata)

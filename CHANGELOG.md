@@ -12,8 +12,8 @@ the semantic version in `pyproject.toml`.
 - Single document quality artifact for business-friendly review.
 - Deterministic quality score explanation with per-section penalty breakdown.
 - Expected section word target visibility in quality tables.
-- Langfuse prompt/response references for section inspection.
-- Section-level critic rubric display where Langfuse scores are available.
+- MLflow prompt/response references for section inspection.
+- Section-level critic rubric display where MLflow trace attributes are available.
 - Semantic generator version stamping in generation and quality reports.
 
 ### Changed

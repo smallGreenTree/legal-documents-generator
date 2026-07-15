@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_ADMIN_DB}
+      PREFECT_DB_USER: ${PREFECT_DB_USER}
+      PREFECT_DB_PASSWORD: ${PREFECT_DB_PASSWORD}
+      PREFECT_DB_NAME: ${PREFECT_DB_NAME}
+      MLFLOW_DB_USER: ${MLFLOW_DB_USER}
+      MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD}
+      MLFLOW_DB_NAME: ${MLFLOW_DB_NAME}
+    volumes:
+      - platform_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_platform_databases.sh:/docker-entrypoint-initdb.d/10-platform-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER} -d ${POSTGRES_ADMIN_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  prefect-server:
+    image: prefecthq/prefect:3.4.24-python3.12
+    restart: unless-stopped
+    command: prefect server start --host 0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+    volumes:
+      - prefect_data:/root/.prefect
+    environment:
+      PREFECT_UI_API_URL: ${PREFECT_EXTERNAL_URL:-http://localhost:4200/api}
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://${PREFECT_DB_USER}:${PREFECT_DB_PASSWORD}@postgres:5432/${PREFECT_DB_NAME}
+
+  mlflow-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@postgres:5432/${MLFLOW_DB_NAME}
+      - --artifacts-destination=/mlartifacts
+      - --serve-artifacts
+      - --allowed-hosts=${MLFLOW_ALLOWED_HOSTS:-localhost:5000,127.0.0.1:5000,mlflow-server:5000}
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_artifacts:/mlartifacts
+
+volumes:
+  platform_postgres_data:
+  prefect_data:
+  mlflow_artifacts:

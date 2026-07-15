@@ -53,48 +53,55 @@ def make_case_schema(
 
     for person_index, person in enumerate(defendants):
         org_index = person_index % len(all_orgs)
-        edges.append({
-            "from": f"p{person_index}",
-            "to": f"o{org_index}",
-            "type": "controlled",
-            "label": f"{person['name']} controlled {all_orgs[org_index]['name']}",
-        })
+        edges.append(
+            {
+                "from": f"p{person_index}",
+                "to": f"o{org_index}",
+                "type": "controlled",
+                "label": f"{person['name']} controlled {all_orgs[org_index]['name']}",
+            }
+        )
 
     if defendants and collateral:
         main_defendant_index = 0
         for collateral_index, collateral_person in enumerate(collateral):
             person_index = len(defendants) + collateral_index
-            edges.append({
-                "from": f"p{main_defendant_index}",
-                "to": f"p{person_index}",
-                "type": "instructed",
-                "label": (
-                    f"{defendants[main_defendant_index]['name']} instructed "
-                    f"{collateral_person['name']}"
-                ),
-            })
+            edges.append(
+                {
+                    "from": f"p{main_defendant_index}",
+                    "to": f"p{person_index}",
+                    "type": "instructed",
+                    "label": (
+                        f"{defendants[main_defendant_index]['name']} instructed "
+                        f"{collateral_person['name']}"
+                    ),
+                }
+            )
 
     for index in range(len(defendants) - 1):
-        edges.append({
-            "from": f"p{index}",
-            "to": f"p{index + 1}",
-            "type": "conspired_with",
-            "label": (
-                f"{defendants[index]['name']} conspired with "
-                f"{defendants[index + 1]['name']}"
-            ),
-        })
+        edges.append(
+            {
+                "from": f"p{index}",
+                "to": f"p{index + 1}",
+                "type": "conspired_with",
+                "label": (
+                    f"{defendants[index]['name']} conspired with {defendants[index + 1]['name']}"
+                ),
+            }
+        )
 
     if charged_orgs and associated_orgs:
         for charged_index, charged_org in enumerate(charged_orgs):
             associated_index = charged_index % len(associated_orgs)
             associated_org = associated_orgs[associated_index]
-            edges.append({
-                "from": f"o{charged_index}",
-                "to": f"o{len(charged_orgs) + associated_index}",
-                "type": "received_funds_from",
-                "label": f"{associated_org['name']} received funds from {charged_org['name']}",
-            })
+            edges.append(
+                {
+                    "from": f"o{charged_index}",
+                    "to": f"o{len(charged_orgs) + associated_index}",
+                    "type": "received_funds_from",
+                    "label": f"{associated_org['name']} received funds from {charged_org['name']}",
+                }
+            )
 
     return {
         "doc_id": doc_id,
@@ -157,7 +164,7 @@ def counter_from_doc_id(doc_id: str, doc_type: str, fraud_type: str) -> int:
     if not isinstance(doc_id, str) or not doc_id.startswith(prefix):
         raise ValueError(f"Schema doc_id must start with '{prefix}', got {doc_id!r}")
 
-    suffix = doc_id[len(prefix):]
+    suffix = doc_id[len(prefix) :]
     if not suffix.isdigit():
         raise ValueError(f"Schema doc_id must end with digits, got {doc_id!r}")
     return int(suffix)
@@ -165,11 +172,15 @@ def counter_from_doc_id(doc_id: str, doc_type: str, fraud_type: str) -> int:
 
 def next_counter(output_dir: Path, doc_type: str, fraud_type: str) -> int:
     prefix = doc_id_prefix(doc_type, fraud_type)
-    numbers = [
-        int(directory.name.replace(prefix, ""))
-        for directory in output_dir.iterdir()
-        if directory.is_dir()
-        and directory.name.startswith(prefix)
-        and directory.name.replace(prefix, "").isdigit()
-    ] if output_dir.exists() else []
+    numbers = (
+        [
+            int(directory.name.replace(prefix, ""))
+            for directory in output_dir.iterdir()
+            if directory.is_dir()
+            and directory.name.startswith(prefix)
+            and directory.name.replace(prefix, "").isdigit()
+        ]
+        if output_dir.exists()
+        else []
+    )
     return (max(numbers) + 1) if numbers else 1

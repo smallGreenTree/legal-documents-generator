@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
 from src.synthetic_ner.constants import (
     GROUNDTRUTH_HEADER,
     INLINE_TEMPLATE_ENV,

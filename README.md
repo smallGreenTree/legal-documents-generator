@@ -37,9 +37,9 @@ Current package split:
 - `src/synthetic_ner/tasks/` for the LangGraph planner/writer/critic workflow
 - `src/synthetic_ner/models/ollama_client.py` for traced Ollama access
 
-At startup, the CLI auto-loads environment variables from `.env` and `.env.langfuse`
-if present (without overriding already-exported shell variables). This helps IDE
-debugger runs pick up Langfuse credentials.
+At startup, the CLI auto-loads environment variables from `.env` and `.env.mlflow`
+if present, without overriding already-exported shell variables. This keeps local
+and IDE runs aligned with the configured MLflow tracking server.
 
 ## LangGraph Workflow
 
@@ -51,8 +51,8 @@ That workflow adds:
 - persistent case memory under `memory/case_{doc_id}/CASE_MEMORY.md`
 - planner, writer, critic, and validator task modules
 - a generation report saved alongside the final document
-- node-level Langfuse spans for every LangGraph node, including section, revision, next-node, and latency metadata
-- Langfuse Prompt Management integration (prompts fetched by name with config fallback)
+- node-level MLflow spans for every LangGraph node, including section, revision, next-node, and latency metadata
+- MLflow Prompt Registry integration (prompts fetched by name and alias with config fallback)
 
 The active workflow mode is `langgraph`. The CLI and Prefect deployment both
 use the same LangGraph generation path.
@@ -61,7 +61,7 @@ use the same LangGraph generation path.
 
 Prefect can be used as the outer, user-friendly orchestration layer for the
 whole generation run. The Prefect flow keeps the existing LangGraph and
-Langfuse internals, but exposes these higher-level stages in the Prefect UI:
+MLflow instrumentation, but exposes these higher-level stages in the Prefect UI:
 
 - `scenario-selection`
 - `human-scenario-review` (optional)
@@ -70,7 +70,7 @@ Langfuse internals, but exposes these higher-level stages in the Prefect UI:
 - `human-entity-review` (optional)
 - `select-doc-id`
 - `case-schema`
-- `langgraph-langfuse-generation`
+- `langgraph-mlflow-generation`
 - `end-of-pipeline-file-audit`
 
 The first stage publishes a scenario summary and an input-file table artifact
@@ -127,7 +127,7 @@ Now open `http://localhost:4200`, go to **Deployments**, and run either:
 The quality deployment pauses before scoring so the reviewer can select the
 document id to analyze.
 
-When Langfuse is enabled, the workflow tries to fetch these managed text prompts:
+When MLflow is enabled, the workflow tries to fetch these managed text prompts:
 
 - `synthetic_ner.document_planner_system`
 - `synthetic_ner.document_planner_user`
@@ -138,13 +138,45 @@ When Langfuse is enabled, the workflow tries to fetch these managed text prompts
 - `synthetic_ner.critic_system`
 - `synthetic_ner.critic_user`
 
-If a prompt does not exist, the app falls back to `configs/workflow_prompts.yaml` and can auto-seed
-the missing prompt in Langfuse.
+If a prompt does not exist, the app falls back to `configs/workflow_prompts.yaml`
+and registers the missing prompt in MLflow under the configured alias.
 
-Optional env vars:
+MLflow settings live under `mlflow` in `config.yaml`:
 
-- `LANGFUSE_PROMPT_LABEL` (default label for fetch/seed, e.g. `production`)
-- `LANGFUSE_PROMPT_AUTOSEED` (`true` by default; set `false` to disable auto-seeding)
+- `enabled`: enable trace and prompt-registry integration
+- `tracking_uri`: MLflow server URL
+- `experiment_name`: shared MLflow experiment, for example `ner-platform`
+- `service_name`: service identity attached to every trace
+- `pipeline_stage`: stage used to distinguish generation, classification, and evaluation
+- `trace_name`: configured root-span name for this service
+- `prompt_name_prefix`: namespace for this service's registered prompts
+- `prompt_alias`: prompt alias used for fetch/registration (for example `production`)
+
+## Local Prefect and MLflow Platform
+
+Prefect and MLflow share one PostgreSQL server while using isolated databases,
+users, and credentials. Neither component uses the other's schema. Copy
+`.env.platform.example` to `.env.platform`, replace every example password, then run:
+
+```bash
+make platform-up
+```
+
+Do not run the platform with the `replace-me` values. `make platform-up`
+reconciles the Prefect and MLflow database roles with `.env.platform` before
+starting either application, so password rotation also works with an existing
+PostgreSQL volume. Verify both services before syncing prompts:
+
+```bash
+make platform-health
+```
+
+This starts PostgreSQL, Prefect at `http://localhost:4200`, and MLflow at
+`http://localhost:5000`. The database initialization script only runs when the
+PostgreSQL volume is created for the first time. For production, store artifacts
+in an approved durable object store or shared filesystem and put both UIs behind
+the organization's authenticated reverse proxy. Native Microsoft Entra ID/OIDC
+is not configured by this local Compose stack.
 
 ## What The Case Schema Does
 
@@ -247,10 +279,10 @@ Generate with the current profile:
 poetry run python generator.py
 ```
 
-Sync prompt templates to Langfuse Prompt Management:
+Sync prompt templates to the MLflow Prompt Registry:
 
 ```bash
-poetry run python -m src.synthetic_ner.sync_langfuse_prompts
+poetry run python -m src.synthetic_ner.sync_mlflow_prompts
 ```
 
 Generate from an existing schema:
@@ -270,5 +302,35 @@ Visualize entity coverage:
 Check code quality:
 
 ```bash
-poetry run ruff check .
+make check
 ```
+
+## Code quality and CI
+
+The repository applies the same engineering-quality controls as the NER evaluation
+pipeline. Install the local commit and push hooks once after installing dependencies:
+
+```bash
+make pre-commit-install
+```
+
+The main local checks are:
+
+```bash
+make check       # formatting, lint, and tests
+make ci-quality  # coverage, complexity, and maintainability gates
+make security    # Bandit SAST and dependency audit
+make docker-build
+```
+
+The initial branch-coverage floor is 59% and the cyclomatic-complexity ceiling is 23,
+matching the current measured baselines. Override `COVERAGE_MIN` or `COMPLEXITY_MAX` locally
+or in CI to ratchet the thresholds upward as orchestration and external-service coverage
+and refactoring improve.
+
+Pull requests and pushes to `main` run separate GitHub Actions jobs for deterministic
+quality gates, security/configuration scanning, and a non-root container build and smoke
+test. Dependabot monitors Python, Docker, and GitHub Actions dependencies weekly. The
+dependency audit and container vulnerability scan remain visible but advisory so that
+upstream Prefect or MLflow findings do not hide regressions in the blocking source,
+configuration, secret, test, coverage, lint, complexity, and image-build checks.

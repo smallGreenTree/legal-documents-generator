@@ -303,8 +303,10 @@ def _word_count(value: str) -> int:
 
 
 def _is_string_list(value: Any, *, minimum: int) -> bool:
-    return isinstance(value, list) and len(value) >= minimum and all(
-        isinstance(item, str) and item.strip() for item in value
+    return (
+        isinstance(value, list)
+        and len(value) >= minimum
+        and all(isinstance(item, str) and item.strip() for item in value)
     )
 
 

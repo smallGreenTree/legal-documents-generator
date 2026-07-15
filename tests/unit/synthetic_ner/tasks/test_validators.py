@@ -74,8 +74,7 @@ def test_validate_section_text_flags_unknown_values_and_markdown():
     issues = validate_section_text(
         section_name="facts",
         section_text=(
-            "- Alice Smith mentioned UNKNOWN LTD and CPS/2026/9999 "
-            "during the alleged scheme."
+            "- Alice Smith mentioned UNKNOWN LTD and CPS/2026/9999 during the alleged scheme."
         ),
         memory_text=MEMORY_TEXT,
         word_target=300,
@@ -110,9 +109,7 @@ def test_validate_section_text_respects_disabled_validator():
 
 
 def test_clean_generated_section_text_does_not_repair_unknown_value():
-    cleaned = clean_generated_section_text(
-        "<think>draft</think>Alice Smith dealt with UNKNOWN LTD"
-    )
+    cleaned = clean_generated_section_text("<think>draft</think>Alice Smith dealt with UNKNOWN LTD")
 
     assert "<think>" not in cleaned
     assert "UNKNOWN LTD" in cleaned

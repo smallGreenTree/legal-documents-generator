@@ -3,9 +3,14 @@ __pycache__/
 *.pyc
 .DS_Store
 .ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 .prefect/
 .env
-.env.langfuse
+.env.mlflow
+.env.platform
 config_case/generated/
 output/
 memory/*

@@ -15,7 +15,7 @@ from src.synthetic_ner.types.app_config import (
     CriticConfig,
     EntityVariantsConfig,
     GenerationConfig,
-    LangfuseConfig,
+    MlflowConfig,
     ModelProviderConfig,
     ModelRoutingConfig,
     OffencePeriodConfig,
@@ -77,9 +77,7 @@ def load_app_config(
     )
     case_raw = load_config(resolved_case_config_path)
     if not isinstance(case_raw, dict):
-        raise ValueError(
-            f"{resolved_case_config_path} must load into a top-level mapping"
-        )
+        raise ValueError(f"{resolved_case_config_path} must load into a top-level mapping")
     return build_app_config(
         raw,
         case_cfg=case_raw,
@@ -95,17 +93,16 @@ def build_app_config(
 ) -> AppConfig:
     profile_cfg = _require_mapping(case_cfg["profile"], "profile")
     scenario_cfg = _require_mapping(case_cfg.get("scenario", {}), "scenario")
+    entity_variants_cfg = case_cfg.get("entity_variants", cfg["entity_variants"])
     return AppConfig(
         paths=_build_paths_config(_require_mapping(cfg["paths"], "paths")),
         model_routing=_build_model_routing_config(
             _require_mapping(cfg["model_routing"], "model_routing"),
         ),
-        langfuse=_build_langfuse_config(_require_mapping(cfg["langfuse"], "langfuse")),
-        generation=_build_generation_config(
-            _require_mapping(cfg["generation"], "generation")
-        ),
+        mlflow=_build_mlflow_config(_require_mapping(cfg["mlflow"], "mlflow")),
+        generation=_build_generation_config(_require_mapping(cfg["generation"], "generation")),
         entity_variants=_build_entity_variants_config(
-            _require_mapping(cfg["entity_variants"], "entity_variants")
+            _require_mapping(entity_variants_cfg, "entity_variants")
         ),
         workflow=_build_workflow_config(
             _require_mapping(cfg["workflow"], "workflow"),
@@ -149,13 +146,10 @@ def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
 def _build_model_routing_config(raw: dict[str, Any]) -> ModelRoutingConfig:
     stages_raw = _require_mapping(raw["stages"], "model_routing.stages")
     required_stages = ("planner", "writer", "critic")
-    missing_stages = [
-        stage_name for stage_name in required_stages if stage_name not in stages_raw
-    ]
+    missing_stages = [stage_name for stage_name in required_stages if stage_name not in stages_raw]
     if missing_stages:
         raise ValueError(
-            "model_routing.stages must explicitly configure: "
-            + ", ".join(missing_stages)
+            "model_routing.stages must explicitly configure: " + ", ".join(missing_stages)
         )
     stages = {
         stage_name: _build_model_provider_config(
@@ -182,17 +176,9 @@ def _build_model_provider_config(
         else None
     )
     think_value = raw.get("think")
-    think = (
-        _require_bool(think_value, f"{path}.think")
-        if think_value is not None
-        else None
-    )
+    think = _require_bool(think_value, f"{path}.think") if think_value is not None else None
     top_p_value = raw.get("top_p")
-    top_p = (
-        _require_ratio(top_p_value, f"{path}.top_p")
-        if top_p_value is not None
-        else None
-    )
+    top_p = _require_ratio(top_p_value, f"{path}.top_p") if top_p_value is not None else None
     recovery = _require_mapping(raw["recovery"], f"{path}.recovery")
     max_generate_attempts = _require_positive_int(
         recovery["max_generate_attempts"],
@@ -222,18 +208,22 @@ def _build_model_provider_config(
     )
 
 
-def _build_langfuse_config(raw: dict[str, Any]) -> LangfuseConfig:
-    return LangfuseConfig(
-        enabled=_require_bool(raw["enabled"], "langfuse.enabled"),
-        host=_require_string(raw["host"], "langfuse.host"),
-        public_key_env=_require_string(
-            raw["public_key_env"],
-            "langfuse.public_key_env",
+def _build_mlflow_config(raw: dict[str, Any]) -> MlflowConfig:
+    return MlflowConfig(
+        enabled=_require_bool(raw["enabled"], "mlflow.enabled"),
+        tracking_uri=_require_string(raw["tracking_uri"], "mlflow.tracking_uri"),
+        experiment_name=_require_string(
+            raw["experiment_name"],
+            "mlflow.experiment_name",
         ),
-        secret_key_env=_require_string(
-            raw["secret_key_env"],
-            "langfuse.secret_key_env",
+        service_name=_require_string(raw["service_name"], "mlflow.service_name"),
+        pipeline_stage=_require_string(raw["pipeline_stage"], "mlflow.pipeline_stage"),
+        trace_name=_require_string(raw["trace_name"], "mlflow.trace_name"),
+        prompt_name_prefix=_require_string(
+            raw["prompt_name_prefix"],
+            "mlflow.prompt_name_prefix",
         ),
+        prompt_alias=_require_string(raw["prompt_alias"], "mlflow.prompt_alias"),
     )
 
 
@@ -282,12 +272,8 @@ def _build_workflow_config(
     config_path: Path | None = None,
 ) -> WorkflowConfig:
     prompts = _resolve_workflow_prompts(raw, config_path=config_path)
-    planner_cfg = _build_planner_config(
-        _require_mapping(raw["planner"], "workflow.planner")
-    )
-    critic_cfg = _build_critic_config(
-        _require_mapping(raw["critic"], "workflow.critic")
-    )
+    planner_cfg = _build_planner_config(_require_mapping(raw["planner"], "workflow.planner"))
+    critic_cfg = _build_critic_config(_require_mapping(raw["critic"], "workflow.critic"))
     writer = _require_mapping(raw["writer"], "workflow.writer")
     writer_max_output_tokens = _require_positive_int(
         writer["max_output_tokens"],
@@ -471,9 +457,7 @@ def _resolve_workflow_prompts(
     )
     prompts_raw = load_config(prompts_config_path)
     if not isinstance(prompts_raw, dict):
-        raise ValueError(
-            f"{prompts_config_path} must contain a top-level mapping"
-        )
+        raise ValueError(f"{prompts_config_path} must contain a top-level mapping")
     if "prompts" in prompts_raw:
         return _require_mapping(
             prompts_raw["prompts"],
@@ -793,10 +777,7 @@ def _build_required_int_mapping(
     path: str,
 ) -> dict[str, int]:
     raw = _require_mapping(value, path)
-    return {
-        key: _require_positive_int(item, f"{path}.{key}")
-        for key, item in raw.items()
-    }
+    return {key: _require_positive_int(item, f"{path}.{key}") for key, item in raw.items()}
 
 
 def _build_string_mapping(
@@ -895,8 +876,6 @@ def _require_non_negative_int(value: Any, path: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{path} must be a non-negative integer")
     return value
-
-
 
 
 def _require_number(value: Any, path: str) -> float:

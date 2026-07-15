@@ -66,7 +66,7 @@ def resolve_workflow_mode(project_root: Path, args: argparse.Namespace) -> str:
 
 
 def load_env_files(project_root: Path) -> None:
-    for env_name in (".env", ".env.langfuse"):
+    for env_name in (".env", ".env.mlflow"):
         _load_env_file(project_root / env_name)
 
 
@@ -99,4 +99,5 @@ def main(project_root: Path | None = None) -> None:
     load_env_files(resolved_project_root)
     args = build_parser(resolved_project_root).parse_args()
     from src.synthetic_ner.tasks.document_generation.orchestrator import run_langgraph_workflow
+
     run_langgraph_workflow(args, resolved_project_root)

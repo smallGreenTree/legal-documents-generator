@@ -58,6 +58,30 @@ def test_config_requires_explicit_stage_routes():
         )
 
 
+def test_case_config_entity_variants_override_global_defaults():
+    raw_config = load_config(PROJECT_ROOT / "config.yaml")
+    case_config = load_config(PROJECT_ROOT / "config_case" / "case_1.yaml")
+    case_config["entity_variants"] = {
+        "persons": {
+            "enabled": True,
+            "generation": {
+                "nickname_variants": 1,
+                "misspelling_variants": 0,
+                "locale_aware": False,
+            },
+        }
+    }
+
+    app_config = build_app_config(
+        raw_config,
+        case_cfg=case_config,
+        config_path=PROJECT_ROOT / "config.yaml",
+    )
+
+    assert app_config.entity_variants.persons.nickname_variants == 1
+    assert app_config.entity_variants.persons.misspelling_variants == 0
+
+
 @pytest.mark.parametrize("stage", ["planner", "writer", "critic"])
 def test_ollama_stage_clients_send_think_false(monkeypatch, stage):
     app_config = load_app_config(PROJECT_ROOT / "config.yaml")
@@ -86,7 +110,7 @@ def test_ollama_stage_clients_send_think_false(monkeypatch, stage):
     client = build_model_client(
         stage=stage,
         routing=app_config.model_routing,
-        tracer=TraceStore(replace(app_config.langfuse, enabled=False)),
+        tracer=TraceStore(replace(app_config.mlflow, enabled=False)),
     )
     client.invoke(
         doc_id="doc",

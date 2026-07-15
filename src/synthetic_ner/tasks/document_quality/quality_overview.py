@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from src.synthetic_ner.version import get_version_provenance
@@ -29,15 +29,9 @@ def build_quality_overview(
     current_version = get_version_provenance(getattr(context, "project_root", None))
     sections = quality_report.get("sections", [])
     missing_sections = [
-        section["section"]
-        for section in sections
-        if section.get("verdict") == "missing"
+        section["section"] for section in sections if section.get("verdict") == "missing"
     ]
-    sections_with_issues = [
-        section["section"]
-        for section in sections
-        if section.get("issues")
-    ]
+    sections_with_issues = [section["section"] for section in sections if section.get("issues")]
     revision_count = sum(_int_value(section.get("revision")) for section in sections)
     final_document_exists = _final_document_path(context, doc_id).exists()
     readiness = _readiness(
@@ -88,7 +82,7 @@ def build_quality_overview(
         },
         "model_workflow": {
             "workflow_mode": generation_report.get("workflow_mode"),
-            "langfuse_trace_url": generation_report.get("langfuse_trace_url"),
+            "mlflow_trace_url": generation_report.get("mlflow_trace_url"),
             "document_generator_version": generation_report.get("generator_version"),
             "quality_analyzer_version": current_version["version"],
             "total_llm_calls": generation_report.get("total_llm_calls"),
@@ -113,35 +107,29 @@ def build_quality_overview(
     return overview
 
 
-def fetch_langfuse_rubric_summary(context: Any, doc_id: str) -> dict[str, Any]:
-    """Read rubric scores from existing Langfuse data when credentials are available."""
+def fetch_mlflow_rubric_summary(context: Any, doc_id: str) -> dict[str, Any]:
+    """Read rubric attributes from the MLflow trace for an existing document."""
     generation_report = _parse_generation_report(_generation_report_path(context, doc_id))
-    trace_id = generation_report.get("langfuse_trace_id")
+    trace_id = generation_report.get("mlflow_trace_id")
     if not trace_id:
         return _empty_rubric_summary("trace id unavailable")
 
-    langfuse_cfg = getattr(context, "langfuse_cfg", None)
-    if langfuse_cfg is None or not getattr(langfuse_cfg, "enabled", False):
-        return _empty_rubric_summary("Langfuse disabled")
-
-    public_key = os.getenv(getattr(langfuse_cfg, "public_key_env", ""))
-    secret_key = os.getenv(getattr(langfuse_cfg, "secret_key_env", ""))
-    if not public_key or not secret_key:
-        return _empty_rubric_summary("Langfuse credentials unavailable")
+    mlflow_cfg = getattr(context, "mlflow_cfg", None)
+    if mlflow_cfg is None or not getattr(mlflow_cfg, "enabled", False):
+        return _empty_rubric_summary("MLflow disabled")
 
     try:
-        from langfuse import Langfuse
+        import mlflow
 
-        trace_url = generation_report.get("langfuse_trace_url")
-        client = Langfuse(
-            public_key=public_key,
-            secret_key=secret_key,
-            host=getattr(langfuse_cfg, "host", None),
-        )
-        scores = _fetch_langfuse_scores(client, trace_id)
-        observation_metadata = _fetch_langfuse_observation_metadata(client, trace_id)
+        mlflow.set_tracking_uri(mlflow_cfg.tracking_uri)
+        trace = mlflow.get_trace(trace_id, flush=True)
+        if trace is None:
+            raise RuntimeError(f"trace {trace_id} was not found")
+        trace_url = generation_report.get("mlflow_trace_url")
+        scores = _fetch_mlflow_scores(trace)
+        observation_metadata = _fetch_mlflow_span_metadata(trace)
     except Exception as exc:
-        return _empty_rubric_summary(_clean_langfuse_error(exc))
+        return _empty_rubric_summary(_clean_mlflow_error(exc))
 
     return _rubric_summary_from_scores(
         scores,
@@ -231,7 +219,7 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
         "| Signal | Value |",
         "| --- | --- |",
         f"| Workflow mode | {workflow.get('workflow_mode') or 'n/a'} |",
-        f"| Langfuse trace | {_link_or_na(workflow.get('langfuse_trace_url'), 'open trace')} |",
+        f"| MLflow trace | {_link_or_na(workflow.get('mlflow_trace_url'), 'open trace')} |",
         f"| Total LLM calls | {_int_display(workflow.get('total_llm_calls'))} |",
         f"| Total model time for document | {workflow.get('total_latency') or 'n/a'} |",
         f"| Total tokens | {_int_display(workflow.get('total_tokens'))} |",
@@ -272,12 +260,9 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
             "",
             (
                 "| Section | Quality | Words | Expected words | Rubric avg | Grounding | "
-                "Completeness | Chronology | Revision | Langfuse | Main issue |"
+                "Completeness | Chronology | Revision | MLflow | Main issue |"
             ),
-            (
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-                "---: | --- | --- |"
-            ),
+            ("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |"),
         ]
     )
     for row in workflow.get("section_rubrics", []):
@@ -292,7 +277,7 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
             f"{_rubric_number_display(row.get('completeness'))} | "
             f"{_rubric_number_display(row.get('chronology'))} | "
             f"{_revision_display(row.get('revision'))} | "
-            f"{_link_or_na(row.get('langfuse_url'), 'trace')} | "
+            f"{_link_or_na(row.get('mlflow_url'), 'trace')} | "
             f"{row.get('main_issue') or 'none'} |"
         )
     if workflow.get("prompt_response_refs"):
@@ -302,7 +287,7 @@ def format_model_workflow_markdown(overview: dict[str, Any]) -> str:
                 "## Prompt/Response References",
                 "",
                 (
-                    "These links point to the Langfuse observations that contain the "
+                    "These links point to the MLflow spans that contain the "
                     "actual prompts and responses for each final section revision."
                 ),
                 "",
@@ -328,12 +313,7 @@ def format_audit_confidence_markdown(overview: dict[str, Any]) -> str:
         "| --- | --- | --- |",
     ]
     for item in overview["audit_confidence"]:
-        lines.append(
-            "| "
-            f"{item['evidence']} | "
-            f"{item['status']} | "
-            f"{item['meaning']} |"
-        )
+        lines.append(f"| {item['evidence']} | {item['status']} | {item['meaning']} |")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -375,8 +355,8 @@ def _parse_generation_report(path: Path) -> dict[str, Any]:
             "total_latency_ms": 0,
             "empty_responses": 0,
             "truncated_calls": 0,
-            "langfuse_trace_id": None,
-            "langfuse_trace_url": None,
+            "mlflow_trace_id": None,
+            "mlflow_trace_url": None,
         }
     text = path.read_text(encoding="utf-8")
     return {
@@ -396,8 +376,8 @@ def _parse_generation_report(path: Path) -> dict[str, Any]:
         "total_latency_ms": _match_int(text, r"- Total LLM latency ms:\s*(\d+)"),
         "empty_responses": _match_int(text, r"- Empty LLM responses:\s*(\d+)"),
         "truncated_calls": _match_int(text, r"- Truncated LLM calls:\s*(\d+)"),
-        "langfuse_trace_id": _match_text(text, r"- Langfuse trace id:\s*(.+)"),
-        "langfuse_trace_url": _match_text(text, r"- Langfuse trace url:\s*(.+)"),
+        "mlflow_trace_id": _match_text(text, r"- MLflow trace id:\s*(.+)"),
+        "mlflow_trace_url": _match_text(text, r"- MLflow trace url:\s*(.+)"),
         "stage_rows": [_stage_from_row(row) for row in _parse_stage_table(text.splitlines())],
     }
 
@@ -437,73 +417,22 @@ def _stage_from_row(row: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def _fetch_langfuse_observation_metadata(client: Any, trace_id: str) -> dict[str, dict[str, Any]]:
-    try:
-        return _fetch_langfuse_observation_metadata_v1(client, trace_id)
-    except Exception as v1_exc:
-        try:
-            return _fetch_langfuse_observation_metadata_v2(client, trace_id)
-        except Exception:
-            raise v1_exc
-
-
-def _fetch_langfuse_observation_metadata_v1(
-    client: Any,
-    trace_id: str,
-) -> dict[str, dict[str, Any]]:
+def _fetch_mlflow_span_metadata(trace: Any) -> dict[str, dict[str, Any]]:
     observations: dict[str, dict[str, Any]] = {}
-    page = 1
-    total_pages = 1
-    while page <= total_pages:
-        response = client.api.legacy.observations_v1.get_many(
-            trace_id=trace_id,
-            limit=100,
-            page=page,
-        )
-        for observation in getattr(response, "data", []) or []:
-            _store_observation_metadata(observations, observation)
-        meta = getattr(response, "meta", None)
-        total_pages = _int_value(getattr(meta, "total_pages", 1)) or 1
-        page += 1
+    for span in getattr(getattr(trace, "data", None), "spans", []) or []:
+        _store_span_metadata(observations, span)
     return observations
 
 
-def _fetch_langfuse_observation_metadata_v2(
-    client: Any,
-    trace_id: str,
-) -> dict[str, dict[str, Any]]:
-    observations: dict[str, dict[str, Any]] = {}
-    cursor = None
-    for _page in range(10):
-        kwargs: dict[str, Any] = {
-            "trace_id": trace_id,
-            "limit": 100,
-        }
-        if cursor:
-            kwargs["cursor"] = cursor
-        response = client.api.observations.get_many(**kwargs)
-        for observation in getattr(response, "data", []) or []:
-            _store_observation_metadata(observations, observation)
-        meta = getattr(response, "meta", None)
-        cursor = (
-            getattr(meta, "next_cursor", None)
-            or getattr(meta, "nextCursor", None)
-            or getattr(meta, "next_page", None)
-        )
-        if not cursor:
-            break
-    return observations
-
-
-def _store_observation_metadata(
+def _store_span_metadata(
     observations: dict[str, dict[str, Any]],
-    observation: Any,
+    span: Any,
 ) -> None:
-    observation_id = str(getattr(observation, "id", "") or "")
+    observation_id = str(getattr(span, "span_id", "") or "")
     if not observation_id:
         return
-    metadata = _as_mapping(getattr(observation, "metadata", None))
-    task_id = metadata.get("task_id") or getattr(observation, "name", None)
+    metadata = _as_mapping(getattr(span, "attributes", None))
+    task_id = metadata.get("task_id") or getattr(span, "name", None)
     observations[observation_id] = {
         "observation_id": observation_id,
         "section_name": metadata.get("section_name"),
@@ -513,34 +442,28 @@ def _store_observation_metadata(
     }
 
 
-def _fetch_langfuse_scores(client: Any, trace_id: str) -> list[Any]:
+def _fetch_mlflow_scores(trace: Any) -> list[Any]:
     scores: list[Any] = []
-    page = 1
-    total_pages = 1
-    while page <= total_pages:
-        response = client.api.scores.get_many(
-            trace_id=trace_id,
-            limit=100,
-            page=page,
-        )
-        scores.extend(getattr(response, "data", []) or [])
-        meta = getattr(response, "meta", None)
-        total_pages = _int_value(getattr(meta, "total_pages", 1)) or 1
-        page += 1
+    for span in getattr(getattr(trace, "data", None), "spans", []) or []:
+        attributes = _as_mapping(getattr(span, "attributes", None))
+        for name, value in attributes.items():
+            if str(name).startswith("rubric.") and isinstance(value, (int, float)):
+                scores.append(
+                    SimpleNamespace(
+                        name=str(name),
+                        value=value,
+                        span_id=str(getattr(span, "span_id", "") or ""),
+                        metadata=attributes,
+                    )
+                )
     return scores
 
 
-def _clean_langfuse_error(exc: Exception) -> str:
+def _clean_mlflow_error(exc: Exception) -> str:
     message = str(exc)
-    if "limit" in message and "100" in message:
-        return "Langfuse read failed: API pagination limit exceeded"
-    status_match = re.search(r"status_code:\s*(\d+)", message)
-    body_match = re.search(r"body:\s*(\{.*\})", message)
-    if status_match and body_match:
-        return f"Langfuse read failed: HTTP {status_match.group(1)} {body_match.group(1)}"
     if len(message) > 240:
         message = message[:237].rstrip() + "..."
-    return f"Langfuse read failed: {message}"
+    return f"MLflow read failed: {message}"
 
 
 def _rubric_summary_from_scores(
@@ -574,28 +497,21 @@ def _rubric_summary_from_scores(
                 {
                     "revision_round": revision_round,
                     "metrics": {},
-                    "langfuse_url": _langfuse_observation_url(trace_url, call_id),
+                    "mlflow_url": _mlflow_span_url(trace_url, call_id),
                 },
             )
             call_bucket["metrics"].setdefault(metric, []).append(score_value)
 
     if not overall_values and metric_values:
-        overall_values = [
-            score
-            for values in metric_values.values()
-            for score in values
-        ]
+        overall_values = [score for values in metric_values.values() for score in values]
     metric_averages = {
-        metric: round(sum(values) / len(values), 2)
-        for metric, values in metric_values.items()
+        metric: round(sum(values) / len(values), 2) for metric, values in metric_values.items()
     }
     lowest_metric = min(metric_averages.items(), key=lambda item: item[1], default=None)
     if not overall_values and not metric_averages:
         return _empty_rubric_summary("no rubric scores found")
     return {
-        "overall": round(sum(overall_values) / len(overall_values), 2)
-        if overall_values
-        else None,
+        "overall": round(sum(overall_values) / len(overall_values), 2) if overall_values else None,
         "lowest_metric": {
             "metric": lowest_metric[0],
             "score": lowest_metric[1],
@@ -616,7 +532,7 @@ def _score_section_context(
     score: Any,
     observation_metadata: dict[str, dict[str, Any]],
 ) -> tuple[str | None, int | None, str]:
-    observation_id = str(getattr(score, "observation_id", "") or "")
+    observation_id = str(getattr(score, "span_id", "") or "")
     metadata = observation_metadata.get(observation_id, {})
     score_metadata = _as_mapping(getattr(score, "metadata", None))
     section_name = (
@@ -658,9 +574,7 @@ def _section_rubric_summary_from_calls(
         overall = metric_averages.get("overall")
         if overall is None:
             dimensional_values = [
-                value
-                for metric, value in metric_averages.items()
-                if metric != "overall"
+                value for metric, value in metric_averages.items() if metric != "overall"
             ]
             overall = (
                 round(sum(dimensional_values) / len(dimensional_values), 2)
@@ -673,7 +587,7 @@ def _section_rubric_summary_from_calls(
                 "overall": overall,
                 "revision": max(selected_revisions) if selected_revisions else None,
                 "calls": len(selected_calls),
-                "langfuse_url": _first_value(selected_calls, "langfuse_url"),
+                "mlflow_url": _first_value(selected_calls, "mlflow_url"),
                 **metric_averages,
             }
         )
@@ -718,11 +632,7 @@ def _latest_stage_observations(
     observations: list[dict[str, Any]],
     stage: str,
 ) -> list[dict[str, Any]]:
-    matching = [
-        observation
-        for observation in observations
-        if observation.get("stage") == stage
-    ]
+    matching = [observation for observation in observations if observation.get("stage") == stage]
     revisions = [
         _optional_int(observation.get("revision_round"))
         for observation in matching
@@ -752,7 +662,7 @@ def _observation_links(
     links: list[str] = []
     for observation in observations:
         observation_id = str(observation.get("observation_id") or "")
-        url = _langfuse_observation_url(trace_url, observation_id)
+        url = _mlflow_span_url(trace_url, observation_id)
         if not url:
             continue
         links.append(_link_or_na(url, _observation_label(observation)))
@@ -775,7 +685,7 @@ def _first_observation_url(
     trace_url: str | None,
 ) -> str | None:
     for observation in observations:
-        url = _langfuse_observation_url(
+        url = _mlflow_span_url(
             trace_url,
             str(observation.get("observation_id") or ""),
         )
@@ -787,18 +697,12 @@ def _first_observation_url(
 def _latest_rubric_calls(calls: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     values = list(calls.values())
     revisions = [
-        call.get("revision_round")
-        for call in values
-        if call.get("revision_round") is not None
+        call.get("revision_round") for call in values if call.get("revision_round") is not None
     ]
     if not revisions:
         return values
     latest_revision = max(revisions)
-    return [
-        call
-        for call in values
-        if call.get("revision_round") == latest_revision
-    ]
+    return [call for call in values if call.get("revision_round") == latest_revision]
 
 
 def _first_value(rows: list[dict[str, Any]], key: str) -> Any:
@@ -809,11 +713,11 @@ def _first_value(rows: list[dict[str, Any]], key: str) -> Any:
     return None
 
 
-def _langfuse_observation_url(trace_url: str | None, observation_id: str) -> str | None:
+def _mlflow_span_url(trace_url: str | None, observation_id: str) -> str | None:
     if not trace_url or not observation_id:
         return trace_url
     separator = "&" if "?" in trace_url else "?"
-    return f"{trace_url}{separator}observation={observation_id}"
+    return f"{trace_url}{separator}span={observation_id}"
 
 
 def _section_rubric_rows(
@@ -846,7 +750,7 @@ def _section_rubric_rows(
                     if rubric.get("revision") is not None
                     else section.get("revision")
                 ),
-                "langfuse_url": rubric.get("langfuse_url") or trace_url,
+                "mlflow_url": rubric.get("mlflow_url") or trace_url,
                 "main_issue": issues[0] if issues else "none",
             }
         )
@@ -877,8 +781,8 @@ def _audit_confidence(
         ),
         _evidence("Schema", schema_path, "Relationship graph"),
         {
-            "evidence": "Langfuse trace",
-            "status": "available" if generation_report.get("langfuse_trace_id") else "missing",
+            "evidence": "MLflow trace",
+            "status": "available" if generation_report.get("mlflow_trace_id") else "missing",
             "meaning": "Prompts, responses, node metrics",
         },
         {
@@ -1023,7 +927,7 @@ def _section_rubric_note(workflow: dict[str, Any]) -> str:
     if rubric.get("sections"):
         return (
             "Rows use the latest available critic rubric scores for each section. "
-            "The Langfuse link opens the matching trace observation where available."
+            "The MLflow link opens the matching trace span where available."
         )
     status = rubric.get("status") or "unavailable"
     return (

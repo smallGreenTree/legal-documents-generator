@@ -9,25 +9,39 @@ PREFECT_API_URL ?= http://localhost:4200/api
 PREFECT_POOL ?= synthetic-ner-local
 PREFECT_DEPLOYMENT ?= document-generation
 PREFECT_QUALITY_DEPLOYMENT ?= document-quality
-PREFECT_EVALUATION_DEPLOYMENT ?= document-evaluation
+PLATFORM_ENV ?= .env.platform
+PLATFORM_COMPOSE ?= docker compose --env-file $(PLATFORM_ENV) -f docker-compose.platform.yml
+COVERAGE_MIN ?= 59
+COMPLEXITY_MAX ?= 23
+QUALITY_PATHS ?= src tests main.py prefect_pipeline.py scripts/smoke_model_routes.py scripts/smoke_prompt_contract.py scripts/check_complexity.py
 
 .PHONY: help install setup
-.PHONY: langfuse-up langfuse-down langfuse-ps
+.PHONY: platform-up platform-down platform-status platform-db-init platform-health platform-check-config
+.PHONY: mlflow-up mlflow-down mlflow-status
 .PHONY: prefect-setup prefect-up prefect-down prefect-status
-.PHONY: ollama-health ollama-pull sync-langfuse
-.PHONY: generate smoke-model-routes smoke-prompt-contract apple-studio-run check mi
+.PHONY: ollama-health ollama-pull sync-mlflow
+.PHONY: generate smoke-model-routes smoke-prompt-contract apple-studio-run
+.PHONY: format format-check test coverage lint complexity sast dependency-audit security
+.PHONY: check ci-quality pre-commit-install pre-commit docker-build mi
 
 help:
 	@echo "Common targets:"
-	@echo "  make setup          Install deps, prepare Prefect, start Langfuse, pull model, sync prompts"
+	@echo "  make setup          Install deps, start Prefect/MLflow/PostgreSQL, pull model, sync prompts"
 	@echo "  make generate       Generate documents with LangGraph workflow"
 	@echo "  make smoke-model-routes Check planner/writer/critic model calls"
 	@echo "  make smoke-prompt-contract Check writer prompt format and content"
 	@echo "  make apple-studio-run Deploy, smoke-test, then queue 10 scenario runs"
+	@echo "  make check          Run formatting, lint, and tests"
+	@echo "  make ci-quality     Run deterministic CI quality gates"
+	@echo "  make security       Run Python SAST and dependency audit"
+	@echo "  make pre-commit-install Install local Git hooks"
+	@echo "  make docker-build   Build the non-root generator image"
 	@echo "  make mi             Show radon maintainability index for src and tests"
-	@echo "  make langfuse-up    Start local Langfuse Docker stack"
+	@echo "  make platform-up    Start PostgreSQL, Prefect server, and MLflow server"
+	@echo "  make platform-health Check Prefect and MLflow HTTP health endpoints"
+	@echo "  make mlflow-up      Start PostgreSQL and MLflow server"
 	@echo "  make prefect-setup  Install/setup Prefect control plane"
-	@echo "  make prefect-up     Start Prefect, deploy generation, quality, evaluation, and worker"
+	@echo "  make prefect-up     Start Prefect, deploy generation, quality, and worker"
 	@echo "  make prefect-status Show Prefect server and worker status"
 	@echo "  make prefect-down   Stop Prefect worker and Docker server"
 	@echo "  make ollama-pull    Pull OLLAMA_MODEL=$(OLLAMA_MODEL)"
@@ -36,22 +50,51 @@ help:
 install:
 	poetry install
 
-setup: prefect-setup langfuse-up ollama-pull sync-langfuse
+setup: prefect-setup platform-up ollama-pull sync-mlflow
 
-langfuse-up:
-	docker compose --env-file .env.langfuse -f docker-compose.langfuse.yml up -d
+platform-check-config:
+	@test -f "$(PLATFORM_ENV)" || { echo "Missing $(PLATFORM_ENV); copy .env.platform.example and set passwords."; exit 1; }
+	@if grep -Eq '^[A-Z0-9_]*PASSWORD=replace-me$$' "$(PLATFORM_ENV)"; then \
+		echo "Refusing to start: replace all placeholder passwords in $(PLATFORM_ENV)."; \
+		exit 1; \
+	fi
 
-langfuse-down:
-	docker compose --env-file .env.langfuse -f docker-compose.langfuse.yml down
+platform-up: platform-check-config
+	$(PLATFORM_COMPOSE) up -d postgres
+	$(MAKE) platform-db-init
+	$(PLATFORM_COMPOSE) up -d prefect-server mlflow-server
 
-langfuse-ps:
-	docker compose --env-file .env.langfuse -f docker-compose.langfuse.yml ps
+platform-db-init: platform-check-config
+	$(PLATFORM_COMPOSE) exec -T postgres bash /docker-entrypoint-initdb.d/10-platform-databases.sh
+
+platform-health:
+	curl -fsS http://localhost:4200/api/health >/dev/null
+	@echo "Prefect API is healthy: http://localhost:4200/api"
+	curl -fsS http://localhost:5000/health >/dev/null
+	@echo "MLflow is healthy: http://localhost:5000"
+
+platform-down:
+	$(PLATFORM_COMPOSE) down
+
+platform-status:
+	$(PLATFORM_COMPOSE) ps
+
+mlflow-up: platform-check-config
+	$(PLATFORM_COMPOSE) up -d postgres
+	$(MAKE) platform-db-init
+	$(PLATFORM_COMPOSE) up -d mlflow-server
+
+mlflow-down:
+	$(PLATFORM_COMPOSE) stop mlflow-server
+
+mlflow-status:
+	$(PLATFORM_COMPOSE) ps postgres mlflow-server
 
 prefect-setup:
 	poetry install
 
 prefect-up:
-	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml up -d
+	$(PLATFORM_COMPOSE) up -d postgres prefect-server mlflow-server
 	$(MAKE) _prefect-deploy
 	$(MAKE) _prefect-worker-bg
 
@@ -63,10 +106,10 @@ prefect-down:
 	else \
 		echo "No Prefect worker pid file found."; \
 	fi
-	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml down
+	$(PLATFORM_COMPOSE) down
 
 prefect-status:
-	docker compose --env-file .env.langfuse -f docker-compose.prefect.yml ps
+	$(PLATFORM_COMPOSE) ps
 	@if [ -f "$(PREFECT_HOME)/run/worker.pid" ]; then \
 		echo "Prefect worker pid: `cat $(PREFECT_HOME)/run/worker.pid`"; \
 	else \
@@ -88,12 +131,6 @@ _prefect-deploy:
 		--name $(PREFECT_QUALITY_DEPLOYMENT) \
 		--pool $(PREFECT_POOL) \
 		--params '{"case_config":"$(CASE_CONFIG)","quality_config":"config_quality.yaml","review_document_selection":true}'
-	PREFECT_HOME=$(PREFECT_HOME) PREFECT_API_URL=$(PREFECT_API_URL) \
-		poetry run prefect --no-prompt deploy \
-		prefect_pipeline.py:evaluate_existing_document \
-		--name $(PREFECT_EVALUATION_DEPLOYMENT) \
-		--pool $(PREFECT_POOL) \
-		--params '{"case_config":"$(CASE_CONFIG)","calibration_mode":"apply_safe","review_document_selection":true}'
 
 _prefect-worker-bg:
 	mkdir -p $(PREFECT_HOME)/logs $(PREFECT_HOME)/run
@@ -107,8 +144,8 @@ ollama-health:
 ollama-pull: ollama-health
 	ollama pull $(OLLAMA_MODEL)
 
-sync-langfuse:
-	$(PYTHON) -m src.synthetic_ner.sync_langfuse_prompts --commit-message "$(MSG)"
+sync-mlflow:
+	$(PYTHON) -m src.synthetic_ner.sync_mlflow_prompts --commit-message "$(MSG)"
 
 generate:
 	$(PYTHON) main.py --case-config $(CASE_CONFIG) --template $(TEMPLATE) --documents $(DOCS) --workflow-mode langgraph
@@ -122,8 +159,48 @@ smoke-prompt-contract:
 apple-studio-run:
 	CASE_CONFIG=$(CASE_CONFIG) TEMPLATE=$(TEMPLATE) DOCUMENTS=10 scripts/apple_studio_prefect_run.sh
 
-check:
-	poetry run ruff check .
+format:
+	poetry run ruff format $(QUALITY_PATHS)
+
+format-check:
+	poetry run ruff format --check $(QUALITY_PATHS)
+
+test:
+	poetry run pytest -q
+
+coverage:
+	poetry run pytest -q --cov=src.synthetic_ner --cov-branch \
+		--cov-report=term-missing --cov-report=xml --cov-fail-under=$(COVERAGE_MIN)
+
+lint:
+	poetry run ruff check $(QUALITY_PATHS)
+
+complexity:
+	$(PYTHON) scripts/check_complexity.py --max $(COMPLEXITY_MAX) src
+	poetry run radon cc src -s -a
+	poetry run radon mi src -s
+
+sast:
+	poetry run bandit -q -r src main.py prefect_pipeline.py -lll -iii
+
+dependency-audit:
+	poetry run pip-audit
+
+security: sast dependency-audit
+
+check: format-check lint test
+
+ci-quality: format-check lint coverage complexity
+
+pre-commit-install:
+	poetry run pre-commit install --install-hooks
+	poetry run pre-commit install --hook-type pre-push
+
+pre-commit:
+	poetry run pre-commit run --all-files
+
+docker-build:
+	docker build --tag synthetic-ner:local .
 
 mi:
 	poetry run radon mi src tests

@@ -10,6 +10,7 @@ from src.synthetic_ner.types.app_config import WorkflowPromptsConfig
 class TraceHandle:
     observation: Any
     metadata: dict[str, Any]
+    context: Any = None
 
 
 @dataclass(slots=True)

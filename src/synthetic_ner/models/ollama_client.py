@@ -9,6 +9,7 @@ from time import perf_counter, sleep
 from typing import Any, Callable
 
 import requests
+
 from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
 from src.synthetic_ner.types.app_config import OllamaConfig
 
@@ -20,7 +21,7 @@ class OllamaCallResult:
 
 
 class TracedOllamaClient:
-    """Small wrapper around Ollama's generate API with Langfuse tracing."""
+    """Small wrapper around Ollama's generate API with MLflow tracing."""
 
     def __init__(self, config: OllamaConfig, tracer: TraceStore) -> None:
         self.base_url = config.base_url.rstrip("/")
@@ -46,10 +47,7 @@ class TracedOllamaClient:
         prompt_object: Any | None = None,
         on_partial_text: Callable[[str], None] | None = None,
     ) -> OllamaCallResult:
-        full_prompt = (
-            f"[SYSTEM]\n{system_prompt.strip()}\n\n"
-            f"[USER]\n{user_prompt.strip()}\n"
-        )
+        full_prompt = f"[SYSTEM]\n{system_prompt.strip()}\n\n[USER]\n{user_prompt.strip()}\n"
         prompt_payload = {
             "system_prompt": system_prompt.strip(),
             "user_prompt": user_prompt.strip(),
@@ -211,10 +209,7 @@ class TracedOllamaClient:
                 )
             except Exception as exc:
                 last_error = exc
-                if (
-                    attempt >= self.recovery.max_generate_attempts
-                    or not _is_retryable_error(exc)
-                ):
+                if attempt >= self.recovery.max_generate_attempts or not _is_retryable_error(exc):
                     break
                 sleep(self.recovery.retry_backoff_seconds * attempt)
         if last_error is not None:
@@ -268,9 +263,7 @@ class TracedOllamaClient:
                 continue
             payload = json.loads(raw_line)
             if payload.get("thinking"):
-                final_payload["thinking"] = (
-                    final_payload.get("thinking", "") + payload["thinking"]
-                )
+                final_payload["thinking"] = final_payload.get("thinking", "") + payload["thinking"]
             piece = payload.get("response", "")
             if piece:
                 chunks.append(piece)

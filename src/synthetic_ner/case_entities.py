@@ -1,4 +1,5 @@
 """Person and organisation generation helpers for synthetic cases."""
+
 import logging
 import random
 import re
@@ -265,9 +266,8 @@ def normalize_person_record(person: dict, is_defendant: bool, context: str) -> d
     return {
         "name": name,
         "initials": person.get("initials") or make_initials(name),
-        "title_surname": person.get("title_surname") or (
-            f"{title} {last_name}".strip() if title else last_name
-        ),
+        "title_surname": person.get("title_surname")
+        or (f"{title} {last_name}".strip() if title else last_name),
         "short_name": person.get("short_name") or first_name,
         "surface_forms_list": surface_forms_list,
         "dob": required["dob"],
@@ -318,13 +318,9 @@ def build_people_from_specs(
             nat=spec.nationality,
             title=spec.title,
             surface_forms=spec.surface_forms,
-            nickname_variants=(
-                person_variants.nickname_variants if spec.variants.nickname else 0
-            ),
+            nickname_variants=(person_variants.nickname_variants if spec.variants.nickname else 0),
             misspelling_variants=(
-                person_variants.misspelling_variants
-                if spec.variants.misspelling
-                else 0
+                person_variants.misspelling_variants if spec.variants.misspelling else 0
             ),
             nat_locales=nat_locales,
             is_defendant=is_defendant,
@@ -469,18 +465,14 @@ def _resolve_locale(nationality: str, nat_locales: dict[str, str]) -> str:
     try:
         return nat_locales[nationality]
     except KeyError as exc:
-        raise ValueError(
-            f"Missing nationality_locales entry for '{nationality}'"
-        ) from exc
+        raise ValueError(f"Missing nationality_locales entry for '{nationality}'") from exc
 
 
 def _resolve_vat_prefix(nationality: str, vat_prefixes: dict[str, str]) -> str:
     try:
         return vat_prefixes[nationality]
     except KeyError as exc:
-        raise ValueError(
-            f"Missing vat_prefixes entry for '{nationality}'"
-        ) from exc
+        raise ValueError(f"Missing vat_prefixes entry for '{nationality}'") from exc
 
 
 def _required_person_fields(person: dict) -> dict[str, str]:

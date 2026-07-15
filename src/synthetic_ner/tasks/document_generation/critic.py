@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from requests.exceptions import ReadTimeout, RequestException
+
 from src.synthetic_ner.tasks.document_generation.prompt_context import (
     build_section_context,
     build_section_contract,
@@ -179,19 +180,18 @@ def _parse_legacy_result(raw_text: str, acceptance_threshold: float = 3.5) -> Cr
             if issues_marker != -1
             else (revision_marker if revision_marker != -1 else len(normalized))
         )
-        rubric_block = normalized[rubrics_marker + len("RUBRICS:"):rubric_block_end]
+        rubric_block = normalized[rubrics_marker + len("RUBRICS:") : rubric_block_end]
         rubrics = _parse_rubrics(rubric_block)
     if issues_marker != -1:
         issues_block_end = revision_marker if revision_marker != -1 else len(normalized)
-        issues_block = normalized[issues_marker + len("ISSUES:"):issues_block_end]
+        issues_block = normalized[issues_marker + len("ISSUES:") : issues_block_end]
         issues = [
             line.removeprefix("-").strip()
             for line in issues_block.splitlines()
-            if line.strip().startswith("-")
-            and line.removeprefix("-").strip().lower() != "none"
+            if line.strip().startswith("-") and line.removeprefix("-").strip().lower() != "none"
         ]
     if revision_marker != -1:
-        revision_instruction = normalized[revision_marker + len("REVISION:"):].strip()
+        revision_instruction = normalized[revision_marker + len("REVISION:") :].strip()
     for rubric_issue in _blocking_rubric_issues(rubrics):
         if rubric_issue not in issues:
             issues.append(rubric_issue)
@@ -203,9 +203,8 @@ def _parse_legacy_result(raw_text: str, acceptance_threshold: float = 3.5) -> Cr
         revision_instruction = (
             "Revise the section to resolve consistency issues and remove any invented facts."
         )
-    if (
-        _overall_rubric_score(rubrics) >= acceptance_threshold
-        and not _critical_rubric_issues(rubrics)
+    if _overall_rubric_score(rubrics) >= acceptance_threshold and not _critical_rubric_issues(
+        rubrics
     ):
         approved = True
         issues = []
@@ -283,7 +282,7 @@ def _extract_json_object(raw_text: str) -> str:
     end = text.rfind("}")
     if start == -1 or end == -1 or end < start:
         raise ValueError("No JSON object found in critic response.")
-    return text[start:end + 1]
+    return text[start : end + 1]
 
 
 def _string_field(value: Any, fallback: str) -> str:
@@ -329,11 +328,7 @@ def _overall_rubric_score(rubrics: dict[str, int]) -> float:
         return 0.0
     if "overall" in rubrics:
         return float(rubrics["overall"])
-    scores = [
-        score
-        for metric, score in rubrics.items()
-        if metric != "overall" and 1 <= score <= 5
-    ]
+    scores = [score for metric, score in rubrics.items() if metric != "overall" and 1 <= score <= 5]
     if not scores:
         return 0.0
     return sum(scores) / len(scores)

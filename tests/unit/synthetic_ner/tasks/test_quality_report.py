@@ -55,8 +55,7 @@ def test_quality_report_scores_existing_document_artifacts(tmp_path):
         doc_id,
         "history",
         "r2",
-        "On 1 January 2026, Philomena Hoffmann was linked to SIMON INTERNATIONAL LTD. "
-        * 12,
+        "On 1 January 2026, Philomena Hoffmann was linked to SIMON INTERNATIONAL LTD. " * 12,
     )
 
     report = build_quality_report(context, doc_id)

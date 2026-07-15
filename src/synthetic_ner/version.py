@@ -25,9 +25,7 @@ def get_generator_version(project_root: Path | str | None = None) -> str:
     data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     version = str(data.get("tool", {}).get("poetry", {}).get("version", "")).strip()
     if not SEMVER_RE.fullmatch(version):
-        raise ValueError(
-            "Generator version must use semantic X.X.X format in pyproject.toml"
-        )
+        raise ValueError("Generator version must use semantic X.X.X format in pyproject.toml")
     return version
 
 

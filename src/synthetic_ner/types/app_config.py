@@ -49,11 +49,15 @@ class ModelRoutingConfig:
 
 
 @dataclass(frozen=True)
-class LangfuseConfig:
+class MlflowConfig:
     enabled: bool
-    host: str
-    public_key_env: str
-    secret_key_env: str
+    tracking_uri: str
+    experiment_name: str
+    service_name: str
+    pipeline_stage: str
+    trace_name: str
+    prompt_name_prefix: str
+    prompt_alias: str
 
 
 @dataclass(frozen=True)
@@ -212,7 +216,7 @@ class CaseConfig:
 class AppConfig:
     paths: PathsConfig
     model_routing: ModelRoutingConfig
-    langfuse: LangfuseConfig
+    mlflow: MlflowConfig
     generation: GenerationConfig
     entity_variants: EntityVariantsConfig
     workflow: WorkflowConfig

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from prefect import flow
+
 from src.synthetic_ner.prefect_flows.utils import (
     ingest_configs,
     resolve_flow_project_root,

@@ -108,9 +108,7 @@ def resolve_case_entities(
         )
 
     defendant_nationalities = [spec.nationality for spec in cast_cfg.defendants]
-    if not defendant_nationalities and (
-        cast_cfg.charged_orgs > 0 or cast_cfg.associated_orgs > 0
-    ):
+    if not defendant_nationalities and (cast_cfg.charged_orgs > 0 or cast_cfg.associated_orgs > 0):
         raise ValueError(
             "case.cast.defendants must not be empty when company auto-generation is enabled"
         )
@@ -202,15 +200,9 @@ def resolve_case_metadata(case_cfg: CaseConfig, doc_type: str) -> dict:
             else make_case_number(doc_type)
         ),
         "legal_reference": make_legal_reference(),
-        "cross_ref": (
-            metadata.cross_ref
-            if not is_auto(metadata.cross_ref)
-            else make_cross_ref()
-        ),
+        "cross_ref": (metadata.cross_ref if not is_auto(metadata.cross_ref) else make_cross_ref()),
         "filing_date": (
-            metadata.filing_date
-            if not is_auto(metadata.filing_date)
-            else make_filing_date()
+            metadata.filing_date if not is_auto(metadata.filing_date) else make_filing_date()
         ),
         "offence_period": offence_period,
     }
@@ -367,9 +359,7 @@ def _scenario_template_context(
     first_defendant = defendants[0] if defendants else {}
     first_org = orgs[0] if orgs else {}
     defendants_str = " and ".join(person.get("name", "") for person in defendants)
-    defendants_upper = " and ".join(
-        person.get("name", "").upper() for person in defendants
-    )
+    defendants_upper = " and ".join(person.get("name", "").upper() for person in defendants)
     companies_str = " and ".join(org.get("name", "") for org in orgs)
 
     return {
@@ -402,10 +392,7 @@ def _format_scenario_value(value: Any, context: dict[str, str]) -> Any:
     if isinstance(value, list):
         return [_format_scenario_value(item, context) for item in value]
     if isinstance(value, dict):
-        return {
-            key: _format_scenario_value(item, context)
-            for key, item in value.items()
-        }
+        return {key: _format_scenario_value(item, context) for key, item in value.items()}
     return value
 
 
@@ -429,22 +416,17 @@ def resolve_prose_overrides(
     extra = [name for name in prose_cfg if name not in section_order]
     if extra:
         raise ValueError(
-            "case.prose has unknown sections for configured section_words: "
-            + ", ".join(extra)
+            "case.prose has unknown sections for configured section_words: " + ", ".join(extra)
         )
 
     resolved = {}
     for section_name in section_order:
         if section_name not in prose_cfg:
-            raise ValueError(
-                f"case.prose is missing a value for section '{section_name}'"
-            )
+            raise ValueError(f"case.prose is missing a value for section '{section_name}'")
         value = prose_cfg[section_name]
         if is_auto(value):
             continue
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(
-                f"case.prose.{section_name} must be a non-empty string or 'auto'"
-            )
+            raise ValueError(f"case.prose.{section_name} must be a non-empty string or 'auto'")
         resolved[section_name] = value.strip()
     return resolved

@@ -14,7 +14,7 @@ from src.synthetic_ner.prefect_flows.utils import (
     resolve_flow_project_root,
     review_document_entities,
     review_selected_scenario,
-    run_langgraph_langfuse,
+    run_langgraph_mlflow,
     select_doc_id,
     select_scenario,
 )
@@ -84,7 +84,7 @@ def generate_dataset(
             document_index,
             selected_doc_id,
         )
-        run_langgraph_langfuse(context, document, schema, doc_id, prefect_flow_run_id)
+        run_langgraph_mlflow(context, document, schema, doc_id, prefect_flow_run_id)
         audit_created_files(context, doc_id)
         doc_ids.append(doc_id)
 

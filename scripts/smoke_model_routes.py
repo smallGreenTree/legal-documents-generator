@@ -9,7 +9,6 @@ return a short response with the same Ollama options used by the app.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,8 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.synthetic_ner.config import load_app_config
-
+from src.synthetic_ner.config import load_app_config  # noqa: E402
 
 DEFAULT_STAGES = ("writer", "critic")
 
@@ -42,10 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--prompt",
-        default=(
-            "Return exactly this JSON object and nothing else: "
-            "{\"ok\":true,\"stage\":\"smoke\"}"
-        ),
+        default=('Return exactly this JSON object and nothing else: {"ok":true,"stage":"smoke"}'),
         help="Tiny prompt used for each smoke generation.",
     )
     parser.add_argument(

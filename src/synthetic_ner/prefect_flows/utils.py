@@ -32,7 +32,7 @@ from src.synthetic_ner.schema import counter_from_doc_id, doc_id_prefix, make_do
 from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
 from src.synthetic_ner.tasks.document_quality.quality_overview import (
     build_quality_overview,
-    fetch_langfuse_rubric_summary,
+    fetch_mlflow_rubric_summary,
     format_audit_confidence_markdown,
     format_model_workflow_markdown,
     format_run_health_markdown,
@@ -80,6 +80,7 @@ NationalityChoice = Literal[
 ]
 TitleChoice = Literal["No title", "Dr", "Mr", "Ms", "Mrs", "Prof"]
 SurfaceFormsChoice = Literal[1, 2, 3, 4]
+VariantCountChoice = Literal[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 OrgCountChoice = Literal[0, 1, 2, 3, 4, 5]
 OrganisationGroupChoice = Literal["charged", "associated"]
 OrganisationRoleChoice = Literal[
@@ -305,7 +306,7 @@ def review_selected_scenario(
         from_schema=scenario["from_schema"],
         quality_config=scenario.get("quality_config"),
     )
-    person_specs = review_person_setup(
+    person_specs, person_variant_generation = review_person_setup(
         scenario=reviewed_scenario,
         person_count=_scenario_person_count(reviewed_scenario),
         timeout_seconds=timeout_seconds,
@@ -321,6 +322,7 @@ def review_selected_scenario(
         response,
         reviewed_scenario,
         person_specs,
+        person_variant_generation,
         organisation_specs,
     )
     _publish_scenario_artifacts(reviewed_scenario)
@@ -339,18 +341,21 @@ def review_person_setup(
     scenario: dict[str, Any],
     person_count: int,
     timeout_seconds: int,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pause with exactly one row per configured person entity."""
     initial_specs = _initial_person_specs_for_setup(scenario, person_count)
-    review_input = _person_setup_review_input_model(initial_specs)
+    review_input = _person_setup_review_input_model(scenario, initial_specs)
     response = pause_flow_run(
         wait_for_input=review_input,
         timeout=timeout_seconds,
         key="person-setup-review",
     )
     if response is None:
-        return initial_specs
-    return _person_specs_from_review_response(response, len(initial_specs))
+        return initial_specs, _person_variant_generation_from_scenario(scenario)
+    return (
+        _person_specs_from_review_response(response, len(initial_specs)),
+        _person_variant_generation_from_review_response(response, scenario),
+    )
 
 
 def review_organisation_setup(
@@ -410,9 +415,7 @@ def _required_prefilled_input_model(
 def _scenario_review_field_types(scenario: dict[str, Any]) -> dict[str, Any]:
     scenario_options = scenario.get("scenario_options", {})
     specific_scenario_options = scenario.get("specific_scenario_options", {})
-    family_values = (
-        list(scenario_options.values()) if isinstance(scenario_options, dict) else []
-    )
+    family_values = list(scenario_options.values()) if isinstance(scenario_options, dict) else []
     specific_values = (
         list(specific_scenario_options.values())
         if isinstance(specific_scenario_options, dict)
@@ -673,9 +676,7 @@ def select_quality_document(
 
     candidates = publish_quality_document_selection(context, timeout_seconds)
     if not candidates:
-        raise SystemExit(
-            "No generated documents are available for this doc_type/fraud_type."
-        )
+        raise SystemExit("No generated documents are available for this doc_type/fraud_type.")
 
     review_input = _required_prefilled_input_model(
         QualityDocumentSelectionInput,
@@ -725,15 +726,12 @@ def _quality_document_candidates(context: Any) -> list[dict[str, Any]]:
         doc_ids.update(
             path.name.removeprefix("case_")
             for path in context.memory_dir.iterdir()
-            if path.is_dir()
-            and path.name.startswith(f"case_{prefix}")
+            if path.is_dir() and path.name.startswith(f"case_{prefix}")
         )
 
     if context.schema_dir.exists():
         doc_ids.update(
-            path.stem
-            for path in context.schema_dir.glob(f"{prefix}*.json")
-            if path.is_file()
+            path.stem for path in context.schema_dir.glob(f"{prefix}*.json") if path.is_file()
         )
 
     return [
@@ -872,6 +870,7 @@ def _build_scenario(
     workflow = root_raw.get("workflow", {}) if isinstance(root_raw, dict) else {}
     model_routing = root_raw.get("model_routing", {}) if isinstance(root_raw, dict) else {}
     generation = root_raw.get("generation", {}) if isinstance(root_raw, dict) else {}
+    entity_variants = _entity_variants_from_configs(root_raw, case_raw)
     scenario_options = _scenario_options(scenario_meta, profile, fraud_statutes)
     specific_scenario_options = _specific_scenario_options(
         scenario_meta,
@@ -929,7 +928,7 @@ def _build_scenario(
                 required=True,
             )
         )
-    for env_name in (".env", ".env.langfuse"):
+    for env_name in (".env", ".env.mlflow"):
         env_path = project_root / env_name
         if env_path.exists():
             input_files.append(_input_file_record(env_name, env_path, required=False))
@@ -952,6 +951,7 @@ def _build_scenario(
         "workflow": workflow,
         "model_routing": model_routing,
         "generation": generation,
+        "entity_variants": entity_variants,
         "prompts_config": prompts_config,
         "prompt_names": sorted((prompts_raw.get("prompts") or {}).keys())
         if isinstance(prompts_raw, dict)
@@ -1044,15 +1044,15 @@ def build_case_schema(
     return doc_id, schema
 
 
-@task(name="langgraph-langfuse-generation")
-def run_langgraph_langfuse(
+@task(name="langgraph-mlflow-generation")
+def run_langgraph_mlflow(
     context: Any,
     document: Any,
     schema: dict,
     doc_id: str,
     prefect_flow_run_id: str | None = None,
 ) -> str:
-    """Run the LangGraph generation workflow with Langfuse tracing enabled by config."""
+    """Run the LangGraph generation workflow with MLflow tracing enabled by config."""
     try:
         run_document_graph(
             context=context,
@@ -1064,7 +1064,7 @@ def run_langgraph_langfuse(
         )
     finally:
         _publish_memory_artifacts(context, doc_id)
-    get_run_logger().info("Completed LangGraph/Langfuse generation for %s", doc_id)
+    get_run_logger().info("Completed LangGraph/MLflow generation for %s", doc_id)
     return doc_id
 
 
@@ -1109,7 +1109,7 @@ def score_document_quality(
     quality_config_path = resolve_project_path(context.project_root, quality_config)
     scoring_config = load_quality_scoring_config(quality_config_path)
     report = build_quality_report(context, doc_id, scoring_config)
-    rubric_summary = fetch_langfuse_rubric_summary(context, doc_id)
+    rubric_summary = fetch_mlflow_rubric_summary(context, doc_id)
     overview = build_quality_overview(
         context=context,
         doc_id=doc_id,
@@ -1210,6 +1210,14 @@ def _case_fraud_statutes(case_raw: Any) -> dict[str, Any]:
         return {}
     statutes = case_raw.get("fraud_statutes", {})
     return statutes if isinstance(statutes, dict) else {}
+
+
+def _entity_variants_from_configs(root_raw: Any, case_raw: Any) -> dict[str, Any]:
+    if isinstance(case_raw, dict) and isinstance(case_raw.get("entity_variants"), dict):
+        return case_raw["entity_variants"]
+    if isinstance(root_raw, dict) and isinstance(root_raw.get("entity_variants"), dict):
+        return root_raw["entity_variants"]
+    return {}
 
 
 def _resolve_scenario_choice(
@@ -1315,6 +1323,7 @@ def _case_setup_from_review_response(
     response: ScenarioReviewInput,
     scenario: dict[str, Any],
     person_specs: list[dict[str, Any]],
+    person_variant_generation: dict[str, Any],
     organisation_specs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     person_count = len(person_specs)
@@ -1335,6 +1344,7 @@ def _case_setup_from_review_response(
         "court": court,
         "person_entities": person_count,
         "person_specs": person_specs,
+        "person_variant_generation": person_variant_generation,
         "charged_orgs": charged_orgs,
         "associated_orgs": associated_orgs,
         "organisation_entities": len(organisation_specs),
@@ -1489,6 +1499,7 @@ def _initial_organisation_specs_for_setup(
 
 
 def _person_setup_review_input_model(
+    scenario: dict[str, Any],
     person_specs: list[dict[str, Any]],
 ) -> type[RunInput]:
     person_count = len(person_specs)
@@ -1497,9 +1508,15 @@ def _person_setup_review_input_model(
         description=(
             f"Configure {person_count} PERSON entit"
             f"{'y' if person_count == 1 else 'ies'}. Each row will become one "
-            "Faker-generated person in case.yaml."
+            "Faker-generated person in case.yaml. Nickname and misspelling "
+            "variants are extra generated aliases appended to the configured "
+            "surface forms."
         ),
-        field_types=_person_row_field_types(person_count),
+        field_types={
+            **_person_variant_field_types(),
+            **_person_row_field_types(person_count),
+        },
+        **_person_variant_initial_data(scenario),
         **_person_row_initial_data(person_specs, person_count),
     )
 
@@ -1532,6 +1549,13 @@ def _person_row_field_types(person_count: int) -> dict[str, Any]:
     return field_types
 
 
+def _person_variant_field_types() -> dict[str, Any]:
+    return {
+        "nickname_variants": VariantCountChoice,
+        "misspelling_variants": VariantCountChoice,
+    }
+
+
 def _organisation_row_field_types(organisation_count: int) -> dict[str, Any]:
     field_types: dict[str, Any] = {}
     for index in range(1, organisation_count + 1):
@@ -1557,14 +1581,19 @@ def _person_row_initial_data(
         role_choice, custom_role = _person_role_initial_values(spec.get("role"))
         rows[f"person_{index}_role"] = role_choice
         rows[f"person_{index}_custom_role"] = custom_role
-        rows[f"person_{index}_nationality"] = _nationality_choice(
-            spec.get("nationality")
-        )
+        rows[f"person_{index}_nationality"] = _nationality_choice(spec.get("nationality"))
         rows[f"person_{index}_title"] = _title_choice(spec.get("title"))
-        rows[f"person_{index}_surface_forms"] = _surface_forms_choice(
-            spec.get("surface_forms")
-        )
+        rows[f"person_{index}_surface_forms"] = _surface_forms_choice(spec.get("surface_forms"))
     return rows
+
+
+def _person_variant_initial_data(scenario: dict[str, Any]) -> dict[str, Any]:
+    variants = _person_variant_generation_from_scenario(scenario)
+    generation = variants["generation"]
+    return {
+        "nickname_variants": _variant_count_choice(generation.get("nickname_variants")),
+        "misspelling_variants": _variant_count_choice(generation.get("misspelling_variants")),
+    }
 
 
 def _organisation_row_initial_data(
@@ -1574,20 +1603,16 @@ def _organisation_row_initial_data(
     rows: dict[str, Any] = {}
     for index in range(1, organisation_count + 1):
         spec = organisation_specs[index - 1]
-        rows[f"organisation_{index}_group"] = _organisation_group_choice(
-            spec.get("group")
-        )
+        rows[f"organisation_{index}_group"] = _organisation_group_choice(spec.get("group"))
         role_choice, custom_role = _organisation_role_initial_values(spec.get("role"))
         rows[f"organisation_{index}_role"] = role_choice
         rows[f"organisation_{index}_custom_role"] = custom_role
-        rows[f"organisation_{index}_country"] = _nationality_choice(
-            spec.get("country")
-        )
+        rows[f"organisation_{index}_country"] = _nationality_choice(spec.get("country"))
     return rows
 
 
 def _person_specs_from_review_response(
-    response: ScenarioReviewInput,
+    response: Any,
     person_count: int,
 ) -> list[dict[str, Any]]:
     specs: list[dict[str, Any]] = []
@@ -1611,6 +1636,58 @@ def _person_specs_from_review_response(
     return specs
 
 
+def _person_variant_generation_from_review_response(
+    response: Any,
+    scenario: dict[str, Any],
+) -> dict[str, Any]:
+    current = _person_variant_generation_from_scenario(scenario)
+    generation = current["generation"]
+    nickname_variants = _non_negative_review_int(
+        getattr(response, "nickname_variants"),
+        "nickname_variants",
+    )
+    misspelling_variants = _non_negative_review_int(
+        getattr(response, "misspelling_variants"),
+        "misspelling_variants",
+    )
+    return {
+        "enabled": bool(nickname_variants or misspelling_variants),
+        "generation": {
+            "nickname_variants": nickname_variants,
+            "misspelling_variants": misspelling_variants,
+            "locale_aware": bool(generation.get("locale_aware", False)),
+        },
+    }
+
+
+def _person_variant_generation_from_scenario(
+    scenario: dict[str, Any],
+) -> dict[str, Any]:
+    entity_variants = scenario.get("entity_variants", {})
+    persons = entity_variants.get("persons", {}) if isinstance(entity_variants, dict) else {}
+    generation = persons.get("generation", {}) if isinstance(persons, dict) else {}
+    enabled = bool(persons.get("enabled", True)) if isinstance(persons, dict) else True
+    nickname_variants = _non_negative_review_int(
+        generation.get("nickname_variants", 0),
+        "entity_variants.persons.generation.nickname_variants",
+    )
+    misspelling_variants = _non_negative_review_int(
+        generation.get("misspelling_variants", 0),
+        "entity_variants.persons.generation.misspelling_variants",
+    )
+    if not enabled:
+        nickname_variants = 0
+        misspelling_variants = 0
+    return {
+        "enabled": enabled,
+        "generation": {
+            "nickname_variants": nickname_variants,
+            "misspelling_variants": misspelling_variants,
+            "locale_aware": bool(generation.get("locale_aware", False)),
+        },
+    }
+
+
 def _organisation_specs_from_review_response(
     response: Any,
     organisation_count: int,
@@ -1627,9 +1704,7 @@ def _organisation_specs_from_review_response(
                     getattr(response, f"organisation_{index}_custom_role"),
                     f"organisation_{index}",
                 ),
-                "country": _nationality_choice(
-                    getattr(response, f"organisation_{index}_country")
-                ),
+                "country": _nationality_choice(getattr(response, f"organisation_{index}_country")),
             }
         )
     return specs
@@ -1722,6 +1797,14 @@ def _surface_forms_choice(value: Any) -> SurfaceFormsChoice:
     except (TypeError, ValueError):
         return 1
     return min(max(parsed, 1), 4)
+
+
+def _variant_count_choice(value: Any) -> VariantCountChoice:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return min(max(parsed, 0), 10)
 
 
 def _person_count_choice(value: Any) -> PersonCountChoice:
@@ -1873,8 +1956,7 @@ def _resize_organisation_group_specs(
     resized = [
         {
             "group": group,
-            "role": str(spec.get("role", "")).strip()
-            or _default_organisation_role(group),
+            "role": str(spec.get("role", "")).strip() or _default_organisation_role(group),
             "country": _nationality_choice(spec.get("country")),
         }
         for spec in organisation_specs[:count]
@@ -1986,7 +2068,40 @@ def _apply_case_setup_to_config(
     cast["organisation_specs"] = case_setup["organisation_specs"]
     cast.pop("address_surface_forms", None)
 
+    _apply_person_variant_generation(
+        generated,
+        case_setup.get("person_variant_generation", {}),
+    )
+
     return generated
+
+
+def _apply_person_variant_generation(
+    generated: dict[str, Any],
+    person_variant_generation: Any,
+) -> None:
+    if not isinstance(person_variant_generation, dict):
+        return
+    generation = person_variant_generation.get("generation", {})
+    if not isinstance(generation, dict):
+        return
+    entity_variants = generated.setdefault("entity_variants", {})
+    if not isinstance(entity_variants, dict):
+        raise SystemExit("entity_variants must be a mapping in the source case config.")
+    entity_variants["persons"] = {
+        "enabled": bool(person_variant_generation.get("enabled", True)),
+        "generation": {
+            "nickname_variants": _non_negative_review_int(
+                generation.get("nickname_variants", 0),
+                "person_variant_generation.generation.nickname_variants",
+            ),
+            "misspelling_variants": _non_negative_review_int(
+                generation.get("misspelling_variants", 0),
+                "person_variant_generation.generation.misspelling_variants",
+            ),
+            "locale_aware": bool(generation.get("locale_aware", False)),
+        },
+    }
 
 
 def _split_person_specs(
@@ -2013,9 +2128,7 @@ def _publish_generated_case_yaml_artifact(
     generated_path: Path,
     scenario: dict[str, Any],
 ) -> None:
-    generated_person_count = len(
-        _combined_person_specs(scenario.get("case", {}).get("cast", {}))
-    )
+    generated_person_count = len(_combined_person_specs(scenario.get("case", {}).get("cast", {})))
     _publish_file_markdown(
         key=_artifact_key("generated-case-yaml"),
         description="Generated case.yaml constructed from Prefect Stage 1 inputs",
@@ -2078,9 +2191,7 @@ def _scenario_summary_text(scenario: dict[str, Any]) -> str:
 def _document_type_details_text(scenario: dict[str, Any]) -> str:
     profile = scenario.get("profile", {})
     section_words = profile.get("section_words", {}) if isinstance(profile, dict) else {}
-    sections = [
-        f"{name} (~{words} words)" for name, words in section_words.items()
-    ]
+    sections = [f"{name} (~{words} words)" for name, words in section_words.items()]
     template_path = scenario.get("template_path") or "not resolved"
     preview = scenario.get("template_preview") or "Template preview unavailable."
     return (
@@ -2403,11 +2514,7 @@ def _surface_forms_for_group(label: str, records: Any) -> str:
 def _names_for_group(label: str, records: Any) -> str:
     if not isinstance(records, list) or not records:
         return f"{label}: none"
-    names = [
-        str(record.get("name", "unnamed"))
-        for record in records
-        if isinstance(record, dict)
-    ]
+    names = [str(record.get("name", "unnamed")) for record in records if isinstance(record, dict)]
     return f"{label}: {', '.join(names) if names else 'none'}"
 
 
@@ -2469,10 +2576,7 @@ def _entity_org_review_rows(document_payload: dict[str, Any]) -> list[dict[str, 
 def _key_value_rows(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
-    return [
-        {"field": key, "value": _review_value(value)}
-        for key, value in payload.items()
-    ]
+    return [{"field": key, "value": _review_value(value)} for key, value in payload.items()]
 
 
 def _counts_review_rows(counts_list: Any) -> list[dict[str, Any]]:
@@ -2528,9 +2632,7 @@ def _document_from_review_json(document_json: str) -> DocumentInputs:
     if not isinstance(evidence_categories, list) or not all(
         isinstance(category, str) for category in evidence_categories
     ):
-        raise SystemExit(
-            "Entity review document_json.evidence_categories must be a string list."
-        )
+        raise SystemExit("Entity review document_json.evidence_categories must be a string list.")
 
     return DocumentInputs(
         defendants=payload["defendants"],
@@ -2590,9 +2692,7 @@ def _collect_document_files(
         if not root.exists():
             continue
         paths = (
-            [root]
-            if root.is_file()
-            else sorted(path for path in root.rglob("*") if path.is_file())
+            [root] if root.is_file() else sorted(path for path in root.rglob("*") if path.is_file())
         )
         for path in paths:
             resolved = path.resolve()
@@ -2620,24 +2720,18 @@ def _artifact_doc_ids(context: Any) -> set[str]:
         if not root.exists():
             continue
         doc_ids.update(
-            path.name
-            for path in root.iterdir()
-            if path.is_dir() and path.name.startswith(prefix)
+            path.name for path in root.iterdir() if path.is_dir() and path.name.startswith(prefix)
         )
 
     if context.schema_dir.exists():
         doc_ids.update(
-            path.stem
-            for path in context.schema_dir.glob(f"{prefix}*.json")
-            if path.is_file()
+            path.stem for path in context.schema_dir.glob(f"{prefix}*.json") if path.is_file()
         )
 
     generated_case_dir = context.project_root / "config_case" / "generated"
     if generated_case_dir.exists():
         doc_ids.update(
-            path.stem
-            for path in generated_case_dir.glob(f"{prefix}*.yaml")
-            if path.is_file()
+            path.stem for path in generated_case_dir.glob(f"{prefix}*.yaml") if path.is_file()
         )
 
     memory_prefix = f"case_{prefix}"
@@ -2742,9 +2836,7 @@ def _publish_entity_artifacts(document: Any) -> None:
                 "name": org["name"],
                 "vat": org["vat"],
                 "address": org["address"],
-                "group": "charged"
-                if org in document.charged_orgs
-                else "associated",
+                "group": "charged" if org in document.charged_orgs else "associated",
             }
             for org in [*document.charged_orgs, *document.associated_orgs]
         ],
@@ -2868,19 +2960,22 @@ def _quality_analysis_markdown(
     report: dict[str, Any],
     overview: dict[str, Any],
 ) -> str:
-    report_with_links = _quality_report_with_langfuse_links(report, overview)
-    return "\n\n".join(
-        [
-            f"# Document Quality Analysis: `{doc_id}`",
-            _demote_markdown_headings(format_run_health_markdown(overview)),
-            _demote_markdown_headings(format_model_workflow_markdown(overview)),
-            _demote_markdown_headings(format_audit_confidence_markdown(overview)),
-            _demote_markdown_headings(format_markdown_report(report_with_links)),
-        ]
-    ).rstrip() + "\n"
+    report_with_links = _quality_report_with_mlflow_links(report, overview)
+    return (
+        "\n\n".join(
+            [
+                f"# Document Quality Analysis: `{doc_id}`",
+                _demote_markdown_headings(format_run_health_markdown(overview)),
+                _demote_markdown_headings(format_model_workflow_markdown(overview)),
+                _demote_markdown_headings(format_audit_confidence_markdown(overview)),
+                _demote_markdown_headings(format_markdown_report(report_with_links)),
+            ]
+        ).rstrip()
+        + "\n"
+    )
 
 
-def _quality_report_with_langfuse_links(
+def _quality_report_with_mlflow_links(
     report: dict[str, Any],
     overview: dict[str, Any],
 ) -> dict[str, Any]:
@@ -2902,10 +2997,8 @@ def _quality_report_with_langfuse_links(
         reference = reference_by_section.get(section_name, {})
         rubric = rubric_by_section.get(section_name, {})
         enriched_section = dict(section)
-        enriched_section["langfuse_url"] = (
-            reference.get("text_url")
-            or reference.get("critic_url")
-            or rubric.get("langfuse_url")
+        enriched_section["mlflow_url"] = (
+            reference.get("text_url") or reference.get("critic_url") or rubric.get("mlflow_url")
         )
         enriched_sections.append(enriched_section)
     enriched["sections"] = enriched_sections

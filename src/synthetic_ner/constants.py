@@ -1,4 +1,5 @@
 """Static literals."""
+
 from jinja2 import Environment
 
 PROSE_SECTION_ORDER = {
@@ -48,8 +49,7 @@ SECTION_DESCRIPTIONS = {
         "proceedings."
     ),
     "background": (
-        "Background: how the matter came before the court, investigation "
-        "history, procedural steps."
+        "Background: how the matter came before the court, investigation history, procedural steps."
     ),
     "findings": (
         "Findings of fact: what the court finds proved, with specific dates, "
@@ -161,7 +161,8 @@ INCOMPLETE_SECTION_MARKERS = {
     "[section not generated]",
 }
 
-INLINE_TEMPLATE_ENV = Environment(
+# This environment renders prompt/config text, never HTML.
+INLINE_TEMPLATE_ENV = Environment(  # nosec B701
     trim_blocks=True,
     lstrip_blocks=True,
     keep_trailing_newline=True,

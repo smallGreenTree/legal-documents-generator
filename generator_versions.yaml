@@ -10,7 +10,7 @@ versions:
       - "Single document quality artifact"
       - "Deterministic quality score explanation"
       - "Expected section word target visibility"
-      - "Langfuse prompt/response references"
+      - "MLflow prompt/response trace references"
       - "Section-level critic rubric display"
       - "Semantic version stamping in reports"
     scoring:

@@ -83,9 +83,7 @@ class SectionWriter:
         words_so_far = 0
         chunk_index = 1
         max_chunks = 1 if word_target <= self.chunk_words else None
-        effective_temperature = (
-            self.writer_temperature if temperature is None else temperature
-        )
+        effective_temperature = self.writer_temperature if temperature is None else temperature
 
         while words_so_far < word_target:
             if max_chunks is not None and chunk_index > max_chunks:
@@ -94,7 +92,7 @@ class SectionWriter:
             chunk_target = min(self.chunk_words, remaining)
             minimum_words = max(60, int(chunk_target * self.min_completion_ratio))
             requested_minimum_words = _prompt_minimum_words(minimum_words, chunk_target)
-            previous_tail = chunks[-1][-self.context_tail_chars:] if chunks else "n/a"
+            previous_tail = chunks[-1][-self.context_tail_chars :] if chunks else "n/a"
             prompt_client = self.prompt_clients.get("writer_user")
             section_contract = build_section_contract(section_name)
             user_prompt = render_prompt_template(
@@ -114,9 +112,7 @@ class SectionWriter:
                 previous_tail=previous_tail,
                 revision_instruction=revision_instruction or "none",
             )
-            task_id = (
-                f"writer_{section_name}_r{revision_round}_chunk_{chunk_index:02d}"
-            )
+            task_id = f"writer_{section_name}_r{revision_round}_chunk_{chunk_index:02d}"
             result = self.client.invoke(
                 doc_id=doc_id,
                 task_id=task_id,
@@ -250,11 +246,7 @@ class SectionWriter:
             return
 
         revision_dir = (
-            self.partial_output_dir
-            / doc_id
-            / "sections"
-            / section_name
-            / f"r{revision_round}"
+            self.partial_output_dir / doc_id / "sections" / section_name / f"r{revision_round}"
         )
         revision_dir.mkdir(parents=True, exist_ok=True)
         (revision_dir / f"chunk_{chunk_index:02d}.txt").write_text(
@@ -338,9 +330,7 @@ def parse_writer_packet(raw_text: str) -> WriterPacket:
         content=clean_generated_section_text(content if isinstance(content, str) else ""),
         facts_used=_string_list(facts_used),
         tone=(
-            tone.strip()
-            if isinstance(tone, str) and tone.strip()
-            else "formal neutral legal prose"
+            tone.strip() if isinstance(tone, str) and tone.strip() else "formal neutral legal prose"
         ),
         legal_risks=_string_list(legal_risks),
         raw_text=raw_text,
@@ -371,7 +361,7 @@ def _extract_json_object(raw_text: str) -> str:
     end = text.rfind("}")
     if start == -1 or end == -1 or end < start:
         raise ValueError("No JSON object found in writer response.")
-    return text[start:end + 1]
+    return text[start : end + 1]
 
 
 def _string_list(value: Any) -> list[str]:
