@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG POETRY_VERSION=2.1.4
 
