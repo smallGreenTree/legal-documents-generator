@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_financial_fraud_005",
+  "fraud_type": "financial_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Charles Scheibe",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Luchino Bramante",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Maurice Regnier",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Damaris Binner",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Ferdinand Hande",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "CARSTEN BIGGEN LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "ROUSSET COLLIN LIMITED",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "BASSI RENSI LIMITED",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Charles Scheibe controlled CARSTEN BIGGEN LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Luchino Bramante controlled ROUSSET COLLIN LIMITED"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Maurice Regnier controlled BASSI RENSI LIMITED"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Charles Scheibe instructed Damaris Binner"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Charles Scheibe instructed Ferdinand Hande"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Charles Scheibe conspired with Luchino Bramante"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Luchino Bramante conspired with Maurice Regnier"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "BASSI RENSI LIMITED received funds from CARSTEN BIGGEN LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "BASSI RENSI LIMITED received funds from ROUSSET COLLIN LIMITED"
+    }
+  ]
+}

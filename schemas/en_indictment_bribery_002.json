@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_bribery_002",
+  "fraud_type": "bribery",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Natalia Fiebig",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Rembrandt Versace",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Arthur Baron",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Hartmuth Ernst",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Hans Georg Drubin",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "TRUPP ANDERS LIMITED",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "FISCHETTI SERVICES LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "NIEMEIER GROUP LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Natalia Fiebig controlled TRUPP ANDERS LIMITED"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Rembrandt Versace controlled FISCHETTI SERVICES LTD"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Arthur Baron controlled NIEMEIER GROUP LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Natalia Fiebig instructed Hartmuth Ernst"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Natalia Fiebig instructed Hans Georg Drubin"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Natalia Fiebig conspired with Rembrandt Versace"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Rembrandt Versace conspired with Arthur Baron"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "NIEMEIER GROUP LTD received funds from TRUPP ANDERS LIMITED"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "NIEMEIER GROUP LTD received funds from FISCHETTI SERVICES LTD"
+    }
+  ]
+}

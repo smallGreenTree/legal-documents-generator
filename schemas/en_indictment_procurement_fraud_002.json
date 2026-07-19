@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_procurement_fraud_002",
+  "fraud_type": "procurement_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Bernfried Holzapfel",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Letizia Gianvecchio",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Olivie Garcia",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Ingo Heinrich",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Achim Gotthard",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "SCHEUERMANN KOBELT INTERNATIONAL LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "GIMENEZ DUMONT LIMITED",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "TOSELLI GROUP LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Bernfried Holzapfel controlled SCHEUERMANN KOBELT INTERNATIONAL LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Letizia Gianvecchio controlled GIMENEZ DUMONT LIMITED"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Olivie Garcia controlled TOSELLI GROUP LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Bernfried Holzapfel instructed Ingo Heinrich"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Bernfried Holzapfel instructed Achim Gotthard"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Bernfried Holzapfel conspired with Letizia Gianvecchio"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Letizia Gianvecchio conspired with Olivie Garcia"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "TOSELLI GROUP LTD received funds from SCHEUERMANN KOBELT INTERNATIONAL LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "TOSELLI GROUP LTD received funds from GIMENEZ DUMONT LIMITED"
+    }
+  ]
+}

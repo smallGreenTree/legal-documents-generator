@@ -1,0 +1,70 @@
+{
+  "doc_id": "en_indictment_procurement_fraud_005",
+  "fraud_type": "procurement_fraud",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Hubert Říha",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Nina Urbanová",
+      "type": "collateral"
+    },
+    {
+      "id": "p2",
+      "name": "Παυλίνα Ξένου",
+      "type": "collateral"
+    },
+    {
+      "id": "p3",
+      "name": "Cordula Pruschke",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Руска Симеонов",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "BEDNÁŘOVÁ MORAVEC SOLUTIONS LTD",
+      "type": "charged"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Hubert Říha controlled BEDNÁŘOVÁ MORAVEC SOLUTIONS LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "instructed",
+      "label": "Hubert Říha instructed Nina Urbanová"
+    },
+    {
+      "from": "p0",
+      "to": "p2",
+      "type": "instructed",
+      "label": "Hubert Říha instructed Παυλίνα Ξένου"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Hubert Říha instructed Cordula Pruschke"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Hubert Říha instructed Руска Симеонов"
+    }
+  ]
+}

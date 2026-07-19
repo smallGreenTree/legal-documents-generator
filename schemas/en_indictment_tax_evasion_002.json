@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_tax_evasion_002",
+  "fraud_type": "tax_evasion",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Reiner Seidel",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Rolando Traversa",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Jeanne Hervé",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Violetta Römer",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Elenore Roskoth",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "BODONI FILOGAMO LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "JESSEL HOLDINGS LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "HESSE RENNER GROUP LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Reiner Seidel controlled BODONI FILOGAMO LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Rolando Traversa controlled JESSEL HOLDINGS LTD"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Jeanne Hervé controlled HESSE RENNER GROUP LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Reiner Seidel instructed Violetta Römer"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Reiner Seidel instructed Elenore Roskoth"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Reiner Seidel conspired with Rolando Traversa"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Rolando Traversa conspired with Jeanne Hervé"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "HESSE RENNER GROUP LTD received funds from BODONI FILOGAMO LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "HESSE RENNER GROUP LTD received funds from JESSEL HOLDINGS LTD"
+    }
+  ]
+}

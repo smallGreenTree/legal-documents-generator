@@ -1,0 +1,104 @@
+{
+  "doc_id": "en_indictment_insider_trading_002",
+  "fraud_type": "insider_trading",
+  "persons": [
+    {
+      "id": "p0",
+      "name": "Hartwig Ruppersberger",
+      "type": "defendant"
+    },
+    {
+      "id": "p1",
+      "name": "Roberto Maderna",
+      "type": "defendant"
+    },
+    {
+      "id": "p2",
+      "name": "Pauline Guyot",
+      "type": "defendant"
+    },
+    {
+      "id": "p3",
+      "name": "Viktor Hellwig",
+      "type": "collateral"
+    },
+    {
+      "id": "p4",
+      "name": "Leo Gnatz",
+      "type": "collateral"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "o0",
+      "name": "SOBRERO LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o1",
+      "name": "SQUARCIONE FERRARIS SERVICES LTD",
+      "type": "charged"
+    },
+    {
+      "id": "o2",
+      "name": "MAILLOT RENARD CONSULTING LTD",
+      "type": "associated"
+    }
+  ],
+  "edges": [
+    {
+      "from": "p0",
+      "to": "o0",
+      "type": "controlled",
+      "label": "Hartwig Ruppersberger controlled SOBRERO LTD"
+    },
+    {
+      "from": "p1",
+      "to": "o1",
+      "type": "controlled",
+      "label": "Roberto Maderna controlled SQUARCIONE FERRARIS SERVICES LTD"
+    },
+    {
+      "from": "p2",
+      "to": "o2",
+      "type": "controlled",
+      "label": "Pauline Guyot controlled MAILLOT RENARD CONSULTING LTD"
+    },
+    {
+      "from": "p0",
+      "to": "p3",
+      "type": "instructed",
+      "label": "Hartwig Ruppersberger instructed Viktor Hellwig"
+    },
+    {
+      "from": "p0",
+      "to": "p4",
+      "type": "instructed",
+      "label": "Hartwig Ruppersberger instructed Leo Gnatz"
+    },
+    {
+      "from": "p0",
+      "to": "p1",
+      "type": "conspired_with",
+      "label": "Hartwig Ruppersberger conspired with Roberto Maderna"
+    },
+    {
+      "from": "p1",
+      "to": "p2",
+      "type": "conspired_with",
+      "label": "Roberto Maderna conspired with Pauline Guyot"
+    },
+    {
+      "from": "o0",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "MAILLOT RENARD CONSULTING LTD received funds from SOBRERO LTD"
+    },
+    {
+      "from": "o1",
+      "to": "o2",
+      "type": "received_funds_from",
+      "label": "MAILLOT RENARD CONSULTING LTD received funds from SQUARCIONE FERRARIS SERVICES LTD"
+    }
+  ]
+}
