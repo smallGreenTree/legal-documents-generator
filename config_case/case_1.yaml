@@ -37,18 +37,7 @@ case:
         title: ""
         surface_forms: 1
         role: Tender committee chair
-      - nationality: GR
-        title: ""
-        surface_forms: 1
-        role: Tender committee member
-      - nationality: DE
-        title: ""
-        surface_forms: 1
-        role: Managing authority official
-      - nationality: BG
-        title: ""
-        surface_forms: 1
-        role: Company director
+
 
     charged_orgs: 1
     associated_orgs: 0
@@ -65,7 +54,7 @@ case:
       - "Article 90(9)(1) of the Czechish Public Procurement Act"
       - "Article 282(2) of the Czechish Criminal Code"
     particulars: >
-      The present case deals with alleged misconduct in office by
+      Thwee present case deals with alleged misconduct in office by
       {first_defendant}, the {first_defendant_role} of the Czechish Transport
       Ministry. The alleged misconduct happened in a public procurement
       procedure for the construction, implementation and maintenance of a sound
