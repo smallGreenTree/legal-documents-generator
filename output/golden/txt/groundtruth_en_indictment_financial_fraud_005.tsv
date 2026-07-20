@@ -1,0 +1,79 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_financial_fraud_005	Charles Scheibe	PERSON	yes	person
+en_indictment_financial_fraud_005	Damaris Binner	PERSON	yes	person
+en_indictment_financial_fraud_005	Ferdinand Hande	PERSON	yes	person
+en_indictment_financial_fraud_005	Luchino Bramante	PERSON	yes	person
+en_indictment_financial_fraud_005	Maurice Regnier	PERSON	yes	person
+en_indictment_financial_fraud_005	BASSI RENSI LIMITED	ORG	yes	organisation
+en_indictment_financial_fraud_005	CARSTEN BIGGEN LTD	ORG	yes	organisation
+en_indictment_financial_fraud_005	ROUSSET COLLIN LIMITED	ORG	yes	organisation
+en_indictment_financial_fraud_005	CPS/2025/7457	CASE_REFERENCE	yes	case number
+en_indictment_financial_fraud_005	C/2024/6203	CASE_REFERENCE	yes	cross reference
+en_indictment_financial_fraud_005	5 November 2025	DATE	yes	date
+en_indictment_financial_fraud_005	25 October 1966	DATE	yes	date
+en_indictment_financial_fraud_005	18 November 1963	DATE	yes	date
+en_indictment_financial_fraud_005	24 June 1965	DATE	yes	date
+en_indictment_financial_fraud_005	7 February 1978	DATE	yes	date
+en_indictment_financial_fraud_005	3 October 1978	DATE	yes	date
+en_indictment_financial_fraud_005	4 August 2024	DATE	yes	date
+en_indictment_financial_fraud_005	13 January 2026	DATE	yes	date
+en_indictment_financial_fraud_005	£107,457	AMOUNT	yes	amount
+en_indictment_financial_fraud_005	£315,537	AMOUNT	yes	amount
+en_indictment_financial_fraud_005	£219,146	AMOUNT	yes	amount
+en_indictment_financial_fraud_005	£96,391	AMOUNT	yes	amount
+en_indictment_financial_fraud_005	Dr Scheibe	TITLE	yes	title
+en_indictment_financial_fraud_005	Mr Bramante	TITLE	yes	title
+en_indictment_financial_fraud_005	Ms Regnier	TITLE	yes	title
+en_indictment_financial_fraud_005	11, boulevard de Briand	ADDRESS	yes	address
+en_indictment_financial_fraud_005	11, boulevard de Briand, BodinBourg 65729	ADDRESS	yes	address
+en_indictment_financial_fraud_005	BodinBourg 65729	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Borgo Bernini, 32	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Borgo Bernini, 32, Siniscola 10143	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Canale Procacci, 69 Appartamento 43	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Canale Procacci, 69 Appartamento 43, Raffaellina 95017	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Delmas 68674	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Klemmring 8433	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Klemmring 8433, Mallersdorf 23320	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Magdeburg 45855	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Mallersdorf 23320	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Mareen-Drewes-Gasse 83/14	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Mareen-Drewes-Gasse 83/14, Magdeburg 45855	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Raffaellina 95017	ADDRESS	yes	address
+en_indictment_financial_fraud_005	rue Maréchal	ADDRESS	yes	address
+en_indictment_financial_fraud_005	rue Maréchal, Delmas 68674	ADDRESS	yes	address
+en_indictment_financial_fraud_005	Siniscola 10143	ADDRESS	yes	address
+en_indictment_financial_fraud_005	DE384057986	VAT	yes	vat
+en_indictment_financial_fraud_005	FRW4908472499	VAT	yes	vat
+en_indictment_financial_fraud_005	IT72209978854	VAT	yes	vat
+en_indictment_financial_fraud_005	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_financial_fraud_005	Crown Court at Bristol	NEGATIVE_CONTROL	no	court
+en_indictment_financial_fraud_005	C.S	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_005	L.B	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_005	M.R	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_005	D.B	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_005	F.H	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_005	Charles	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Char Scheibe	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Charl Scheibe	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Charles Zcheibe	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Char Zcheibe	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Luch Bramante	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Luchi Bramante	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Luchino Brramante	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Luch Brramante	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Maur Regnier	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Mauri Regnier	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Maurice Regnyer	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Maur Regnyer	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Binner	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Damaris	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Dama Binner	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Damar Binner	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Damaris Bynner	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Dama Bynner	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Hande	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Ferdinand	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Ferd Hande	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Ferdi Hande	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Ferdinand Hannde	PERSON	yes	person surface form
+en_indictment_financial_fraud_005	Ferd Hannde	PERSON	yes	person surface form

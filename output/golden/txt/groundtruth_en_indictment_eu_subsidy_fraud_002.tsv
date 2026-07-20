@@ -1,0 +1,50 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_eu_subsidy_fraud_002	Adrienne Georges	PERSON	yes	person
+en_indictment_eu_subsidy_fraud_002	Karl-Hermann Weller	PERSON	yes	person
+en_indictment_eu_subsidy_fraud_002	Klaus-Dieter Speer	PERSON	yes	person
+en_indictment_eu_subsidy_fraud_002	Miriam Heß	PERSON	yes	person
+en_indictment_eu_subsidy_fraud_002	Orlando Castiglione	PERSON	yes	person
+en_indictment_eu_subsidy_fraud_002	JUNITZ GRÖTTNER GROUP LTD	ORG	yes	organisation
+en_indictment_eu_subsidy_fraud_002	WULF DUSSEN VAN LTD	ORG	yes	organisation
+en_indictment_eu_subsidy_fraud_002	ZAMORANI BERTONI CONSULTING LTD	ORG	yes	organisation
+en_indictment_eu_subsidy_fraud_002	CPS/2026/4588	CASE_REFERENCE	yes	case number
+en_indictment_eu_subsidy_fraud_002	C/2025/2287	CASE_REFERENCE	yes	cross reference
+en_indictment_eu_subsidy_fraud_002	11 February 2026	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	14 August 1987	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	4 October 1974	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	18 January 1988	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	30 June 1989	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	19 July 1983	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	24 August 2024	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	17 January 2026	DATE	yes	date
+en_indictment_eu_subsidy_fraud_002	£95,485	AMOUNT	yes	amount
+en_indictment_eu_subsidy_fraud_002	£456,346	AMOUNT	yes	amount
+en_indictment_eu_subsidy_fraud_002	£202,431	AMOUNT	yes	amount
+en_indictment_eu_subsidy_fraud_002	£253,915	AMOUNT	yes	amount
+en_indictment_eu_subsidy_fraud_002	Mr Speer	TITLE	yes	title
+en_indictment_eu_subsidy_fraud_002	Dr Speer	TITLE	yes	title
+en_indictment_eu_subsidy_fraud_002	Mr Castiglione	TITLE	yes	title
+en_indictment_eu_subsidy_fraud_002	Ms Georges	TITLE	yes	title
+en_indictment_eu_subsidy_fraud_002	20, rue de Rey	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	20, rue de Rey, Saint Michelle 88608	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Angela-Ebert-Gasse 59-78	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Angela-Ebert-Gasse 59-78, Badalzungen 05850	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Badalzungen 05850	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Comeglians 71013	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Feuchtwangen 92893	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Liesel-Fiebig-Ring 9	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Liesel-Fiebig-Ring 9, Feuchtwangen 92893	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Ponzano 33085	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Saint Michelle 88608	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Saulgau 58406	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Viale Camanni, 5	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Viale Camanni, 5, Comeglians 71013	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Viale Paulina, 3	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Viale Paulina, 3, Ponzano 33085	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Zahnallee 41-54	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	Zahnallee 41-54, Saulgau 58406	ADDRESS	yes	address
+en_indictment_eu_subsidy_fraud_002	DE890677279	VAT	yes	vat
+en_indictment_eu_subsidy_fraud_002	IT64783747544	VAT	yes	vat
+en_indictment_eu_subsidy_fraud_002	DE799915705	VAT	yes	vat
+en_indictment_eu_subsidy_fraud_002	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_eu_subsidy_fraud_002	Crown Court at Bristol	NEGATIVE_CONTROL	no	court

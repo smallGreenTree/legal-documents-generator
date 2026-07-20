@@ -1,0 +1,53 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_insider_trading_003	Danielle Wende	PERSON	yes	person
+en_indictment_insider_trading_003	Elly Eberhardt	PERSON	yes	person
+en_indictment_insider_trading_003	Gloria Franscini	PERSON	yes	person
+en_indictment_insider_trading_003	Herbert Gieß	PERSON	yes	person
+en_indictment_insider_trading_003	Margot Maillet	PERSON	yes	person
+en_indictment_insider_trading_003	GRAF FLIEGNER GROUP LTD	ORG	yes	organisation
+en_indictment_insider_trading_003	STAHR LTD	ORG	yes	organisation
+en_indictment_insider_trading_003	STOLZE NASER SERVICES LTD	ORG	yes	organisation
+en_indictment_insider_trading_003	CPS/2026/0477	CASE_REFERENCE	yes	case number
+en_indictment_insider_trading_003	C/2024/601	CASE_REFERENCE	yes	cross reference
+en_indictment_insider_trading_003	6 July 2025	DATE	yes	date
+en_indictment_insider_trading_003	25 January 1965	DATE	yes	date
+en_indictment_insider_trading_003	16 June 1990	DATE	yes	date
+en_indictment_insider_trading_003	15 April 1980	DATE	yes	date
+en_indictment_insider_trading_003	17 August 1987	DATE	yes	date
+en_indictment_insider_trading_003	27 September 1968	DATE	yes	date
+en_indictment_insider_trading_003	5 October 2025	DATE	yes	date
+en_indictment_insider_trading_003	9 January 2026	DATE	yes	date
+en_indictment_insider_trading_003	£296,619	AMOUNT	yes	amount
+en_indictment_insider_trading_003	£422,204	AMOUNT	yes	amount
+en_indictment_insider_trading_003	£172,136	AMOUNT	yes	amount
+en_indictment_insider_trading_003	£718,823	AMOUNT	yes	amount
+en_indictment_insider_trading_003	Mr Gieß	TITLE	yes	title
+en_indictment_insider_trading_003	Ms Franscini	TITLE	yes	title
+en_indictment_insider_trading_003	Ms Maillet	TITLE	yes	title
+en_indictment_insider_trading_003	Mr Franscini	TITLE	yes	title
+en_indictment_insider_trading_003	231, avenue Renaud	ADDRESS	yes	address
+en_indictment_insider_trading_003	231, avenue Renaud, Aubryboeuf 71236	ADDRESS	yes	address
+en_indictment_insider_trading_003	Aubryboeuf 71236	ADDRESS	yes	address
+en_indictment_insider_trading_003	bearing the postal code 11754	ADDRESS	yes	address
+en_indictment_insider_trading_003	Fiebiggasse 80	ADDRESS	yes	address
+en_indictment_insider_trading_003	Fiebiggasse 80, in the municipality of Regen	ADDRESS	yes	address
+en_indictment_insider_trading_003	Fiebiggasse 80, in the municipality of Regen, bearing the postal code 11754	ADDRESS	yes	address
+en_indictment_insider_trading_003	Fiebiggasse 80, Regen 11754	ADDRESS	yes	address
+en_indictment_insider_trading_003	Lachmannweg 4628	ADDRESS	yes	address
+en_indictment_insider_trading_003	Lachmannweg 4628, Plauen 18422	ADDRESS	yes	address
+en_indictment_insider_trading_003	Lachmannweg 4628, within the jurisdiction of Plauen	ADDRESS	yes	address
+en_indictment_insider_trading_003	Lachmannweg 4628, within the jurisdiction of Plauen, under the postal designation 18422	ADDRESS	yes	address
+en_indictment_insider_trading_003	Plauen 18422	ADDRESS	yes	address
+en_indictment_insider_trading_003	Regen 11754	ADDRESS	yes	address
+en_indictment_insider_trading_003	Rotonda Marissa, 27 Appartamento 26	ADDRESS	yes	address
+en_indictment_insider_trading_003	Rotonda Marissa, 27 Appartamento 26, Valdengo 45032	ADDRESS	yes	address
+en_indictment_insider_trading_003	Rudolphstr. 10-68	ADDRESS	yes	address
+en_indictment_insider_trading_003	Rudolphstr. 10-68, Schwarzenberg 02429	ADDRESS	yes	address
+en_indictment_insider_trading_003	Schwarzenberg 02429	ADDRESS	yes	address
+en_indictment_insider_trading_003	under the postal designation 18422	ADDRESS	yes	address
+en_indictment_insider_trading_003	Valdengo 45032	ADDRESS	yes	address
+en_indictment_insider_trading_003	DE732220589	VAT	yes	vat
+en_indictment_insider_trading_003	DE226404639	VAT	yes	vat
+en_indictment_insider_trading_003	DE052882123	VAT	yes	vat
+en_indictment_insider_trading_003	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_insider_trading_003	Crown Court at Birmingham	NEGATIVE_CONTROL	no	court

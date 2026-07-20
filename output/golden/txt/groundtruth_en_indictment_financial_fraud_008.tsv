@@ -1,0 +1,60 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_financial_fraud_008	Claus-Dieter Bohnbach	PERSON	yes	person
+en_indictment_financial_fraud_008	Ildiko Trommler	PERSON	yes	person
+en_indictment_financial_fraud_008	Lucio Calvo	PERSON	yes	person
+en_indictment_financial_fraud_008	Marian Kraus	PERSON	yes	person
+en_indictment_financial_fraud_008	Susanne Garcia	PERSON	yes	person
+en_indictment_financial_fraud_008	BERTRAND LIMITED	ORG	yes	organisation
+en_indictment_financial_fraud_008	BRESCIANI SEDDIO SOLUTIONS LTD	ORG	yes	organisation
+en_indictment_financial_fraud_008	MULLER LIMITED	ORG	yes	organisation
+en_indictment_financial_fraud_008	CPS/2024/8407	CASE_REFERENCE	yes	case number
+en_indictment_financial_fraud_008	C/2025/3735	CASE_REFERENCE	yes	cross reference
+en_indictment_financial_fraud_008	18 December 2025	DATE	yes	date
+en_indictment_financial_fraud_008	23 April 1989	DATE	yes	date
+en_indictment_financial_fraud_008	30 July 1989	DATE	yes	date
+en_indictment_financial_fraud_008	11 January 1980	DATE	yes	date
+en_indictment_financial_fraud_008	26 January 1995	DATE	yes	date
+en_indictment_financial_fraud_008	16 January 1965	DATE	yes	date
+en_indictment_financial_fraud_008	17 March 2025	DATE	yes	date
+en_indictment_financial_fraud_008	8 October 2025	DATE	yes	date
+en_indictment_financial_fraud_008	£85,985	AMOUNT	yes	amount
+en_indictment_financial_fraud_008	£652,568	AMOUNT	yes	amount
+en_indictment_financial_fraud_008	£316,320	AMOUNT	yes	amount
+en_indictment_financial_fraud_008	£336,248	AMOUNT	yes	amount
+en_indictment_financial_fraud_008	Dr Trommler	TITLE	yes	title
+en_indictment_financial_fraud_008	Mr Calvo	TITLE	yes	title
+en_indictment_financial_fraud_008	Ms Garcia	TITLE	yes	title
+en_indictment_financial_fraud_008	Mr Kraus	TITLE	yes	title
+en_indictment_financial_fraud_008	191, chemin Aurore Barbier	ADDRESS	yes	address
+en_indictment_financial_fraud_008	191, chemin Aurore Barbier, Saint Camille 13907	ADDRESS	yes	address
+en_indictment_financial_fraud_008	694, chemin de Roger	ADDRESS	yes	address
+en_indictment_financial_fraud_008	694, chemin de Roger, Regnier 59527	ADDRESS	yes	address
+en_indictment_financial_fraud_008	696, rue de Lamy	ADDRESS	yes	address
+en_indictment_financial_fraud_008	696, rue de Lamy, Saint Frédérique 89684	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Contrada Nicola, 7 Piano 9	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Contrada Nicola, 7 Piano 9, Molina 29018	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Ingolstadt 21752	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Mohauptplatz 31	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Mohauptplatz 31, Ingolstadt 21752	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Molina 29018	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Regnier 59527	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Saint Camille 13907	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Saint Frédérique 89684	ADDRESS	yes	address
+en_indictment_financial_fraud_008	St. Jakob in Ahrn 20064	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Vicolo Ferdinando, 679 Appartamento 3	ADDRESS	yes	address
+en_indictment_financial_fraud_008	Vicolo Ferdinando, 679 Appartamento 3, St. Jakob in Ahrn 20064	ADDRESS	yes	address
+en_indictment_financial_fraud_008	FRP3360240905	VAT	yes	vat
+en_indictment_financial_fraud_008	FRH8505882722	VAT	yes	vat
+en_indictment_financial_fraud_008	IT97706087518	VAT	yes	vat
+en_indictment_financial_fraud_008	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_financial_fraud_008	Crown Court at Birmingham	NEGATIVE_CONTROL	no	court
+en_indictment_financial_fraud_008	L.C	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_008	S.G	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_008	C.B	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_008	M.K	INITIAL	yes	initial surface form
+en_indictment_financial_fraud_008	Ildiko	PERSON	yes	person surface form
+en_indictment_financial_fraud_008	Ildi Trommler	PERSON	yes	person surface form
+en_indictment_financial_fraud_008	Luci Calvo	PERSON	yes	person surface form
+en_indictment_financial_fraud_008	Susanne	PERSON	yes	person surface form
+en_indictment_financial_fraud_008	Bohnbach	PERSON	yes	person surface form
+en_indictment_financial_fraud_008	Kraus	PERSON	yes	person surface form

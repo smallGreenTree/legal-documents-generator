@@ -108,7 +108,16 @@ def filter_groundtruth_rows_for_rendered_text(
     rendered_text: str,
 ) -> list[tuple[str, str, str, str, str]]:
     searchable_text = _normalize_groundtruth_surface(rendered_text)
-    return [row for row in rows if _normalize_groundtruth_surface(row[1]) in searchable_text]
+    filtered_rows: list[tuple[str, str, str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in rows:
+        normalized_surface = _normalize_groundtruth_surface(row[1])
+        key = (normalized_surface, row[2], row[3])
+        if normalized_surface not in searchable_text or key in seen:
+            continue
+        filtered_rows.append(row)
+        seen.add(key)
+    return filtered_rows
 
 
 def _normalize_groundtruth_surface(value: str) -> str:

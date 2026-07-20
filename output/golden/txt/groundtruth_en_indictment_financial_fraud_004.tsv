@@ -1,0 +1,62 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_financial_fraud_004	Dino Maderna	PERSON	yes	person
+en_indictment_financial_fraud_004	Friedhelm Lachmann	PERSON	yes	person
+en_indictment_financial_fraud_004	Gustav Holsten	PERSON	yes	person
+en_indictment_financial_fraud_004	Isidor Kitzmann	PERSON	yes	person
+en_indictment_financial_fraud_004	Marcel De Sousa	PERSON	yes	person
+en_indictment_financial_fraud_004	BERNINI ANTONELLI SOLUTIONS LTD	ORG	yes	organisation
+en_indictment_financial_fraud_004	BOHNBACH HENTSCHEL LTD	ORG	yes	organisation
+en_indictment_financial_fraud_004	LEONARDI GROUP LTD	ORG	yes	organisation
+en_indictment_financial_fraud_004	CPS/2025/8324	CASE_REFERENCE	yes	case number
+en_indictment_financial_fraud_004	C/2025/5856	CASE_REFERENCE	yes	cross reference
+en_indictment_financial_fraud_004	3 September 2025	DATE	yes	date
+en_indictment_financial_fraud_004	28 July 1979	DATE	yes	date
+en_indictment_financial_fraud_004	11 February 1971	DATE	yes	date
+en_indictment_financial_fraud_004	31 December 1982	DATE	yes	date
+en_indictment_financial_fraud_004	22 April 1971	DATE	yes	date
+en_indictment_financial_fraud_004	23 October 1981	DATE	yes	date
+en_indictment_financial_fraud_004	1 August 2024	DATE	yes	date
+en_indictment_financial_fraud_004	27 December 2025	DATE	yes	date
+en_indictment_financial_fraud_004	£108,885	AMOUNT	yes	amount
+en_indictment_financial_fraud_004	£500,251	AMOUNT	yes	amount
+en_indictment_financial_fraud_004	£364,408	AMOUNT	yes	amount
+en_indictment_financial_fraud_004	£135,843	AMOUNT	yes	amount
+en_indictment_financial_fraud_004	£499,251	AMOUNT	yes	amount
+en_indictment_financial_fraud_004	Mr Kitzmann	TITLE	yes	title
+en_indictment_financial_fraud_004	Mr Maderna	TITLE	yes	title
+en_indictment_financial_fraud_004	Ms Sousa	TITLE	yes	title
+en_indictment_financial_fraud_004	Mr Holsten	TITLE	yes	title
+en_indictment_financial_fraud_004	Dr Kitzmann	TITLE	yes	title
+en_indictment_financial_fraud_004	Mr Lachmann	TITLE	yes	title
+en_indictment_financial_fraud_004	115, boulevard de Jacques	ADDRESS	yes	address
+en_indictment_financial_fraud_004	115, boulevard de Jacques, Saint Susanne 64980	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Borgo Gadda, 547 Appartamento 21	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Borgo Gadda, 547 Appartamento 21, Rovito 37024	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Eberthgasse 5593	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Eberthgasse 5593, Meiningen 56917	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Marienberg 28008	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Meiningen 56917	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Rovito 37024	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Ruppersbergerplatz 7071	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Ruppersbergerplatz 7071, Marienberg 28008	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Saint Susanne 64980	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Strada Bianca, 5 Piano 5	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Strada Bianca, 5 Piano 5, located in Ubiale	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Strada Bianca, 5 Piano 5, located in Ubiale, under the postal code 23894	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Strada Bianca, 5 Piano 5, Ubiale 23894	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Strada Fabio, 5 Appartamento 39	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Strada Fabio, 5 Appartamento 39, Trava 37035	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Trava 37035	ADDRESS	yes	address
+en_indictment_financial_fraud_004	Ubiale 23894	ADDRESS	yes	address
+en_indictment_financial_fraud_004	under the postal code 23894	ADDRESS	yes	address
+en_indictment_financial_fraud_004	DE221051243	VAT	yes	vat
+en_indictment_financial_fraud_004	IT58341483409	VAT	yes	vat
+en_indictment_financial_fraud_004	IT60915203804	VAT	yes	vat
+en_indictment_financial_fraud_004	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_financial_fraud_004	Crown Court at Manchester	NEGATIVE_CONTROL	no	court
+en_indictment_financial_fraud_004	Dino Madera	PERSON	yes	person surface form
+en_indictment_financial_fraud_004	Mr. Kitzmann	TITLE	yes	title surface form
+en_indictment_financial_fraud_004	Mr. Maderna	TITLE	yes	title surface form
+en_indictment_financial_fraud_004	Ms. Sousa	TITLE	yes	title surface form
+en_indictment_financial_fraud_004	Mr. Holsten	TITLE	yes	title surface form
+en_indictment_financial_fraud_004	Mr De Sousa	TITLE	yes	title surface form
