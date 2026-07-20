@@ -1,0 +1,82 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_insider_trading_002	Hartwig Ruppersberger	PERSON	yes	person
+en_indictment_insider_trading_002	Leo Gnatz	PERSON	yes	person
+en_indictment_insider_trading_002	Pauline Guyot	PERSON	yes	person
+en_indictment_insider_trading_002	Roberto Maderna	PERSON	yes	person
+en_indictment_insider_trading_002	Viktor Hellwig	PERSON	yes	person
+en_indictment_insider_trading_002	MAILLOT RENARD CONSULTING LTD	ORG	yes	organisation
+en_indictment_insider_trading_002	SOBRERO LTD	ORG	yes	organisation
+en_indictment_insider_trading_002	SQUARCIONE FERRARIS SERVICES LTD	ORG	yes	organisation
+en_indictment_insider_trading_002	CPS/2026/3483	CASE_REFERENCE	yes	case number
+en_indictment_insider_trading_002	C/2024/6556	CASE_REFERENCE	yes	cross reference
+en_indictment_insider_trading_002	10 January 2026	DATE	yes	date
+en_indictment_insider_trading_002	6 February 1974	DATE	yes	date
+en_indictment_insider_trading_002	29 October 1991	DATE	yes	date
+en_indictment_insider_trading_002	25 March 1973	DATE	yes	date
+en_indictment_insider_trading_002	1 July 1988	DATE	yes	date
+en_indictment_insider_trading_002	2 October 1961	DATE	yes	date
+en_indictment_insider_trading_002	28 July 2025	DATE	yes	date
+en_indictment_insider_trading_002	21 March 2026	DATE	yes	date
+en_indictment_insider_trading_002	£77,493	AMOUNT	yes	amount
+en_indictment_insider_trading_002	£797,764	AMOUNT	yes	amount
+en_indictment_insider_trading_002	£359,084	AMOUNT	yes	amount
+en_indictment_insider_trading_002	£438,680	AMOUNT	yes	amount
+en_indictment_insider_trading_002	Dr Ruppersberger	TITLE	yes	title
+en_indictment_insider_trading_002	Mr Maderna	TITLE	yes	title
+en_indictment_insider_trading_002	Ms Guyot	TITLE	yes	title
+en_indictment_insider_trading_002	Mr Ruppersberger	TITLE	yes	title
+en_indictment_insider_trading_002	Mr Hellwig	TITLE	yes	title
+en_indictment_insider_trading_002	Mr Gnatz	TITLE	yes	title
+en_indictment_insider_trading_002	4, avenue de Coulon	ADDRESS	yes	address
+en_indictment_insider_trading_002	4, avenue de Coulon, Dupontboeuf 29945	ADDRESS	yes	address
+en_indictment_insider_trading_002	9, chemin Susan Gilles	ADDRESS	yes	address
+en_indictment_insider_trading_002	9, chemin Susan Gilles, Leclercq 86241	ADDRESS	yes	address
+en_indictment_insider_trading_002	Canale Gabriella, 61	ADDRESS	yes	address
+en_indictment_insider_trading_002	Canale Gabriella, 61, Casamorcia 10094	ADDRESS	yes	address
+en_indictment_insider_trading_002	Casamorcia 10094	ADDRESS	yes	address
+en_indictment_insider_trading_002	Dupontboeuf 29945	ADDRESS	yes	address
+en_indictment_insider_trading_002	Leclercq 86241	ADDRESS	yes	address
+en_indictment_insider_trading_002	Löchelplatz 4-2	ADDRESS	yes	address
+en_indictment_insider_trading_002	Löchelplatz 4-2, Monschau 94629	ADDRESS	yes	address
+en_indictment_insider_trading_002	Monschau 94629	ADDRESS	yes	address
+en_indictment_insider_trading_002	Mozzano Torretta 64036	ADDRESS	yes	address
+en_indictment_insider_trading_002	Stretto Gianmarco, 77 Piano 2	ADDRESS	yes	address
+en_indictment_insider_trading_002	Stretto Gianmarco, 77 Piano 2, Tresenda 13900	ADDRESS	yes	address
+en_indictment_insider_trading_002	Tresenda 13900	ADDRESS	yes	address
+en_indictment_insider_trading_002	Via Giacinto, 617	ADDRESS	yes	address
+en_indictment_insider_trading_002	Via Giacinto, 617, Mozzano Torretta 64036	ADDRESS	yes	address
+en_indictment_insider_trading_002	IT74917727310	VAT	yes	vat
+en_indictment_insider_trading_002	IT26769504491	VAT	yes	vat
+en_indictment_insider_trading_002	FRG3676232638	VAT	yes	vat
+en_indictment_insider_trading_002	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_insider_trading_002	Crown Court at Newcastle	NEGATIVE_CONTROL	no	court
+en_indictment_insider_trading_002	H.R	INITIAL	yes	initial surface form
+en_indictment_insider_trading_002	R.M	INITIAL	yes	initial surface form
+en_indictment_insider_trading_002	P.G	INITIAL	yes	initial surface form
+en_indictment_insider_trading_002	V.H	INITIAL	yes	initial surface form
+en_indictment_insider_trading_002	L.G	INITIAL	yes	initial surface form
+en_indictment_insider_trading_002	Hartwig	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Hart Ruppersberger	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Hartw Ruppersberger	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Hartwig Rupperzberger	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Hart Rupperzberger	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Roberto	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Robe Maderna	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Rober Maderna	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Roberto Madderna	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Robe Madderna	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Pauline	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Paul Guyot	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Pauli Guyot	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Pauline Guiot	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Paul Guiot	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Hellwig	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Viktor	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Vikt Hellwig	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Vikto Hellwig	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Viktor Hellwyg	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Vikt Hellwyg	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Gnatz	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Leo	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Leo Gnats	PERSON	yes	person surface form
+en_indictment_insider_trading_002	Leo Gnnatz	PERSON	yes	person surface form

@@ -1,0 +1,51 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_bribery_002	Arthur Baron	PERSON	yes	person
+en_indictment_bribery_002	Hans Georg Drubin	PERSON	yes	person
+en_indictment_bribery_002	Hartmuth Ernst	PERSON	yes	person
+en_indictment_bribery_002	Natalia Fiebig	PERSON	yes	person
+en_indictment_bribery_002	Rembrandt Versace	PERSON	yes	person
+en_indictment_bribery_002	FISCHETTI SERVICES LTD	ORG	yes	organisation
+en_indictment_bribery_002	NIEMEIER GROUP LTD	ORG	yes	organisation
+en_indictment_bribery_002	TRUPP ANDERS LIMITED	ORG	yes	organisation
+en_indictment_bribery_002	CPS/2025/8676	CASE_REFERENCE	yes	case number
+en_indictment_bribery_002	C/2026/440	CASE_REFERENCE	yes	cross reference
+en_indictment_bribery_002	21 December 2025	DATE	yes	date
+en_indictment_bribery_002	3 November 1968	DATE	yes	date
+en_indictment_bribery_002	10 December 1976	DATE	yes	date
+en_indictment_bribery_002	9 August 1967	DATE	yes	date
+en_indictment_bribery_002	4 June 1966	DATE	yes	date
+en_indictment_bribery_002	4 May 1982	DATE	yes	date
+en_indictment_bribery_002	22 October 2024	DATE	yes	date
+en_indictment_bribery_002	7 November 2025	DATE	yes	date
+en_indictment_bribery_002	£182,100	AMOUNT	yes	amount
+en_indictment_bribery_002	£106,844	AMOUNT	yes	amount
+en_indictment_bribery_002	£93,104	AMOUNT	yes	amount
+en_indictment_bribery_002	£288,944	AMOUNT	yes	amount
+en_indictment_bribery_002	Ms Fiebig	TITLE	yes	title
+en_indictment_bribery_002	Mr Versace	TITLE	yes	title
+en_indictment_bribery_002	Ms Baron	TITLE	yes	title
+en_indictment_bribery_002	Mr Ernst	TITLE	yes	title
+en_indictment_bribery_002	Mr Drubin	TITLE	yes	title
+en_indictment_bribery_002	48, boulevard Julien	ADDRESS	yes	address
+en_indictment_bribery_002	48, boulevard Julien, Evrard 75263	ADDRESS	yes	address
+en_indictment_bribery_002	Castelfondo 00181	ADDRESS	yes	address
+en_indictment_bribery_002	Evrard 75263	ADDRESS	yes	address
+en_indictment_bribery_002	Hannoversch Münden 06434	ADDRESS	yes	address
+en_indictment_bribery_002	Incrocio Gaggini, 88	ADDRESS	yes	address
+en_indictment_bribery_002	Incrocio Gaggini, 88, San Pietro Di Legnago 40064	ADDRESS	yes	address
+en_indictment_bribery_002	Klaudia-Hermighausen-Straße 9-2	ADDRESS	yes	address
+en_indictment_bribery_002	Klaudia-Hermighausen-Straße 9-2, Stadtsteinach 07874	ADDRESS	yes	address
+en_indictment_bribery_002	Piazza Mattarella, 6 Piano 6	ADDRESS	yes	address
+en_indictment_bribery_002	Piazza Mattarella, 6 Piano 6, Castelfondo 00181	ADDRESS	yes	address
+en_indictment_bribery_002	Pinneberg 84716	ADDRESS	yes	address
+en_indictment_bribery_002	Samuel-Reinhardt-Straße 2/6	ADDRESS	yes	address
+en_indictment_bribery_002	Samuel-Reinhardt-Straße 2/6, Hannoversch Münden 06434	ADDRESS	yes	address
+en_indictment_bribery_002	San Pietro Di Legnago 40064	ADDRESS	yes	address
+en_indictment_bribery_002	Stadtsteinach 07874	ADDRESS	yes	address
+en_indictment_bribery_002	Trappallee 127	ADDRESS	yes	address
+en_indictment_bribery_002	Trappallee 127, Pinneberg 84716	ADDRESS	yes	address
+en_indictment_bribery_002	DE355127625	VAT	yes	vat
+en_indictment_bribery_002	IT45014697759	VAT	yes	vat
+en_indictment_bribery_002	DE053197152	VAT	yes	vat
+en_indictment_bribery_002	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_bribery_002	Crown Court at Southwark	NEGATIVE_CONTROL	no	court

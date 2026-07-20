@@ -118,6 +118,21 @@ def test_groundtruth_rows_are_filtered_to_rendered_text_surfaces():
     ]
 
 
+def test_groundtruth_rows_deduplicate_the_same_normalized_target():
+    rows = [
+        ("doc-1", "O.B.", "INITIAL", "yes", "Olivia Brown initials"),
+        ("doc-1", "o.b.", "INITIAL", "yes", "Oliver Black initials"),
+        ("doc-1", "O.B.", "PERSON", "yes", "distinct label"),
+    ]
+
+    filtered = filter_groundtruth_rows_for_rendered_text(rows, "The signatory was O.B.")
+
+    assert filtered == [
+        ("doc-1", "O.B.", "INITIAL", "yes", "Olivia Brown initials"),
+        ("doc-1", "O.B.", "PERSON", "yes", "distinct label"),
+    ]
+
+
 def _required_label_order(label):
     return {
         "PERSON": 1,

@@ -1,0 +1,84 @@
+doc_id	entity_text	label	should_propose	notes
+en_indictment_insider_trading_004	Ferdinando Eco	PERSON	yes	person
+en_indictment_insider_trading_004	Gotthard Hölzenbecher	PERSON	yes	person
+en_indictment_insider_trading_004	Herma Salz	PERSON	yes	person
+en_indictment_insider_trading_004	Marc Dumont	PERSON	yes	person
+en_indictment_insider_trading_004	Veit Mühle	PERSON	yes	person
+en_indictment_insider_trading_004	CACCIANEMICO LIMITED	ORG	yes	organisation
+en_indictment_insider_trading_004	REINHARDT GROUP LTD	ORG	yes	organisation
+en_indictment_insider_trading_004	SORGATZ HERRMANN SERVICES LTD	ORG	yes	organisation
+en_indictment_insider_trading_004	CPS/2024/3657	CASE_REFERENCE	yes	case number
+en_indictment_insider_trading_004	C/2026/7573	CASE_REFERENCE	yes	cross reference
+en_indictment_insider_trading_004	28 December 2025	DATE	yes	date
+en_indictment_insider_trading_004	18 March 1983	DATE	yes	date
+en_indictment_insider_trading_004	18 June 1963	DATE	yes	date
+en_indictment_insider_trading_004	9 October 1981	DATE	yes	date
+en_indictment_insider_trading_004	13 February 1984	DATE	yes	date
+en_indictment_insider_trading_004	18 November 1970	DATE	yes	date
+en_indictment_insider_trading_004	24 April 2025	DATE	yes	date
+en_indictment_insider_trading_004	2 November 2025	DATE	yes	date
+en_indictment_insider_trading_004	£632,973	AMOUNT	yes	amount
+en_indictment_insider_trading_004	£79,759	AMOUNT	yes	amount
+en_indictment_insider_trading_004	£201,705	AMOUNT	yes	amount
+en_indictment_insider_trading_004	£431,268	AMOUNT	yes	amount
+en_indictment_insider_trading_004	Mr Mühle	TITLE	yes	title
+en_indictment_insider_trading_004	Mr Eco	TITLE	yes	title
+en_indictment_insider_trading_004	Mr Dumont	TITLE	yes	title
+en_indictment_insider_trading_004	Mr Hölzenbecher	TITLE	yes	title
+en_indictment_insider_trading_004	Dr Mühle	TITLE	yes	title
+en_indictment_insider_trading_004	Ms Dumont	TITLE	yes	title
+en_indictment_insider_trading_004	Canale Capone, 5	ADDRESS	yes	address
+en_indictment_insider_trading_004	Canale Capone, 5, Ciro' Marina 11010	ADDRESS	yes	address
+en_indictment_insider_trading_004	Ciro' Marina 11010	ADDRESS	yes	address
+en_indictment_insider_trading_004	established as Jäkelgasse 8/8	ADDRESS	yes	address
+en_indictment_insider_trading_004	established as Jäkelgasse 8/8, Rastatt 15068	ADDRESS	yes	address
+en_indictment_insider_trading_004	Franka-Kreusel-Platz 137	ADDRESS	yes	address
+en_indictment_insider_trading_004	Franka-Kreusel-Platz 137, Kamenz 36621	ADDRESS	yes	address
+en_indictment_insider_trading_004	Franz-Xaver-Klingelhöfer-Ring 2	ADDRESS	yes	address
+en_indictment_insider_trading_004	Franz-Xaver-Klingelhöfer-Ring 2, Hechingen 56511	ADDRESS	yes	address
+en_indictment_insider_trading_004	Hechingen 56511	ADDRESS	yes	address
+en_indictment_insider_trading_004	Jäkelgasse 8/8	ADDRESS	yes	address
+en_indictment_insider_trading_004	Jäkelgasse 8/8, Rastatt 15068	ADDRESS	yes	address
+en_indictment_insider_trading_004	Kamenz 36621	ADDRESS	yes	address
+en_indictment_insider_trading_004	Lacroixnec 09821	ADDRESS	yes	address
+en_indictment_insider_trading_004	Rastatt 15068	ADDRESS	yes	address
+en_indictment_insider_trading_004	rue Gaudin	ADDRESS	yes	address
+en_indictment_insider_trading_004	rue Gaudin, Lacroixnec 09821	ADDRESS	yes	address
+en_indictment_insider_trading_004	Strada Turchi, 6 Appartamento 1	ADDRESS	yes	address
+en_indictment_insider_trading_004	Strada Turchi, 6 Appartamento 1, Villanders 20023	ADDRESS	yes	address
+en_indictment_insider_trading_004	Villanders 20023	ADDRESS	yes	address
+en_indictment_insider_trading_004	DE275103315	VAT	yes	vat
+en_indictment_insider_trading_004	DE205253036	VAT	yes	vat
+en_indictment_insider_trading_004	IT52940463972	VAT	yes	vat
+en_indictment_insider_trading_004	Serious Fraud Office	NEGATIVE_CONTROL	no	prosecution
+en_indictment_insider_trading_004	Crown Court at Bristol	NEGATIVE_CONTROL	no	court
+en_indictment_insider_trading_004	V.M	INITIAL	yes	initial surface form
+en_indictment_insider_trading_004	F.E	INITIAL	yes	initial surface form
+en_indictment_insider_trading_004	M.D	INITIAL	yes	initial surface form
+en_indictment_insider_trading_004	G.H	INITIAL	yes	initial surface form
+en_indictment_insider_trading_004	H.S	INITIAL	yes	initial surface form
+en_indictment_insider_trading_004	Veit	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Veit Mühhle	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Ferdinando	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Ferd Eco	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Ferdi Eco	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Ferdinando Eko	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Ferd Eko	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Marc	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Marc Dummont	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Hölzenbecher	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Gotthard	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Gott Hölzenbecher	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Gotth Hölzenbecher	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Gotthard Hölsenbecher	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Gott Hölsenbecher	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Salz	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Herma	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Herm Salz	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Her Salz	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Herma Sals	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Herm Sals	PERSON	yes	person surface form
+en_indictment_insider_trading_004	Mr. Mühle	TITLE	yes	title surface form
+en_indictment_insider_trading_004	Mr. Eco	TITLE	yes	title surface form
+en_indictment_insider_trading_004	Mr. Dumont	TITLE	yes	title surface form
+en_indictment_insider_trading_004	Mr. Hölzenbecher	TITLE	yes	title surface form
