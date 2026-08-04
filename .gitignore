@@ -18,3 +18,4 @@ memory/*
 traces/*
 !traces/.gitkeep
 schemas/*_graph.html
+schemas
