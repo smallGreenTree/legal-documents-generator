@@ -1,147 +1,250 @@
-from src.synthetic_ner.engine import (
-    build_groundtruth_rows,
-    filter_groundtruth_rows_for_rendered_text,
+import json
+from pathlib import Path
+
+import pytest
+from src.synthetic_ner.tasks.groundtruth import (
+    GROUNDTRUTH_HEADER,
+    GroundTruthError,
+    MentionAnnotation,
+    build_entity_references,
+    build_mention_annotations,
+    generate_groundtruth_for_document,
+    load_groundtruth_contract,
+    read_groundtruth_tsv,
+    validate_mention_annotations,
+    write_document_reference_artifacts,
 )
+from src.synthetic_ner.types.document_inputs import DocumentInputs
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+CONTRACT_PATH = PROJECT_ROOT / "groundtruth_contract.yaml"
 
 
-def test_groundtruth_rows_are_structured_in_required_order():
-    rows = build_groundtruth_rows(
-        "doc-1",
-        defendants=[
-            {
-                "name": "Olivia Price",
-                "initials": "O.P.",
-                "title_surname": "Dr Price",
-                "surface_forms_list": ["Olivia Price", "O.P.", "Dr Price"],
-                "dob": "1 January 1980",
-                "address": "10 Legal Street, London EC1A 1AA",
-                "street": "10 Legal Street",
-                "city_postcode": "London EC1A 1AA",
-                "is_defendant": True,
-            }
+def test_repeated_entity_occurrences_have_unique_ids_and_offsets():
+    document_text = "Alice signed the contract. Alice then left."
+    contract = load_groundtruth_contract(CONTRACT_PATH)
+    references = [{"entity_text": "Alice", "label": "PERSON"}]
+
+    annotations = build_mention_annotations(
+        doc_id="doc1",
+        document_text=document_text,
+        references=references,
+        contract=contract,
+    )
+
+    assert annotations == [
+        MentionAnnotation("doc1-001", "doc1", "Alice", "PERSON", 0, 5),
+        MentionAnnotation("doc1-002", "doc1", "Alice", "PERSON", 27, 32),
+    ]
+    for annotation in annotations:
+        assert document_text[annotation.start_char : annotation.end_char] == annotation.entity_text
+
+
+def test_unicode_punctuation_and_multiline_offsets_use_python_string_indexes():
+    document_text = "Élodie signed.\nOn line two, Élodie paid €10."
+    contract = load_groundtruth_contract(CONTRACT_PATH)
+    references = [
+        {"entity_text": "Élodie", "label": "PERSON"},
+        {"entity_text": "€10", "label": "AMOUNT"},
+    ]
+
+    annotations = build_mention_annotations(
+        doc_id="unicode-doc",
+        document_text=document_text,
+        references=references,
+        contract=contract,
+    )
+
+    assert [(row.entity_text, row.start_char, row.end_char) for row in annotations] == [
+        ("Élodie", 0, 6),
+        ("Élodie", 28, 34),
+        ("€10", 40, 43),
+    ]
+
+
+def test_conflicting_labels_on_the_same_span_fail_validation():
+    contract = load_groundtruth_contract(CONTRACT_PATH)
+    document_text = "Alice"
+    references = [
+        {"entity_text": "Alice", "label": "PERSON"},
+        {"entity_text": "Alice", "label": "ORG"},
+    ]
+    annotations = build_mention_annotations(
+        doc_id="doc1",
+        document_text=document_text,
+        references=references,
+        contract=contract,
+    )
+
+    with pytest.raises(GroundTruthError, match="span conflicts"):
+        validate_mention_annotations(
+            doc_id="doc1",
+            document_text=document_text,
+            annotations=annotations,
+            references=references,
+            contract=contract,
+        )
+
+
+def test_invalid_offsets_and_duplicate_matching_keys_fail_validation():
+    contract = load_groundtruth_contract(CONTRACT_PATH)
+    references = [{"entity_text": "Alice", "label": "PERSON"}]
+    annotations = [
+        MentionAnnotation("doc1-001", "doc1", "Alice", "PERSON", 0, 5),
+        MentionAnnotation("doc1-002", "doc1", "Alice", "PERSON", 0, 5),
+        MentionAnnotation("doc1-003", "doc1", "Alice", "PERSON", 0, 99),
+    ]
+
+    with pytest.raises(GroundTruthError) as exc_info:
+        validate_mention_annotations(
+            doc_id="doc1",
+            document_text="Alice",
+            annotations=annotations,
+            references=references,
+            contract=contract,
+        )
+
+    assert any("matching key is duplicated" in issue for issue in exc_info.value.issues)
+    assert any("invalid offsets" in issue for issue in exc_info.value.issues)
+
+
+def test_reference_catalogue_includes_variants_and_negative_controls():
+    references = build_entity_references(_document_inputs(), address_surface_forms=3)
+    by_key = {(row["entity_text"], row["label"]): row for row in references}
+
+    assert ("Alice Example", "PERSON") in by_key
+    assert ("Ali Example", "PERSON") in by_key
+    assert ("A.E.", "INITIAL") in by_key
+    assert ("Dr Example", "TITLE") in by_key
+    assert ("Serious Fraud Office", "NEGATIVE_CONTROL") in by_key
+    assert ("Test Synthetic Court", "NEGATIVE_CONTROL") in by_key
+    assert ("10 Legal Street, London EC1A 1AA", "ADDRESS") in by_key
+    assert ("10 Legal Street", "ADDRESS") in by_key
+    assert ("London EC1A 1AA", "ADDRESS") in by_key
+
+
+def test_groundtruth_is_generated_after_document_and_reproduced_idempotently(tmp_path):
+    doc_id = "doc1"
+    doc_dir = tmp_path / doc_id
+    doc_dir.mkdir()
+    document_path = doc_dir / f"{doc_id}.txt"
+    document_path.write_text(
+        "Alice Example appeared before Test Synthetic Court. Alice Example paid £10.\n",
+        encoding="utf-8",
+    )
+    write_document_reference_artifacts(
+        doc_dir=doc_dir,
+        doc_id=doc_id,
+        document=_document_inputs(),
+        document_path=document_path,
+        address_surface_forms=3,
+    )
+
+    first = generate_groundtruth_for_document(
+        document_dir=doc_dir,
+        contract_path=CONTRACT_PATH,
+    )
+    second = generate_groundtruth_for_document(
+        document_dir=doc_dir,
+        contract_path=CONTRACT_PATH,
+    )
+
+    assert first["status"] == "completed"
+    assert first["reused"] is False
+    assert second["reused"] is True
+    assert first["groundtruth_sha256"] == second["groundtruth_sha256"]
+    assert b"\r\n" not in (doc_dir / "groundtruth.tsv").read_bytes()
+    annotations = read_groundtruth_tsv(doc_dir / "groundtruth.tsv")
+    manifest = json.loads((doc_dir / "groundtruth_manifest.json").read_text())
+    assert manifest["overlap_policy"] == {
+        "allow_nested_same_label": ["ADDRESS"],
+        "prefer_longest_same_label": True,
+    }
+    assert [(row.entity_text, row.label) for row in annotations] == [
+        ("Alice Example", "PERSON"),
+        ("Test Synthetic Court", "NEGATIVE_CONTROL"),
+        ("Alice Example", "PERSON"),
+        ("£10", "AMOUNT"),
+    ]
+    assert GROUNDTRUTH_HEADER == (
+        "annotation_id",
+        "doc_id",
+        "entity_text",
+        "label",
+        "start_char",
+        "end_char",
+    )
+
+
+def test_invalid_existing_groundtruth_is_not_repaired_and_writes_error_report(tmp_path):
+    doc_id = "doc1"
+    doc_dir = tmp_path / doc_id
+    doc_dir.mkdir()
+    document_path = doc_dir / f"{doc_id}.txt"
+    document_path.write_text("Alice Example appeared.\n", encoding="utf-8")
+    write_document_reference_artifacts(
+        doc_dir=doc_dir,
+        doc_id=doc_id,
+        document=_document_inputs(),
+        document_path=document_path,
+        address_surface_forms=3,
+    )
+    invalid_tsv = "invalid\theader\n"
+    (doc_dir / "groundtruth.tsv").write_text(invalid_tsv, encoding="utf-8")
+
+    with pytest.raises(GroundTruthError, match="will not be overwritten"):
+        generate_groundtruth_for_document(
+            document_dir=doc_dir,
+            contract_path=CONTRACT_PATH,
+        )
+
+    assert (doc_dir / "groundtruth.tsv").read_text(encoding="utf-8") == invalid_tsv
+    error_report = json.loads(
+        (doc_dir / "groundtruth_validation_errors.json").read_text(encoding="utf-8")
+    )
+    assert error_report["doc_id"] == doc_id
+    assert "will not be overwritten" in error_report["issues"][0]
+
+
+def _document_inputs() -> DocumentInputs:
+    person = {
+        "name": "Alice Example",
+        "initials": "A.E.",
+        "title_surname": "Dr Example",
+        "short_name": "Alice",
+        "surface_forms_list": [
+            "Alice Example",
+            "A.E.",
+            "Dr Example",
+            "Alice",
+            "Ali Example",
         ],
-        collateral=[
-            {
-                "name": "Daniel Dunn",
-                "initials": "D.D.",
-                "title_surname": "Mr Dunn",
-                "surface_forms_list": ["Daniel Dunn", "D.D.", "Mr Dunn"],
-                "dob": "2 February 1981",
-                "address": "11 Witness Road, London EC2A 2BB",
-                "street": "11 Witness Road",
-                "city_postcode": "London EC2A 2BB",
-                "is_defendant": False,
-            }
-        ],
-        charged_orgs=[
-            {
-                "name": "PRICE GROUP LTD",
-                "address": "1 Company House, London W1A 1AA",
-                "street": "1 Company House",
-                "city_postcode": "London W1A 1AA",
-                "vat": "GB123456789",
-            }
-        ],
-        associated_orgs=[
-            {
-                "name": "DUNN HOLDINGS LTD",
-                "address": "2 Company House, London W2A 2AA",
-                "street": "2 Company House",
-                "city_postcode": "London W2A 2AA",
-                "vat": "GB987654321",
-            }
-        ],
+        "dob": "1 January 1980",
+        "address": "10 Legal Street, London EC1A 1AA",
+        "street": "10 Legal Street",
+        "city_postcode": "London EC1A 1AA",
+        "is_defendant": True,
+    }
+    organisation = {
+        "name": "EXAMPLE LTD",
+        "address": "1 Company House, London W1A 1AA",
+        "street": "1 Company House",
+        "city_postcode": "London W1A 1AA",
+        "vat": "GB123456789",
+    }
+    return DocumentInputs(
+        defendants=[person],
+        collateral=[],
+        charged_orgs=[organisation],
+        associated_orgs=[],
         metadata={
             "court": "Test Synthetic Court",
             "case_number": "CPS/2026/1234",
+            "legal_reference": "1234567/890",
             "cross_ref": "C/2026/5678",
             "filing_date": "3 March 2026",
-            "offence_period": ("4 April 2025", "5 May 2025"),
+            "offence_period": None,
         },
-        counts_list=[
-            {
-                "particulars": (
-                    "Olivia Price caused loss of EUR 10,000 between 4 April 2025 and 5 May 2025."
-                )
-            }
-        ],
-        amounts={
-            "total_loss": "£250,000",
-            "inflated_invoice_value": "£75,000",
-            "transfers": [
-                {
-                    "from": "PRICE GROUP LTD",
-                    "to": "DUNN HOLDINGS LTD",
-                    "amount": "£175,000",
-                }
-            ],
-        },
+        counts_list=[{"particulars": "Alice Example paid £10."}],
+        amounts={"total_loss": "£10"},
     )
-
-    labels = [row[2] for row in rows if row[2] != "NEGATIVE_CONTROL"]
-    assert labels == sorted(labels, key=_required_label_order)
-    assert _texts_for_label(rows, "PERSON") == ["Olivia Price", "Daniel Dunn"]
-    assert _texts_for_label(rows, "ORG") == ["PRICE GROUP LTD", "DUNN HOLDINGS LTD"]
-    assert _texts_for_label(rows, "CASE_REFERENCE") == ["CPS/2026/1234", "C/2026/5678"]
-    assert "EUR 10,000" in _texts_for_label(rows, "AMOUNT")
-    assert "£250,000" in _texts_for_label(rows, "AMOUNT")
-    assert "£75,000" in _texts_for_label(rows, "AMOUNT")
-    assert "£175,000" in _texts_for_label(rows, "AMOUNT")
-    assert _texts_for_label(rows, "INITIAL") == ["O.P.", "D.D."]
-    assert _texts_for_label(rows, "TITLE") == ["Dr Price", "Mr Dunn"]
-    assert _texts_for_label(rows, "VAT") == ["GB123456789", "GB987654321"]
-
-
-def _texts_for_label(rows, label):
-    return [row[1] for row in rows if row[2] == label]
-
-
-def test_groundtruth_rows_are_filtered_to_rendered_text_surfaces():
-    rows = [
-        ("doc-1", "Olivia Price", "PERSON", "yes", "person"),
-        ("doc-1", "1 January 1980", "DATE", "yes", "dob"),
-        ("doc-1", "PRICE GROUP LTD", "ORG", "yes", "company"),
-        ("doc-1", "Serious Fraud Office", "NEGATIVE_CONTROL", "no", "prosecution"),
-        ("doc-1", "Test Synthetic Court", "NEGATIVE_CONTROL", "no", "court"),
-    ]
-    rendered_text = (
-        "OLIVIA PRICE appeared in proceedings involving PRICE GROUP LTD. "
-        "The case was brought by Serious Fraud Office."
-    )
-
-    filtered = filter_groundtruth_rows_for_rendered_text(rows, rendered_text)
-
-    assert filtered == [
-        ("doc-1", "Olivia Price", "PERSON", "yes", "person"),
-        ("doc-1", "PRICE GROUP LTD", "ORG", "yes", "company"),
-        ("doc-1", "Serious Fraud Office", "NEGATIVE_CONTROL", "no", "prosecution"),
-    ]
-
-
-def test_groundtruth_rows_deduplicate_the_same_normalized_target():
-    rows = [
-        ("doc-1", "O.B.", "INITIAL", "yes", "Olivia Brown initials"),
-        ("doc-1", "o.b.", "INITIAL", "yes", "Oliver Black initials"),
-        ("doc-1", "O.B.", "PERSON", "yes", "distinct label"),
-    ]
-
-    filtered = filter_groundtruth_rows_for_rendered_text(rows, "The signatory was O.B.")
-
-    assert filtered == [
-        ("doc-1", "O.B.", "INITIAL", "yes", "Olivia Brown initials"),
-        ("doc-1", "O.B.", "PERSON", "yes", "distinct label"),
-    ]
-
-
-def _required_label_order(label):
-    return {
-        "PERSON": 1,
-        "ORG": 2,
-        "CASE_REFERENCE": 3,
-        "DATE": 4,
-        "AMOUNT": 5,
-        "INITIAL": 6,
-        "TITLE": 7,
-        "ADDRESS": 8,
-        "VAT": 9,
-    }[label]

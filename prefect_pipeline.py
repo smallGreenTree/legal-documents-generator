@@ -5,14 +5,25 @@ from __future__ import annotations
 import argparse
 
 from src.synthetic_ner.prefect_flows.generation import generate_dataset
+from src.synthetic_ner.prefect_flows.groundtruth import generate_groundtruth_directory
 from src.synthetic_ner.prefect_flows.quality import score_existing_document
 from src.synthetic_ner.tasks.document_quality.quality_report import DEFAULT_QUALITY_CONFIG_PATH
 
-__all__ = ["generate_dataset", "score_existing_document"]
+__all__ = ["generate_dataset", "generate_groundtruth_directory", "score_existing_document"]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run synthetic NER generation through Prefect.")
+    parser.add_argument(
+        "--groundtruth-directory",
+        default=None,
+        help="Generate validated ground truth for every document package in this directory.",
+    )
+    parser.add_argument(
+        "--groundtruth-contract",
+        default="groundtruth_contract.yaml",
+        help="Ground-truth contract path relative to project root.",
+    )
     parser.add_argument(
         "--score-doc-id",
         nargs="?",
@@ -79,6 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.groundtruth_directory is not None:
+        generate_groundtruth_directory(
+            input_directory=args.groundtruth_directory,
+            project_root=args.project_root,
+            contract_path=args.groundtruth_contract,
+        )
+        return
     if args.score_doc_id is not None or args.score_document_quality:
         score_existing_document(
             doc_id=args.score_doc_id or None,

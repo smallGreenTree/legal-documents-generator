@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from prefect import flow, get_run_logger
 
+from src.synthetic_ner.prefect_flows.groundtruth import generate_document_groundtruth
 from src.synthetic_ner.prefect_flows.utils import (
     _current_flow_run_id,
     audit_created_files,
@@ -85,6 +86,15 @@ def generate_dataset(
             selected_doc_id,
         )
         run_langgraph_mlflow(context, document, schema, doc_id, prefect_flow_run_id)
+        groundtruth_result = generate_document_groundtruth(
+            document_dir=str(context.output_dir / doc_id),
+            project_root=str(resolved_project_root),
+        )
+        if (
+            groundtruth_result.get("status") != "completed"
+            or groundtruth_result.get("doc_id") != doc_id
+        ):
+            raise RuntimeError(f"Ground truth did not complete successfully for {doc_id}")
         audit_created_files(context, doc_id)
         doc_ids.append(doc_id)
 

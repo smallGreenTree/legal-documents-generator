@@ -42,6 +42,7 @@ from src.synthetic_ner.tasks.document_quality.quality_report import (
     format_markdown_report,
     load_quality_scoring_config,
 )
+from src.synthetic_ner.tasks.groundtruth import require_completed_groundtruth
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.utils import load_config
 
@@ -1071,6 +1072,7 @@ def run_langgraph_mlflow(
 @task(name="end-of-pipeline-file-audit")
 def audit_created_files(context: Any, doc_id: str) -> Path:
     """Write a document-level manifest of generated files and checksums."""
+    require_completed_groundtruth(context.output_dir / doc_id, doc_id)
     audit_path = context.output_dir / doc_id / "file_audit.json"
     files = _collect_document_files(context, doc_id, exclude={audit_path})
     payload = {
@@ -2889,6 +2891,8 @@ def _publish_prefect_artifacts(context: Any, doc_id: str, audit_payload: dict[st
     schema_path = context.schema_dir / f"{doc_id}.json"
     document_path = doc_dir / f"{doc_id}.txt"
     report_path = doc_dir / "generation_report.md"
+    groundtruth_path = doc_dir / "groundtruth.tsv"
+    groundtruth_manifest_path = doc_dir / "groundtruth_manifest.json"
     audit_path = doc_dir / "file_audit.json"
 
     create_markdown_artifact(
@@ -2934,6 +2938,18 @@ def _publish_prefect_artifacts(context: Any, doc_id: str, audit_payload: dict[st
         key=_artifact_key(doc_id, "generation-report"),
         description=f"Generation report for {doc_id}",
         path=report_path,
+    )
+    _publish_file_markdown(
+        key=_artifact_key(doc_id, "groundtruth-tsv"),
+        description=f"Validated occurrence-level ground truth for {doc_id}",
+        path=groundtruth_path,
+        language="tsv",
+    )
+    _publish_file_markdown(
+        key=_artifact_key(doc_id, "groundtruth-manifest"),
+        description=f"Ground-truth validation manifest for {doc_id}",
+        path=groundtruth_manifest_path,
+        language="json",
     )
     _publish_file_markdown(
         key=_artifact_key(doc_id, "schema-json-final"),

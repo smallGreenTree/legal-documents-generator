@@ -152,8 +152,6 @@ EN_SECTIONS = {
     },
 }
 
-GROUNDTRUTH_HEADER = ["doc_id", "entity_text", "label", "should_propose", "notes"]
-
 TITLE_PREFIXES = ["Mr.", "Mrs.", "Ms.", "Miss", "Dr.", "Prof.", "Sir", "Lord"]
 
 INCOMPLETE_SECTION_MARKERS = {

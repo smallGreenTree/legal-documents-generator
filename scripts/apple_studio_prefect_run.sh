@@ -42,7 +42,7 @@ echo "prefect_api=$PREFECT_API_URL"
 echo
 
 echo "== 1/4 Deploy Prefect generation flow =="
-make _prefect-deploy \
+make generator-deploy \
   CASE_CONFIG="$CASE_CONFIG" \
   TEMPLATE="$TEMPLATE" \
   DOCS="1" \

@@ -1,0 +1,71 @@
+contract_name: ner_groundtruth_mentions
+contract_version: 1.0.0
+format: TSV
+encoding: UTF-8
+delimiter: tab
+header_required: true
+line_endings: LF
+
+primary_key:
+  - annotation_id
+
+matching_key:
+  - doc_id
+  - start_char
+  - end_char
+  - label
+
+overlap_policy:
+  prefer_longest_same_label: true
+  allow_nested_same_label:
+    - ADDRESS
+
+columns:
+  annotation_id:
+    type: string
+    required: true
+    nullable: false
+    description: Unique identifier for one entity occurrence.
+
+  doc_id:
+    type: string
+    required: true
+    nullable: false
+    description: Identifier of the rendered source document.
+
+  entity_text:
+    type: string
+    required: true
+    nullable: false
+    min_length: 1
+    description: Exact entity text appearing in the rendered document.
+
+  label:
+    type: string
+    required: true
+    nullable: false
+    allowed_values:
+      - ADDRESS
+      - AMOUNT
+      - CASE_REFERENCE
+      - DATE
+      - INITIAL
+      - NEGATIVE_CONTROL
+      - ORG
+      - PERSON
+      - TITLE
+      - VAT
+
+  start_char:
+    type: integer
+    required: true
+    nullable: false
+    minimum: 0
+    description: Zero-based, inclusive Unicode code-point start position.
+
+  end_char:
+    type: integer
+    required: true
+    nullable: false
+    minimum: 1
+    description: Zero-based, exclusive Unicode code-point end position.

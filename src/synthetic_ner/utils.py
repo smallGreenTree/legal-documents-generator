@@ -1,13 +1,11 @@
 """Shared utility helpers."""
 
-import csv
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from src.synthetic_ner.constants import (
-    GROUNDTRUTH_HEADER,
     INLINE_TEMPLATE_ENV,
     TITLE_PREFIXES,
 )
@@ -16,14 +14,6 @@ from src.synthetic_ner.constants import (
 def load_config(path: Path | str) -> dict:
     with open(path, encoding="utf-8") as handle:
         return yaml.safe_load(handle)
-
-
-def write_groundtruth(path: Path, rows: list[tuple]) -> None:
-    with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, delimiter="\t")
-        writer.writerow(GROUNDTRUTH_HEADER)
-        for row in rows:
-            writer.writerow(row)
 
 
 def is_auto(value) -> bool:

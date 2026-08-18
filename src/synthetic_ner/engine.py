@@ -1,6 +1,5 @@
 """Core document generation engine."""
 
-import re
 from argparse import Namespace
 from dataclasses import replace
 from pathlib import Path
@@ -31,19 +30,13 @@ from src.synthetic_ner.schema import (
     normalize_schema,
     write_case_schema,
 )
+from src.synthetic_ner.tasks.groundtruth import write_document_reference_artifacts
 from src.synthetic_ner.types.app_config import ProfileConfig
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 from src.synthetic_ner.utils import (
     is_auto,
-    make_initials,
     resolve_project_path,
-    write_groundtruth,
-)
-
-_AMOUNT_RE = re.compile(
-    r"(?:£|€|\b(?:GBP|EUR)\s*)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|m|thousand|k))?",
-    re.IGNORECASE,
 )
 
 
@@ -72,261 +65,6 @@ def build_section_word_targets(
 
 def resolve_documents_to_generate(profile: ProfileConfig) -> int:
     return profile.documents
-
-
-def build_groundtruth_rows(
-    doc_id: str,
-    defendants: list,
-    collateral: list,
-    charged_orgs: list,
-    associated_orgs: list,
-    metadata: dict,
-    counts_list: list[dict],
-    amounts: dict | None = None,
-    address_surface_forms: int = 3,
-) -> list[tuple[str, str, str, str, str]]:
-    rows: list[tuple[str, str, str, str, str]] = []
-    all_people = defendants + collateral
-    all_orgs = charged_orgs + associated_orgs
-
-    _append_person_rows(rows, doc_id, all_people)
-    _append_org_rows(rows, doc_id, all_orgs, charged_orgs)
-    _append_reference_rows(rows, doc_id, metadata)
-    _append_date_rows(rows, doc_id, metadata, all_people)
-    _append_amount_rows(rows, doc_id, counts_list, amounts or {})
-    _append_initial_rows(rows, doc_id, all_people)
-    _append_title_rows(rows, doc_id, all_people)
-    _append_all_address_rows(rows, doc_id, defendants, all_orgs, address_surface_forms)
-    _append_vat_rows(rows, doc_id, all_orgs)
-    _append_row(rows, doc_id, PROSECUTION, "NEGATIVE_CONTROL", "no", "prosecution")
-    _append_row(rows, doc_id, metadata["court"], "NEGATIVE_CONTROL", "no", "court")
-    return rows
-
-
-def filter_groundtruth_rows_for_rendered_text(
-    rows: list[tuple[str, str, str, str, str]],
-    rendered_text: str,
-) -> list[tuple[str, str, str, str, str]]:
-    searchable_text = _normalize_groundtruth_surface(rendered_text)
-    filtered_rows: list[tuple[str, str, str, str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for row in rows:
-        normalized_surface = _normalize_groundtruth_surface(row[1])
-        key = (normalized_surface, row[2], row[3])
-        if normalized_surface not in searchable_text or key in seen:
-            continue
-        filtered_rows.append(row)
-        seen.add(key)
-    return filtered_rows
-
-
-def _normalize_groundtruth_surface(value: str) -> str:
-    return re.sub(r"\s+", " ", value.strip()).casefold()
-
-
-def _append_person_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    people: list[dict],
-) -> None:
-    for person in people:
-        _append_row(rows, doc_id, person["name"], "PERSON", "yes", _person_note(person))
-
-
-def _append_org_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    orgs: list[dict],
-    charged_orgs: list[dict],
-) -> None:
-    for org in orgs:
-        _append_row(rows, doc_id, org["name"], "ORG", "yes", _org_note(org, charged_orgs))
-
-
-def _append_reference_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    metadata: dict,
-) -> None:
-    _append_row(rows, doc_id, metadata["case_number"], "CASE_REFERENCE", "yes", "case number")
-    _append_row(rows, doc_id, metadata["cross_ref"], "CASE_REFERENCE", "yes", "cross reference")
-
-
-def _append_date_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    metadata: dict,
-    people: list[dict],
-) -> None:
-    _append_row(rows, doc_id, metadata["filing_date"], "DATE", "yes", "filing date")
-    offence_period = metadata.get("offence_period")
-    if offence_period:
-        _append_row(rows, doc_id, offence_period[0], "DATE", "yes", "offence period start")
-        _append_row(rows, doc_id, offence_period[1], "DATE", "yes", "offence period end")
-    for person in people:
-        _append_row(
-            rows,
-            doc_id,
-            person.get("dob"),
-            "DATE",
-            "yes",
-            f"{person['name']} date of birth",
-        )
-
-
-def _append_amount_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    counts_list: list[dict],
-    amounts: dict,
-) -> None:
-    seen: set[str] = set()
-    for amount in _extract_count_values(counts_list, _AMOUNT_RE):
-        if amount not in seen:
-            _append_row(rows, doc_id, amount, "AMOUNT", "yes", "amount in count particulars")
-            seen.add(amount)
-    for label, amount in _amount_values(amounts):
-        if amount not in seen:
-            _append_row(rows, doc_id, amount, "AMOUNT", "yes", label)
-            seen.add(amount)
-
-
-def _amount_values(amounts: dict) -> list[tuple[str, str]]:
-    values = []
-    total_loss = amounts.get("total_loss")
-    if total_loss:
-        values.append(("total alleged loss", total_loss))
-    invoice_value = amounts.get("inflated_invoice_value")
-    if invoice_value:
-        values.append(("inflated invoice value", invoice_value))
-    for transfer in amounts.get("transfers", []):
-        if not isinstance(transfer, dict) or not transfer.get("amount"):
-            continue
-        values.append(
-            (
-                f"transfer from {transfer.get('from')} to {transfer.get('to')}",
-                transfer["amount"],
-            )
-        )
-    return values
-
-
-def _append_initial_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    people: list[dict],
-) -> None:
-    for person in people:
-        _append_row(
-            rows,
-            doc_id,
-            person.get("initials") or make_initials(person["name"]),
-            "INITIAL",
-            "yes",
-            f"{person['name']} initials",
-        )
-
-
-def _append_title_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    people: list[dict],
-) -> None:
-    for person in people:
-        title_surname = person.get("title_surname")
-        if title_surname and title_surname != person["name"].split()[-1]:
-            _append_row(rows, doc_id, title_surname, "TITLE", "yes", f"{person['name']} title")
-
-
-def _append_all_address_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    defendants: list[dict],
-    orgs: list[dict],
-    address_surface_forms: int,
-) -> None:
-    for person in defendants:
-        _append_address_rows(rows, doc_id, person, "defendant", address_surface_forms)
-    for org in orgs:
-        _append_address_rows(rows, doc_id, org, "organisation", address_surface_forms)
-
-
-def _append_vat_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    orgs: list[dict],
-) -> None:
-    for org in orgs:
-        _append_row(rows, doc_id, org["vat"], "VAT", "yes", f"{org['name']} VAT number")
-
-
-def _append_row(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    value: str | None,
-    label: str,
-    should_propose: str,
-    notes: str,
-) -> None:
-    if value:
-        rows.append((doc_id, value, label, should_propose, notes))
-
-
-def _person_note(person: dict) -> str:
-    return "defendant person" if person.get("is_defendant") else "collateral person"
-
-
-def _org_note(org: dict, charged_orgs: list[dict]) -> str:
-    return "charged organisation" if org in charged_orgs else "associated organisation"
-
-
-def _extract_count_values(counts_list: list[dict], pattern: re.Pattern[str]) -> list[str]:
-    values: list[str] = []
-    seen: set[str] = set()
-    for count in counts_list:
-        for match in pattern.findall(count.get("particulars", "")):
-            normalized = str(match).strip().rstrip(".,;:")
-            if normalized and normalized not in seen:
-                seen.add(normalized)
-                values.append(normalized)
-    return values
-
-
-def _append_address_rows(
-    rows: list[tuple[str, str, str, str, str]],
-    doc_id: str,
-    record: dict,
-    owner_type: str,
-    address_surface_forms: int,
-) -> None:
-    owner = record["name"]
-    if address_surface_forms >= 1:
-        _append_row(
-            rows,
-            doc_id,
-            record.get("address"),
-            "ADDRESS",
-            "yes",
-            f"{owner} full address",
-        )
-    if address_surface_forms >= 2:
-        _append_row(
-            rows,
-            doc_id,
-            record.get("street"),
-            "ADDRESS",
-            "yes",
-            f"{owner_type} building/street identifier for {owner}",
-        )
-    if address_surface_forms >= 3:
-        _append_row(
-            rows,
-            doc_id,
-            record.get("city_postcode"),
-            "ADDRESS",
-            "yes",
-            f"{owner_type} city/postcode for {owner}",
-        )
 
 
 def build_template_environment(template_path: Path) -> Environment:
@@ -644,26 +382,17 @@ def save_document_artifacts(
     txt_path = doc_dir / f"{doc_id}.txt"
     txt_path.write_text(rendered_text, encoding="utf-8")
 
-    candidate_gt_rows = build_groundtruth_rows(
-        doc_id,
-        document.defendants,
-        document.collateral,
-        document.charged_orgs,
-        document.associated_orgs,
-        document.metadata,
-        document.counts_list,
-        document.amounts,
-        context.case_cfg.cast.address_surface_forms,
+    reference_path, manifest_path = write_document_reference_artifacts(
+        doc_dir=doc_dir,
+        doc_id=doc_id,
+        document=document,
+        document_path=txt_path,
+        address_surface_forms=context.case_cfg.cast.address_surface_forms,
     )
-    gt_rows = filter_groundtruth_rows_for_rendered_text(candidate_gt_rows, rendered_text)
-    gt_path = doc_dir / "groundtruth.tsv"
-    write_groundtruth(gt_path, gt_rows)
 
     actual_words = len(rendered_text.split())
     actual_pages = round(actual_words / context.generation_cfg.words_per_page, 1)
     print(f"  Schema : {schema_path}")
     print(f"  Saved  : {txt_path}  ({actual_words}w ≈ {actual_pages} pages)")
-    removed_gt_rows = len(candidate_gt_rows) - len(gt_rows)
-    print(f"  GT rows: {len(gt_rows)}  →  {gt_path}")
-    if removed_gt_rows:
-        print(f"  GT trim: removed {removed_gt_rows} row(s) absent from rendered text")
+    print(f"  GT refs : {reference_path}")
+    print(f"  Manifest: {manifest_path}")

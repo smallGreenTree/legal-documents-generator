@@ -3,7 +3,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from src.synthetic_ner.constants import NATIONALITY_ADJECTIVES
-from src.synthetic_ner.engine import build_groundtruth_rows
 from src.synthetic_ner.prefect_flows.utils import (
     EntityReviewInput,
     QualityDocumentSelectionInput,
@@ -28,6 +27,7 @@ from src.synthetic_ner.prefect_flows.utils import (
     _scenario_review_field_types,
     _used_doc_counters,
 )
+from src.synthetic_ner.tasks.groundtruth import build_entity_references
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.utils import load_config
 
@@ -609,8 +609,7 @@ def test_case_setup_reads_prefect_person_rows():
 
 
 def test_address_surface_forms_limit_groundtruth_address_rows():
-    rows = build_groundtruth_rows(
-        "doc-1",
+    document = DocumentInputs(
         defendants=[
             {
                 "name": "Olivia Price",
@@ -635,7 +634,10 @@ def test_address_surface_forms_limit_groundtruth_address_rows():
             "offence_period": None,
         },
         counts_list=[],
-        address_surface_forms=1,
+        amounts={},
     )
+    rows = build_entity_references(document, address_surface_forms=1)
 
-    assert [row[1] for row in rows if row[2] == "ADDRESS"] == ["10 Legal Street, London EC1A 1AA"]
+    assert [row["entity_text"] for row in rows if row["label"] == "ADDRESS"] == [
+        "10 Legal Street, London EC1A 1AA"
+    ]
