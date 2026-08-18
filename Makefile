@@ -10,7 +10,6 @@ PREFECT_HOME ?= $(CURDIR)/.prefect
 PREFECT_API_URL ?= http://localhost:4200/api
 PREFECT_POOL ?= synthetic-ner-local
 PREFECT_DEPLOYMENT ?= document-generation
-PREFECT_QUALITY_DEPLOYMENT ?= document-quality
 PREFECT_GROUNDTRUTH_DEPLOYMENT ?= groundtruth-directory
 PREFECT_WORKER_NAME ?= synthetic-ner-worker
 COVERAGE_MIN ?= 59
@@ -51,12 +50,6 @@ generator-deploy:
 		--name "$(PREFECT_DEPLOYMENT)" \
 		--pool "$(PREFECT_POOL)" \
 		--params '{"case_config":"$(CASE_CONFIG)","template":"$(TEMPLATE)","documents":$(DOCS),"review_scenario":true,"review_entities":true}'
-	PREFECT_HOME="$(PREFECT_HOME)" PREFECT_API_URL="$(PREFECT_API_URL)" \
-		$(PREFECT) --no-prompt deploy \
-		prefect_pipeline.py:score_existing_document \
-		--name "$(PREFECT_QUALITY_DEPLOYMENT)" \
-		--pool "$(PREFECT_POOL)" \
-		--params '{"case_config":"$(CASE_CONFIG)","quality_config":"config_quality.yaml","review_document_selection":true}'
 	PREFECT_HOME="$(PREFECT_HOME)" PREFECT_API_URL="$(PREFECT_API_URL)" \
 		$(PREFECT) --no-prompt deploy \
 		prefect_pipeline.py:generate_groundtruth_directory \

@@ -6,10 +6,8 @@ import argparse
 
 from src.synthetic_ner.prefect_flows.generation import generate_dataset
 from src.synthetic_ner.prefect_flows.groundtruth import generate_groundtruth_directory
-from src.synthetic_ner.prefect_flows.quality import score_existing_document
-from src.synthetic_ner.tasks.document_quality.quality_report import DEFAULT_QUALITY_CONFIG_PATH
 
-__all__ = ["generate_dataset", "generate_groundtruth_directory", "score_existing_document"]
+__all__ = ["generate_dataset", "generate_groundtruth_directory"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,36 +21,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--groundtruth-contract",
         default="groundtruth_contract.yaml",
         help="Ground-truth contract path relative to project root.",
-    )
-    parser.add_argument(
-        "--score-doc-id",
-        nargs="?",
-        const="",
-        default=None,
-        help=(
-            "Score an existing document id instead of running generation. "
-            "Pass without a value to pause and select the document in Prefect."
-        ),
-    )
-    parser.add_argument(
-        "--score-document-quality",
-        action="store_true",
-        help="Run the quality scoring flow and pause for document selection.",
-    )
-    parser.add_argument(
-        "--no-document-selection-pause",
-        action="store_true",
-        help="Score the supplied --score-doc-id directly without the Prefect selection pause.",
-    )
-    parser.add_argument(
-        "--quality-config",
-        default=DEFAULT_QUALITY_CONFIG_PATH,
-        help="Quality scoring config path relative to project root.",
-    )
-    parser.add_argument(
-        "--memory-path",
-        default=None,
-        help="Memory markdown path. Defaults to memory/case_<doc_id>/CASE_MEMORY.md.",
     )
     parser.add_argument(
         "--case-config",
@@ -95,19 +63,6 @@ def main() -> None:
             input_directory=args.groundtruth_directory,
             project_root=args.project_root,
             contract_path=args.groundtruth_contract,
-        )
-        return
-    if args.score_doc_id is not None or args.score_document_quality:
-        score_existing_document(
-            doc_id=args.score_doc_id or None,
-            case_config=args.case_config,
-            quality_config=args.quality_config,
-            doc_type=args.doc_type,
-            fraud_type=args.fraud_type,
-            project_root=args.project_root,
-            review_scenario=args.review_scenario,
-            review_document_selection=not args.no_document_selection_pause,
-            review_timeout_seconds=args.review_timeout_seconds,
         )
         return
     generate_dataset(
