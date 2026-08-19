@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from src.synthetic_ner.document_inputs_io import (
+from src.synthetic_ner.document.inputs import (
     document_inputs_from_payload,
     load_document_inputs,
 )

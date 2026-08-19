@@ -1,5 +1,5 @@
 import pytest
-from src.synthetic_ner.version import get_generator_version, get_version_provenance
+from src.synthetic_ner.metadata.version import get_generator_version, get_version_provenance
 
 
 def test_generator_version_comes_from_pyproject_semver(tmp_path):

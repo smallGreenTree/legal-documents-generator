@@ -2,7 +2,7 @@
 """Smoke-test configured Ollama model routes.
 
 This is intentionally cheaper than a document generation run. It verifies that
-the configured models are present/reachable and that each selected stage can
+the configured model_providers are present/reachable and that each selected stage can
 return a short response with the same Ollama options used by the app.
 """
 
@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.synthetic_ner.config import load_app_config  # noqa: E402
+from src.synthetic_ner.configuration.loader import load_app_config  # noqa: E402
 
 DEFAULT_STAGES = ("writer", "polisher", "critic")
 

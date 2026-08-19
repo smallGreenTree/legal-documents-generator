@@ -9,6 +9,7 @@ from typing import Any
 
 from prefect import flow, get_run_logger, task
 
+from src.synthetic_ner.core.paths import resolve_project_path
 from src.synthetic_ner.prefect_flows.utils import resolve_flow_project_root
 from src.synthetic_ner.tasks.groundtruth import (
     calculate_groundtruth_offsets,
@@ -19,7 +20,6 @@ from src.synthetic_ner.tasks.groundtruth import (
     select_used_initial_entities,
     validate_and_publish_groundtruth,
 )
-from src.synthetic_ner.utils import resolve_project_path
 
 DEFAULT_GROUNDTRUTH_CONTRACT_PATH = "groundtruth_contract.yaml"
 

@@ -20,23 +20,20 @@ from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
 from pydantic import Field, create_model
 
-from src.synthetic_ner.case import resolve_counts, resolve_scenario_brief
+from src.synthetic_ner.case_generation.case import resolve_counts, resolve_scenario_brief
+from src.synthetic_ner.case_generation.identifiers import counter_from_doc_id, make_doc_id
 from src.synthetic_ner.cli import load_env_files
-from src.synthetic_ner.document_ids import counter_from_doc_id, make_doc_id
-from src.synthetic_ner.document_inputs_io import (
+from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.core.paths import resolve_project_path
+from src.synthetic_ner.document.engine import build_runtime_context, resolve_document_inputs
+from src.synthetic_ner.document.inputs import (
     document_inputs_from_payload,
     document_inputs_payload,
     write_document_inputs,
 )
-from src.synthetic_ner.engine import (
-    build_runtime_context,
-    resolve_document_inputs,
-    resolve_project_path,
-)
 from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
 from src.synthetic_ner.tasks.groundtruth import require_completed_groundtruth
 from src.synthetic_ner.types.document_inputs import DOCUMENT_INPUTS_FILENAME, DocumentInputs
-from src.synthetic_ner.utils import load_config
 
 ARTIFACT_TEXT_LIMIT = 24_000
 DEFAULT_GENERATED_CASE_CONFIG_PATTERN = "config_case/generated/{doc_id}.yaml"

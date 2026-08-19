@@ -63,7 +63,7 @@ generator-worker:
 		$(PREFECT) worker start --pool "$(PREFECT_POOL)" --name "$(PREFECT_WORKER_NAME)"
 
 sync-mlflow:
-	$(PYTHON) -m src.synthetic_ner.sync_mlflow_prompts --commit-message "$(MSG)"
+	$(PYTHON) -m src.synthetic_ner.integrations.mlflow_prompts --commit-message "$(MSG)"
 
 generate:
 	$(PYTHON) main.py --case-config "$(CASE_CONFIG)" --template "$(TEMPLATE)" --documents "$(DOCS)" --workflow-mode langgraph

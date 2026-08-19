@@ -1,4 +1,4 @@
-from src.synthetic_ner.tasks.document_generation.memory_manager import CaseMemoryManager
+from src.synthetic_ner.tasks.document_generation.context.memory import CaseMemoryManager
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 
 

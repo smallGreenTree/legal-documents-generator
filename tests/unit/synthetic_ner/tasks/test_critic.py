@@ -1,6 +1,6 @@
 import json
 
-from src.synthetic_ner.tasks.document_generation.critic import SectionCritic
+from src.synthetic_ner.tasks.document_generation.stages.critic import SectionCritic
 
 
 def test_critic_edits_do_not_block_when_overall_rubric_meets_threshold():

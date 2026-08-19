@@ -111,14 +111,6 @@ prompts:
     }
     {% endif -%}
 
-    {% if revision_instruction and revision_instruction != "none" -%}
-    REVISION REQUIREMENTS:
-    {{ revision_instruction }}
-
-    Rewrite from SECTION_CONTEXT and SECTION_CONTRACT. Resolve every blocking
-    issue without adding facts that are not listed in SECTION_CONTEXT.
-    {% endif -%}
-
     Return the structured drafting packet for this section. Write connected
     paragraphs, not a list. Use natural variation from SECTION_CONTEXT, but do
     not invent anything.
@@ -126,12 +118,15 @@ prompts:
     field for every listed person.
 
   polisher_system: |
-    You polish one generated section for NER/anonymization test data.
-    Use only the JSON packet, SECTION_CONTEXT and SECTION_CONTRACT.
-    Preserve required fact coverage and the required length band.
+    You revise an existing legal section for NER/anonymization test data.
+    Use only CURRENT_DRAFT, REVISION_REQUIREMENTS, SECTION_CONTEXT and
+    SECTION_CONTRACT. Apply every requested correction to the current draft.
+    Preserve correct grounded facts and required fact coverage.
     Preserve alignment with the Investigator Scenario Brief when it is present.
     Do not add facts or identifiers that are not listed in SECTION_CONTEXT.
-    Return final polished prose only. Do not return JSON, markdown, headings,
+    Remove repetition and unnecessary elaboration even when that makes the
+    section shorter. Do not rewrite unaffected passages without a reason.
+    Return revised prose only. Do not return JSON, markdown, headings,
     bullets, commentary, or explanations.
 
   polisher_user: |
@@ -141,11 +136,14 @@ prompts:
     SECTION_CONTRACT:
     {{ section_contract }}
 
-    WRITER_JSON:
-    {{ writer_json }}
+    CURRENT_DRAFT:
+    {{ current_section }}
 
-    Polish the content field into final formal legal prose for section "{{ section_name }}".
-    Target length: {{ requested_minimum_words }}-{{ word_target }} words.
+    REVISION_REQUIREMENTS:
+    {{ revision_instruction }}
+
+    Revise the existing draft for section "{{ section_name }}". Resolve every
+    listed issue while leaving correct, unaffected content intact.
     {% if section_name == "companies" -%}
     For companies, keep the prose concise and direct: identify each charged
     organisation by exact name, VAT number, address, and charged status. Do not
@@ -161,15 +159,14 @@ prompts:
     absence of invented exhibits. The final text should read like a natural
     evidence overview, not a memory dump.
     {% endif -%}
-    Preserve every required fact already present, add missing required facts only
-    from SECTION_CONTEXT, remove repetition, and vary sentence structure.
+    Preserve every required fact already present. Add a missing required fact
+    only when REVISION_REQUIREMENTS identifies it and SECTION_CONTEXT supplies it.
+    Remove repetition and vary sentence structure.
     Ruthlessly delete any meta-commentary, contract-compliance explanations,
     self-referential sentences, or boilerplate such as "The legal prose is
     structured to...", "This approach guarantees...", "The section is intended
     to serve as...", "ensuring compliance...", or "No additional information
     beyond the required facts...".
-    Remove repetition and vary sentence structure while preserving every
-    required fact.
     Do not add any new facts or explanations.
 
   critic_system: |

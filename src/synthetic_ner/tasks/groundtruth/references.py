@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.synthetic_ner.constants import PROSECUTION
-from src.synthetic_ner.entity_text import AMOUNT_RE, strip_surface_punctuation
+from src.synthetic_ner.core.constants import PROSECUTION
+from src.synthetic_ner.text.entities import AMOUNT_RE, strip_surface_punctuation
 
 
 def build_entity_references(

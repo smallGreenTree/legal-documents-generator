@@ -148,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    from src.synthetic_ner.config import load_app_config
+    from src.synthetic_ner.configuration.loader import load_app_config
 
     args = build_parser().parse_args()
     project_root = Path.cwd()

@@ -111,6 +111,11 @@ workflow:
     output_token_multiplier: 1.8
     min_completion_ratio: 0.7
 
+  polisher:
+    active: true
+    temperature: 0.0
+    max_output_tokens: 2500
+
   critic:
     active: true
     acceptance_threshold: 3.5

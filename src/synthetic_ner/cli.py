@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from src.synthetic_ner.config import load_app_config
+from src.synthetic_ner.configuration.loader import load_app_config
 
 
 def build_parser(project_root: Path) -> argparse.ArgumentParser:

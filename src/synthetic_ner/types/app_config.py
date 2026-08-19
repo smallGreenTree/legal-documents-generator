@@ -96,6 +96,13 @@ class WriterConfig:
 
 
 @dataclass(frozen=True)
+class PolisherConfig:
+    active: bool
+    temperature: float
+    max_output_tokens: int
+
+
+@dataclass(frozen=True)
 class CriticConfig:
     active: bool
     acceptance_threshold: float
@@ -123,6 +130,7 @@ class WorkflowConfig:
     memory_summary_chars: int
     validators: dict[str, bool]
     writer: WriterConfig
+    polisher: PolisherConfig
     critic: CriticConfig
     prompts: WorkflowPromptsConfig
 

@@ -1,4 +1,4 @@
-from src.synthetic_ner.tasks.document_generation.validators import (
+from src.synthetic_ner.tasks.document_generation.validation.validators import (
     clean_generated_section_text,
     validate_section_text,
 )

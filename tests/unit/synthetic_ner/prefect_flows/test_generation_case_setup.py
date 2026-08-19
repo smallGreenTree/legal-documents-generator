@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.synthetic_ner.constants import NATIONALITY_ADJECTIVES
+from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.core.constants import NATIONALITY_ADJECTIVES
 from src.synthetic_ner.prefect_flows.utils import (
     EntityReviewInput,
     ScenarioReviewInput,
@@ -28,7 +29,6 @@ from src.synthetic_ner.prefect_flows.utils import (
     save_resolved_entities,
 )
 from src.synthetic_ner.types.document_inputs import DocumentInputs
-from src.synthetic_ner.utils import load_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 

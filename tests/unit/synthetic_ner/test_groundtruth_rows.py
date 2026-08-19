@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from src.synthetic_ner.engine import save_document_artifacts
+from src.synthetic_ner.document.engine import save_document_artifacts
 from src.synthetic_ner.tasks.groundtruth import (
     GROUNDTRUTH_HEADER,
     GroundTruthError,

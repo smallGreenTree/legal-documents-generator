@@ -3,10 +3,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from src.synthetic_ner.config import build_app_config, load_app_config
-from src.synthetic_ner.models.factory import build_model_client
-from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
-from src.synthetic_ner.utils import load_config
+from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.configuration.loader import build_app_config, load_app_config
+from src.synthetic_ner.model_providers.factory import build_model_client
+from src.synthetic_ner.tasks.document_generation.observability.tracer import TraceStore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -22,6 +22,9 @@ def test_config_loads_think_false_for_ollama_and_all_routed_stages():
     assert app_config.model_routing.stages["writer"].top_p == 0.9
     assert app_config.model_routing.stages["polisher"].top_p == 0.9
     assert app_config.model_routing.stages["critic"].top_p == 0.9
+    assert app_config.workflow.polisher.active is True
+    assert app_config.workflow.polisher.temperature == 0.0
+    assert app_config.workflow.polisher.max_output_tokens == 2500
     assert app_config.workflow.prompts.writer_system.strip()
 
 
@@ -81,7 +84,7 @@ def test_ollama_stage_clients_send_think_false(monkeypatch, stage):
         )
 
     monkeypatch.setattr(
-        "src.synthetic_ner.models.ollama_client.requests.post",
+        "src.synthetic_ner.model_providers.ollama_client.requests.post",
         fake_post,
     )
 
