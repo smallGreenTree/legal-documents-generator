@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         action="append",
-        choices=("planner", "writer", "critic"),
+        choices=DEFAULT_STAGES,
         help="Stage to test. May be repeated. Defaults to writer and critic.",
     )
     parser.add_argument(
@@ -116,7 +116,7 @@ def _smoke_ollama_stage(
     max_output_tokens: int,
 ) -> dict[str, Any]:
     options: dict[str, Any] = {
-        "temperature": 0.0 if stage in {"critic", "planner"} else 0.2,
+        "temperature": 0.0 if stage == "critic" else 0.2,
         "num_predict": max_output_tokens,
     }
     if num_ctx is not None:

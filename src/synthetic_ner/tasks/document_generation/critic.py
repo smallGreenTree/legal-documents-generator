@@ -53,7 +53,6 @@ class SectionCritic:
         parent_task_id: str | None,
         memory_text: str,
         section_name: str,
-        section_plan: str,
         section_text: str,
         revision_round: int,
     ) -> CriticResult:
@@ -71,7 +70,6 @@ class SectionCritic:
             memory_text=compact_memory,
             section_context=section_context,
             section_contract=section_contract,
-            section_plan=section_plan,
             section_text=compact_section_text,
             section_name=section_name,
             critic_rubrics=_format_rubrics(self.rubrics),

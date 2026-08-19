@@ -14,9 +14,7 @@ def write_generation_report(
     context,
     doc_id: str,
     memory_path: Path,
-    document_plan: str,
     section_contracts: dict[str, str],
-    section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
     trace_store: TraceStore,
 ) -> Path:
@@ -31,12 +29,10 @@ def write_generation_report(
         memory_path=memory_path,
         trace_info=trace_info,
         llm_summary=llm_summary,
-        document_plan=document_plan,
     )
     lines.extend(
         _format_section_results(
             section_contracts=section_contracts,
-            section_plans=section_plans,
             section_reviews=section_reviews,
         )
     )
@@ -55,7 +51,6 @@ def _report_header(
     memory_path: Path,
     trace_info,
     llm_summary: dict[str, Any],
-    document_plan: str,
 ) -> list[str]:
     version = get_version_provenance(getattr(context, "project_root", None))
     return [
@@ -81,9 +76,6 @@ def _report_header(
         f"- Empty LLM responses: {llm_summary['empty_responses']}",
         f"- Truncated LLM calls: {llm_summary['truncated_calls']}",
         "",
-        "## Document Plan",
-        document_plan or "- none",
-        "",
         "## Section Results",
     ]
 
@@ -91,11 +83,10 @@ def _report_header(
 def _format_section_results(
     *,
     section_contracts: dict[str, str],
-    section_plans: dict[str, str],
     section_reviews: dict[str, list[str]],
 ) -> list[str]:
     lines = []
-    for section_name in section_plans:
+    for section_name in section_contracts:
         issues = section_reviews.get(section_name, [])
         lines.extend(
             [
@@ -103,9 +94,6 @@ def _format_section_results(
                 "",
                 "Contract:",
                 section_contracts.get(section_name, "- none"),
-                "",
-                "Plan:",
-                section_plans[section_name],
                 "",
                 "Issues:",
                 *([f"- {issue}" for issue in issues] or ["- none"]),

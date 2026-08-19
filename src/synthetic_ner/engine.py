@@ -21,23 +21,11 @@ from src.synthetic_ner.constants import (
     INCOMPLETE_SECTION_MARKERS,
     PROSECUTION,
 )
-from src.synthetic_ner.schema import (
-    counter_from_doc_id,
-    load_case_schema,
-    make_case_schema,
-    make_doc_id,
-    next_counter,
-    normalize_schema,
-    write_case_schema,
-)
-from src.synthetic_ner.tasks.groundtruth import write_document_reference_artifacts
+from src.synthetic_ner.document_inputs_io import write_document_inputs
 from src.synthetic_ner.types.app_config import ProfileConfig
-from src.synthetic_ner.types.document_inputs import DocumentInputs
+from src.synthetic_ner.types.document_inputs import DOCUMENT_INPUTS_FILENAME, DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
-from src.synthetic_ner.utils import (
-    is_auto,
-    resolve_project_path,
-)
+from src.synthetic_ner.utils import resolve_project_path
 
 
 def build_section_word_targets(
@@ -118,10 +106,8 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     fraud_type = profile.fraud_type
 
     output_dir = resolve_project_path(project_root, app_config.paths.output_dir)
-    schema_dir = resolve_project_path(project_root, app_config.paths.schema_dir)
     memory_dir = resolve_project_path(project_root, app_config.paths.memory_dir)
     output_dir.mkdir(exist_ok=True)
-    schema_dir.mkdir(exist_ok=True)
     memory_dir.mkdir(exist_ok=True)
 
     try:
@@ -136,10 +122,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-
-    schema_source_path = (
-        resolve_project_path(project_root, args.from_schema) if args.from_schema else None
-    )
 
     return RuntimeContext(
         project_root=project_root,
@@ -156,7 +138,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         doc_type=doc_type,
         fraud_type=fraud_type,
         output_dir=output_dir,
-        schema_dir=schema_dir,
         memory_dir=memory_dir,
         template_path=template_path,
         template_env=build_template_environment(template_path),
@@ -166,7 +147,6 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         section_word_targets=section_word_targets,
         documents=documents,
         prose_overrides=prose_overrides,
-        schema_source_path=schema_source_path,
     )
 
 
@@ -218,83 +198,6 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
         evidence_categories=context.case_cfg.evidence_categories,
         scenario_brief=scenario_brief,
     )
-
-
-def resolve_schema_for_document(
-    context: RuntimeContext,
-    document: DocumentInputs,
-    document_index: int,
-    doc_id_override: str | None = None,
-) -> tuple[str, dict]:
-    if context.schema_source_path:
-        loaded_schema = load_case_schema(context.schema_source_path)
-        try:
-            if doc_id_override is None:
-                source_counter = counter_from_doc_id(
-                    loaded_schema.get("doc_id"),
-                    context.doc_type,
-                    context.fraud_type,
-                )
-                doc_id = make_doc_id(
-                    context.doc_type,
-                    context.fraud_type,
-                    source_counter + document_index + 1,
-                )
-            else:
-                counter_from_doc_id(
-                    doc_id_override,
-                    context.doc_type,
-                    context.fraud_type,
-                )
-                doc_id = doc_id_override
-            schema = normalize_schema(
-                loaded_schema,
-                doc_id,
-                context.fraud_type,
-                document.defendants,
-                document.collateral,
-                document.charged_orgs,
-                document.associated_orgs,
-            )
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-        print(f"  Schema  : loaded from {context.schema_source_path} → {doc_id}")
-        return doc_id, schema
-
-    if doc_id_override is None:
-        counter = next_counter(context.output_dir, context.doc_type, context.fraud_type)
-        doc_id = make_doc_id(context.doc_type, context.fraud_type, counter)
-    else:
-        try:
-            counter_from_doc_id(doc_id_override, context.doc_type, context.fraud_type)
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-        doc_id = doc_id_override
-    try:
-        if is_auto(context.case_cfg.schema):
-            schema = make_case_schema(
-                doc_id,
-                context.fraud_type,
-                document.defendants,
-                document.collateral,
-                document.charged_orgs,
-                document.associated_orgs,
-            )
-            print(f"  Schema  : {len(schema['edges'])} edges (auto)")
-        else:
-            schema = normalize_schema(
-                context.case_cfg.schema,
-                doc_id,
-                context.fraud_type,
-                document.defendants,
-                document.collateral,
-                document.charged_orgs,
-                document.associated_orgs,
-            )
-            print(f"  Schema  : {len(schema['edges'])} edges (from config)")
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
-    return doc_id, schema
 
 
 def collect_section_output_problems(
@@ -353,46 +256,20 @@ def render_document_text(
     )
 
 
-def ensure_target_paths_available(
-    context: RuntimeContext,
-    doc_dir: Path,
-    schema_path: Path,
-) -> None:
-    if context.schema_source_path and doc_dir.exists():
-        raise SystemExit(f"Target output folder already exists for schema-derived run: {doc_dir}")
-    if context.schema_source_path and schema_path.exists():
-        raise SystemExit(f"Target schema file already exists for schema-derived run: {schema_path}")
-
-
 def save_document_artifacts(
     context: RuntimeContext,
     document: DocumentInputs,
     doc_id: str,
-    schema: dict,
     rendered_text: str,
 ) -> None:
     doc_dir = context.output_dir / doc_id
-    schema_path = context.schema_dir / f"{doc_id}.json"
-    ensure_target_paths_available(context, doc_dir, schema_path)
     doc_dir.mkdir(parents=True, exist_ok=True)
-    schema_path.parent.mkdir(parents=True, exist_ok=True)
-
-    write_case_schema(schema_path, schema)
 
     txt_path = doc_dir / f"{doc_id}.txt"
     txt_path.write_text(rendered_text, encoding="utf-8")
-
-    reference_path, manifest_path = write_document_reference_artifacts(
-        doc_dir=doc_dir,
-        doc_id=doc_id,
-        document=document,
-        document_path=txt_path,
-        address_surface_forms=context.case_cfg.cast.address_surface_forms,
-    )
+    inputs_path = write_document_inputs(doc_dir / DOCUMENT_INPUTS_FILENAME, document)
 
     actual_words = len(rendered_text.split())
     actual_pages = round(actual_words / context.generation_cfg.words_per_page, 1)
-    print(f"  Schema : {schema_path}")
     print(f"  Saved  : {txt_path}  ({actual_words}w ≈ {actual_pages} pages)")
-    print(f"  GT refs : {reference_path}")
-    print(f"  Manifest: {manifest_path}")
+    print(f"  Inputs : {inputs_path}")

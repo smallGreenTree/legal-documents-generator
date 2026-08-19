@@ -41,7 +41,6 @@ class TraceStore:
         self.run_metadata = dict(run_metadata or {})
         self._document_context = None
         self._document_observation = None
-        self._document_trace_context: dict[str, str] | None = None
         self._node_runs: list[NodeExecutionRecord] = []
         self._llm_calls: list[dict[str, Any]] = []
         self._prompt_sync_summary = "MLflow prompts: not resolved"
@@ -95,7 +94,6 @@ class TraceStore:
         )
         self._document_observation.set_inputs(input_payload)
         trace_id = self._document_observation.trace_id
-        self._document_trace_context = {"trace_id": trace_id}
         trace_url = self._trace_url(trace_id)
         self._current_session = DocumentTraceSession(
             enabled=True,
@@ -172,7 +170,6 @@ class TraceStore:
                 observation.record_exception(exc)
                 self._record_node_run(
                     node_name=node_name,
-                    state=state,
                     status="error",
                     latency_ms=latency_ms,
                     next_node=None,
@@ -199,7 +196,6 @@ class TraceStore:
             )
             self._record_node_run(
                 node_name=node_name,
-                state=combined_state,
                 status="completed",
                 latency_ms=latency_ms,
                 next_node=next_node,
@@ -390,7 +386,6 @@ class TraceStore:
             latency_ms = round((perf_counter() - started) * 1000)
             self._record_node_run(
                 node_name=node_name,
-                state=state,
                 status="error",
                 latency_ms=latency_ms,
                 next_node=None,
@@ -402,7 +397,6 @@ class TraceStore:
         latency_ms = round((perf_counter() - started) * 1000)
         self._record_node_run(
             node_name=node_name,
-            state=combined_state,
             status="completed",
             latency_ms=latency_ms,
             next_node=next_node,
@@ -413,19 +407,16 @@ class TraceStore:
         self,
         *,
         node_name: str,
-        state: Mapping[str, Any],
         status: str,
         latency_ms: int,
         next_node: str | None,
     ) -> None:
-        section_name = state.get("current_section")
         self._node_runs.append(
             NodeExecutionRecord(
                 node_name=node_name,
                 status=status,
                 latency_ms=latency_ms,
                 next_node=next_node,
-                section_name=section_name if isinstance(section_name, str) else None,
             )
         )
 

@@ -15,34 +15,12 @@ def test_config_loads_think_false_for_ollama_and_all_routed_stages():
     app_config = load_app_config(PROJECT_ROOT / "config.yaml")
 
     assert not hasattr(app_config, "ollama")
-    assert app_config.model_routing.stages["planner"].think is False
+    assert set(app_config.model_routing.stages) == {"writer", "critic"}
     assert app_config.model_routing.stages["writer"].think is False
     assert app_config.model_routing.stages["critic"].think is False
-    assert app_config.model_routing.stages["planner"].top_p == 0.9
     assert app_config.model_routing.stages["writer"].top_p == 0.9
     assert app_config.model_routing.stages["critic"].top_p == 0.9
-
-
-def test_inactive_planner_prompts_are_not_required():
-    app_config = load_app_config(PROJECT_ROOT / "config.yaml")
-
-    assert app_config.workflow.planner.active is False
-    assert app_config.workflow.prompts.document_planner_system == ""
-    assert app_config.workflow.prompts.section_planner_user == ""
     assert app_config.workflow.prompts.writer_system.strip()
-
-
-def test_planner_active_requires_planner_prompts():
-    raw_config = load_config(PROJECT_ROOT / "config.yaml")
-    case_config = load_config(PROJECT_ROOT / "config_case" / "case_1.yaml")
-    raw_config["workflow"]["planner"]["active"] = True
-
-    with pytest.raises(ValueError, match="document_planner_system"):
-        build_app_config(
-            raw_config,
-            case_cfg=case_config,
-            config_path=PROJECT_ROOT / "config.yaml",
-        )
 
 
 def test_config_requires_explicit_stage_routes():
@@ -82,7 +60,7 @@ def test_case_config_entity_variants_override_global_defaults():
     assert app_config.entity_variants.persons.misspelling_variants == 0
 
 
-@pytest.mark.parametrize("stage", ["planner", "writer", "critic"])
+@pytest.mark.parametrize("stage", ["writer", "critic"])
 def test_ollama_stage_clients_send_think_false(monkeypatch, stage):
     app_config = load_app_config(PROJECT_ROOT / "config.yaml")
     captured_requests = []

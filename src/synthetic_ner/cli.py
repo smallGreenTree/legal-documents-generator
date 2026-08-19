@@ -41,11 +41,6 @@ def build_parser(project_root: Path) -> argparse.ArgumentParser:
         help="Override scenario.id",
     )
     parser.add_argument(
-        "--from-schema",
-        metavar="PATH",
-        help="Load an existing case schema instead of auto-generating one",
-    )
-    parser.add_argument(
         "--workflow-mode",
         choices=("langgraph",),
         default=None,

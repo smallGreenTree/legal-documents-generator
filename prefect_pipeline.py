@@ -35,7 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--documents", "--count", dest="documents", type=int, default=None)
     parser.add_argument("--doc-type", default=None)
     parser.add_argument("--fraud-type", default=None)
-    parser.add_argument("--from-schema", default=None)
     parser.add_argument("--project-root", default=None)
     parser.add_argument(
         "--review-scenario",
@@ -71,7 +70,6 @@ def main() -> None:
         documents=args.documents,
         doc_type=args.doc_type,
         fraud_type=args.fraud_type,
-        from_schema=args.from_schema,
         project_root=args.project_root,
         review_scenario=args.review_scenario,
         review_entities=args.review_entities,

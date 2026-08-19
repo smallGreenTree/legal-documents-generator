@@ -7,6 +7,10 @@ from src.synthetic_ner.config import load_app_config
 from src.synthetic_ner.constants import EN_LABELS
 from src.synthetic_ner.engine import build_section_labels, build_template_environment
 from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
+from src.synthetic_ner.tasks.groundtruth import (
+    generate_groundtruth_for_document,
+    read_groundtruth_tsv,
+)
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 
@@ -44,11 +48,34 @@ def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, 
     assert UNKNOWN_AMOUNT_ISSUE not in disabled.report_text
     assert GENERATED_FACTS_TEXT in enabled.document_text
     assert GENERATED_FACTS_TEXT in disabled.document_text
+    assert not any(call["stage"] == "groundtruth" for call in enabled.calls)
+    assert {path.name for path in enabled.document_dir.iterdir()} == {
+        f"{DOC_ID}.txt",
+        "document_inputs.json",
+        "generation_report.md",
+    }
+
+
+def test_generated_report_and_text_are_sufficient_for_groundtruth(tmp_path, monkeypatch):
+    generated = _run_graph(tmp_path / "generated", monkeypatch, unknown_amounts=True)
+
+    result = generate_groundtruth_for_document(
+        document_dir=generated.document_dir,
+        contract_path=PROJECT_ROOT / "groundtruth_contract.yaml",
+    )
+
+    assert result["status"] == "completed"
+    annotations = read_groundtruth_tsv(generated.document_dir / "groundtruth.tsv")
+    keys = {(row.entity_text, row.label) for row in annotations}
+    assert ("Ann-Kathrin Dietz", "PERSON") in keys
+    assert ("PAVAROTTI SERVICES LTD", "ORG") in keys
+    assert ("£99,999", "AMOUNT") not in keys
 
 
 def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
     context = _build_context(tmp_path, unknown_amounts=unknown_amounts)
     calls = []
+    document = _document_inputs()
 
     def fake_build_model_client(*, stage, routing, tracer):
         del routing, tracer
@@ -60,8 +87,7 @@ def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
     )
     run_document_graph(
         context=context,
-        document=_document_inputs(),
-        schema=_schema(),
+        document=document,
         doc_id=DOC_ID,
         workflow_run_id=f"test-{unknown_amounts}",
     )
@@ -71,6 +97,7 @@ def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
         calls=calls,
         report_text=report_text,
         document_text=document_text,
+        document_dir=context.output_dir / DOC_ID,
     )
 
 
@@ -93,10 +120,8 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         encoding="utf-8",
     )
     output_dir = tmp_path / "output"
-    schema_dir = tmp_path / "schemas"
     memory_dir = tmp_path / "memory"
     output_dir.mkdir()
-    schema_dir.mkdir()
     memory_dir.mkdir()
 
     return RuntimeContext(
@@ -114,7 +139,6 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         doc_type="facts_test",
         fraud_type="financial_fraud",
         output_dir=output_dir,
-        schema_dir=schema_dir,
         memory_dir=memory_dir,
         template_path=template_path,
         template_env=build_template_environment(template_path),
@@ -124,7 +148,6 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         section_word_targets={"facts": 90},
         documents=1,
         prose_overrides={},
-        schema_source_path=None,
     )
 
 
@@ -171,17 +194,6 @@ def _document_inputs() -> DocumentInputs:
     )
 
 
-def _schema() -> dict:
-    return {
-        "doc_id": DOC_ID,
-        "edges": [
-            {
-                "label": "Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD",
-            }
-        ],
-    }
-
-
 class FakeModelClient:
     def __init__(self, stage: str, calls: list[dict]):
         self.stage = stage
@@ -189,12 +201,7 @@ class FakeModelClient:
 
     def invoke(self, **kwargs):
         self.calls.append(kwargs)
-        task_id = kwargs["task_id"]
-        if task_id == "planner_document":
-            text = "Use only the recorded relationship facts."
-        elif task_id.startswith("planner_"):
-            text = "Draft a facts section from the allowed relationship facts."
-        elif kwargs["stage"] == "writer":
+        if kwargs["stage"] == "writer":
             text = json.dumps(
                 {
                     "content": GENERATED_FACTS_TEXT,

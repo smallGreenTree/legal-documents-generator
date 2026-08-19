@@ -1,22 +1,9 @@
 paths:
   output_dir: output
-  schema_dir: schemas
   memory_dir: memory
 
 model_routing:
   stages:
-    planner:
-      provider: ollama
-      base_url: http://localhost:11434
-      model:  qwen3.6:27b
-      num_ctx: 8192
-      think: false
-      top_p: 0.9
-      timeout: 900
-      recovery:
-        max_generate_attempts: 1
-        retry_backoff_seconds: 5
-        controlled_empty_section: "[section not generated- ERROR dude]]"
     writer:
       provider: ollama
       base_url: http://localhost:11434
@@ -100,13 +87,6 @@ workflow:
     repeated_sentence_fragments: false
     truncated_sentence: false
     facts_contract: false
-
-  planner:
-    active: false
-    temperature: 0.0
-    max_output_tokens:
-      document: 2000
-      section: 1200
 
   writer:
     active: true

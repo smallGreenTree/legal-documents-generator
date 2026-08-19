@@ -67,7 +67,6 @@ class CaseMemoryManager:
         doc_type: str,
         fraud_type: str,
         document,
-        schema: dict,
         section_order: list[str],
     ) -> Path:
         case_dir = self.base_dir / f"case_{doc_id}"
@@ -79,7 +78,6 @@ class CaseMemoryManager:
                 doc_type=doc_type,
                 fraud_type=fraud_type,
                 document=document,
-                schema=schema,
                 section_order=section_order,
             ),
             encoding="utf-8",
@@ -89,19 +87,11 @@ class CaseMemoryManager:
     def read_memory(self, memory_path: Path) -> str:
         return memory_path.read_text(encoding="utf-8")
 
-    def append_document_plan(self, memory_path: Path, document_plan: str) -> None:
-        self._append_runtime_block(
-            memory_path,
-            "## Document Plan",
-            document_plan.strip(),
-        )
-
     def append_section_result(
         self,
         memory_path: Path,
         *,
         section_name: str,
-        section_plan: str,
         section_text: str,
         issues: list[str],
     ) -> None:
@@ -110,7 +100,7 @@ class CaseMemoryManager:
             summary = summary[: self.summary_chars].rstrip() + "..."
 
         issue_lines = "\n".join(f"- {issue}" for issue in issues) if issues else "- none"
-        content = f"Plan:\n{section_plan.strip()}\n\nSummary:\n{summary}\n\nIssues:\n{issue_lines}"
+        content = f"Summary:\n{summary}\n\nIssues:\n{issue_lines}"
         self._append_runtime_block(
             memory_path,
             f"## Section Memory: {section_name}",
@@ -136,7 +126,6 @@ class CaseMemoryManager:
         doc_type: str,
         fraud_type: str,
         document,
-        schema: dict,
         section_order: list[str],
     ) -> str:
         metadata = document.metadata
@@ -180,7 +169,6 @@ class CaseMemoryManager:
         scenario_brief = _format_scenario_brief(document.scenario_brief)
         amounts = _format_amounts(document.amounts)
         evidence_categories = _format_explicit_evidence_categories(document.evidence_categories)
-        edges = "\n".join(f"- {edge['label']}" for edge in schema.get("edges", [])) or "- none"
         sections = "\n".join(f"- {section_name}" for section_name in section_order)
 
         return f"""# CASE_MEMORY
@@ -216,17 +204,13 @@ class CaseMemoryManager:
 ## Evidence Categories
 {evidence_categories}
 
-## Relationship Graph
-{edges}
-
 ## Required Sections
 {sections}
 
-{build_allowed_facts_section(document, schema)}
+{build_allowed_facts_section(document)}
 
 ## Strict Rules
-- Use only the entities, dates, companies, addresses, amounts, counts, and
-  relationships listed here.
+- Use only the entities, dates, companies, addresses, amounts, and counts listed here.
 - Use only the exact person surface forms, VAT numbers, case references, and dates listed above.
 - Do not invent new people, organisations, invoice codes, or procedural steps.
 - Keep chronology internally consistent across all sections.

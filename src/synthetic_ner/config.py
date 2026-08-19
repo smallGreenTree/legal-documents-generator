@@ -24,7 +24,6 @@ from src.synthetic_ner.types.app_config import (
     PersonSpecConfig,
     PersonVariantEligibilityConfig,
     PersonVariantGenerationConfig,
-    PlannerConfig,
     ProfileConfig,
     WorkflowConfig,
     WorkflowPromptsConfig,
@@ -138,14 +137,13 @@ def resolve_section_order(doc_type: str) -> list[str]:
 def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
     return PathsConfig(
         output_dir=_require_string(raw["output_dir"], "paths.output_dir"),
-        schema_dir=_require_string(raw["schema_dir"], "paths.schema_dir"),
         memory_dir=_require_string(raw["memory_dir"], "paths.memory_dir"),
     )
 
 
 def _build_model_routing_config(raw: dict[str, Any]) -> ModelRoutingConfig:
     stages_raw = _require_mapping(raw["stages"], "model_routing.stages")
-    required_stages = ("planner", "writer", "critic")
+    required_stages = ("writer", "critic")
     missing_stages = [stage_name for stage_name in required_stages if stage_name not in stages_raw]
     if missing_stages:
         raise ValueError(
@@ -272,7 +270,6 @@ def _build_workflow_config(
     config_path: Path | None = None,
 ) -> WorkflowConfig:
     prompts = _resolve_workflow_prompts(raw, config_path=config_path)
-    planner_cfg = _build_planner_config(_require_mapping(raw["planner"], "workflow.planner"))
     critic_cfg = _build_critic_config(_require_mapping(raw["critic"], "workflow.critic"))
     writer = _require_mapping(raw["writer"], "workflow.writer")
     writer_max_output_tokens = _require_positive_int(
@@ -300,7 +297,6 @@ def _build_workflow_config(
             "workflow.memory_summary_chars",
         ),
         validators=_build_validator_config(raw.get("validators", {})),
-        planner=planner_cfg,
         writer=WriterConfig(
             active=_require_bool(
                 writer.get("active", True),
@@ -330,93 +326,45 @@ def _build_workflow_config(
             ),
         ),
         critic=critic_cfg,
-        prompts=_build_workflow_prompts_config(
-            prompts,
-            planner_active=planner_cfg.active,
-        ),
+        prompts=_build_workflow_prompts_config(prompts),
     )
 
 
 def _build_workflow_prompts_config(
     prompts: dict[str, Any],
-    *,
-    planner_active: bool,
 ) -> WorkflowPromptsConfig:
-    planner_path = "workflow.prompts"
-    if planner_active:
-        document_planner_system = _require_prompt(
-            prompts,
-            "document_planner_system",
-            planner_path,
-        )
-        document_planner_user = _require_prompt(
-            prompts,
-            "document_planner_user",
-            planner_path,
-        )
-        section_planner_system = _require_prompt(
-            prompts,
-            "section_planner_system",
-            planner_path,
-        )
-        section_planner_user = _require_prompt(
-            prompts,
-            "section_planner_user",
-            planner_path,
-        )
-    else:
-        document_planner_system = _optional_prompt_string(
-            prompts.get("document_planner_system"),
-            f"{planner_path}.document_planner_system",
-        )
-        document_planner_user = _optional_prompt_string(
-            prompts.get("document_planner_user"),
-            f"{planner_path}.document_planner_user",
-        )
-        section_planner_system = _optional_prompt_string(
-            prompts.get("section_planner_system"),
-            f"{planner_path}.section_planner_system",
-        )
-        section_planner_user = _optional_prompt_string(
-            prompts.get("section_planner_user"),
-            f"{planner_path}.section_planner_user",
-        )
-
+    prompts_path = "workflow.prompts"
     return WorkflowPromptsConfig(
         writer_system=_require_prompt(
             prompts,
             "writer_system",
-            planner_path,
+            prompts_path,
         ),
         writer_user=_require_prompt(
             prompts,
             "writer_user",
-            planner_path,
+            prompts_path,
         ),
         polisher_system=_require_prompt(
             prompts,
             "polisher_system",
-            planner_path,
+            prompts_path,
         ),
         polisher_user=_require_prompt(
             prompts,
             "polisher_user",
-            planner_path,
+            prompts_path,
         ),
         critic_system=_require_prompt(
             prompts,
             "critic_system",
-            planner_path,
+            prompts_path,
         ),
         critic_user=_require_prompt(
             prompts,
             "critic_user",
-            planner_path,
+            prompts_path,
         ),
-        document_planner_system=document_planner_system,
-        document_planner_user=document_planner_user,
-        section_planner_system=section_planner_system,
-        section_planner_user=section_planner_user,
     )
 
 
@@ -464,31 +412,6 @@ def _resolve_workflow_prompts(
             f"{prompts_config_path}.prompts",
         )
     return prompts_raw
-
-
-def _build_planner_config(raw: dict[str, Any]) -> PlannerConfig:
-    max_output_tokens = _require_mapping(
-        raw["max_output_tokens"],
-        "workflow.planner.max_output_tokens",
-    )
-    return PlannerConfig(
-        active=_require_bool(
-            raw.get("active", True),
-            "workflow.planner.active",
-        ),
-        temperature=_require_number(
-            raw["temperature"],
-            "workflow.planner.temperature",
-        ),
-        document_max_output_tokens=_require_positive_int(
-            max_output_tokens["document"],
-            "workflow.planner.max_output_tokens.document",
-        ),
-        section_max_output_tokens=_require_positive_int(
-            max_output_tokens["section"],
-            "workflow.planner.max_output_tokens.section",
-        ),
-    )
 
 
 def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
@@ -629,7 +552,6 @@ def _build_case_config(raw: dict[str, Any]) -> CaseConfig:
             raw.get("associated_orgs", "auto"),
             "case.associated_orgs",
         ),
-        schema=_build_auto_or_mapping(raw.get("schema", "auto"), "case.schema"),
         evidence_categories=_build_optional_string_list(
             raw.get("evidence_categories", []),
             "case.evidence_categories",
@@ -808,12 +730,6 @@ def _build_auto_or_list(value: Any, path: str) -> str | list[dict[str, Any]]:
     return raw
 
 
-def _build_auto_or_mapping(value: Any, path: str) -> str | dict[str, Any]:
-    if value == "auto":
-        return "auto"
-    return _require_mapping(value, path)
-
-
 def _build_optional_mapping(value: Any, path: str) -> dict[str, Any]:
     if value is None:
         return {}
@@ -858,12 +774,6 @@ def _require_prompt(prompts: dict[str, Any], key: str, path: str) -> str:
     if key not in prompts:
         raise ValueError(f"{path}.{key} is required")
     return _require_string(prompts[key], f"{path}.{key}")
-
-
-def _optional_prompt_string(value: Any, path: str) -> str:
-    if value is None:
-        return ""
-    return _require_string(value, path, allow_empty=True)
 
 
 def _require_positive_int(value: Any, path: str) -> int:

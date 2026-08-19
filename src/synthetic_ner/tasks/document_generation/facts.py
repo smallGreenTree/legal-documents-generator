@@ -6,15 +6,12 @@ import re
 from dataclasses import dataclass
 
 from src.synthetic_ner.constants import COMPANY_SUFFIXES
+from src.synthetic_ner.entity_text import AMOUNT_RE, normalize_phrase
 
 MONTH_PATTERN = (
     "January|February|March|April|May|June|July|August|September|October|November|December"
 )
 DATE_RE = re.compile(rf"\b\d{{1,2}} (?:{MONTH_PATTERN}) \d{{4}}\b")
-AMOUNT_RE = re.compile(
-    r"(?:£|€|\b(?:GBP|EUR)\s*)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|m|thousand|k))?",
-    re.IGNORECASE,
-)
 VAT_RE = re.compile(r"\b[A-Z]{2}(?=[A-Z0-9]{8,14}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b")
 CASE_REF_RE = re.compile(r"\b(?:CPS/\d{4}/\d{4}|C/\d{4}/\d{1,4}|T\d{9,10}|\d{7}/\d{3})\b")
 INITIALS_RE = re.compile(r"\b(?:[A-Z]\.){2,4}\b")
@@ -41,7 +38,7 @@ class AllowedFacts:
     dates: set[str]
 
 
-def build_allowed_facts_section(document, schema: dict) -> str:
+def build_allowed_facts_section(document) -> str:
     metadata = document.metadata
     offence_period = metadata.get("offence_period")
     case_refs = [
@@ -76,7 +73,6 @@ def build_allowed_facts_section(document, schema: dict) -> str:
         )
         for org in (document.charged_orgs + document.associated_orgs)
     ]
-    edge_lines = [f"- {edge['label']}" for edge in schema.get("edges", [])]
     amount_lines = []
     total_loss = document.amounts.get("total_loss")
     if total_loss:
@@ -109,90 +105,16 @@ def build_allowed_facts_section(document, schema: dict) -> str:
         "",
         "### Allowed Amounts",
         *(amount_lines or ["- none"]),
-        "",
-        "### Relationship Facts",
-        *(edge_lines or ["- none"]),
     ]
     return "\n".join(blocks)
 
 
-def collect_allowed_facts(document) -> AllowedFacts:
-    metadata = document.metadata
-    people = document.defendants + document.collateral
-    person_surface_forms = {
-        normalize_phrase(form)
-        for person in people
-        for form in (
-            [
-                person.get("name"),
-                person.get("title_surname"),
-                person.get("short_name"),
-                person.get("initials"),
-            ]
-            + list(person.get("surface_forms_list", []))
-        )
-        if form
-    }
-    titled_people = {
-        normalize_title_phrase(person["title_surname"])
-        for person in people
-        if person.get("title_surname")
-    }
-    initials = {normalize_phrase(person["initials"]) for person in people if person.get("initials")}
-    org_names = {
-        normalize_phrase(org["name"])
-        for org in (document.charged_orgs + document.associated_orgs)
-        if org.get("name")
-    }
-    vat_numbers = {
-        normalize_phrase(org["vat"])
-        for org in (document.charged_orgs + document.associated_orgs)
-        if org.get("vat")
-    }
-    amounts = {normalize_phrase(amount) for amount in _amount_values(document.amounts)}
-
-    case_refs = {
-        normalize_phrase(metadata["case_number"]),
-        normalize_phrase(metadata.get("legal_reference", "")),
-        normalize_phrase(metadata["cross_ref"]),
-    }
-    dates = {
-        normalize_phrase(metadata["filing_date"]),
-        *(
-            {
-                normalize_phrase(metadata["offence_period"][0]),
-                normalize_phrase(metadata["offence_period"][1]),
-            }
-            if metadata.get("offence_period")
-            else set()
-        ),
-        *{normalize_phrase(person["dob"]) for person in people if person.get("dob")},
-        *{
-            normalize_phrase(date_text)
-            for count in document.counts_list
-            for date_text in DATE_RE.findall(count.get("particulars", ""))
-        },
-    }
-
-    return AllowedFacts(
-        person_surface_forms=person_surface_forms,
-        titled_people=titled_people,
-        initials=initials,
-        org_names=org_names,
-        vat_numbers=vat_numbers,
-        amounts=amounts,
-        case_refs=case_refs,
-        dates=dates,
-    )
-
-
 def collect_allowed_facts_from_memory(memory_text: str) -> AllowedFacts:
-    seed_memory = _extract_seed_memory(memory_text)
-    refs_block = _extract_markdown_section(seed_memory, "### Case References and Dates")
-    people_block = _extract_markdown_section(seed_memory, "### Allowed Person Surface Forms")
-    orgs_block = _extract_markdown_section(seed_memory, "### Allowed Organisations")
-    amounts_block = _extract_markdown_section(seed_memory, "### Allowed Amounts")
-    counts_block = _extract_markdown_section(seed_memory, "## Counts")
+    refs_block = _extract_markdown_section(memory_text, "### Case References and Dates")
+    people_block = _extract_markdown_section(memory_text, "### Allowed Person Surface Forms")
+    orgs_block = _extract_markdown_section(memory_text, "### Allowed Organisations")
+    amounts_block = _extract_markdown_section(memory_text, "### Allowed Amounts")
+    counts_block = _extract_markdown_section(memory_text, "## Counts")
 
     case_refs, dates = _parse_case_refs_and_dates(refs_block)
     person_surface_forms, titled_people, initials, people_dates = _parse_people_block(people_block)
@@ -213,18 +135,6 @@ def collect_allowed_facts_from_memory(memory_text: str) -> AllowedFacts:
         case_refs=case_refs,
         dates=dates,
     )
-
-
-def _amount_values(amounts: dict) -> list[str]:
-    values = []
-    for key in ("total_loss", "inflated_invoice_value"):
-        value = amounts.get(key)
-        if value:
-            values.append(value)
-    for transfer in amounts.get("transfers", []):
-        if isinstance(transfer, dict) and transfer.get("amount"):
-            values.append(transfer["amount"])
-    return values
 
 
 def _parse_case_refs_and_dates(block: str) -> tuple[set[str], set[str]]:
@@ -302,10 +212,6 @@ def _add_org_parts(parts: list[str], org_names: set[str], vat_numbers: set[str])
                 vat_numbers.add(vat_number)
 
 
-def normalize_phrase(value: str) -> str:
-    return " ".join(str(value).strip().split()).strip(".,;:()[]{}")
-
-
 def normalize_title_phrase(value: str) -> str:
     normalized = normalize_phrase(value)
     return (
@@ -330,13 +236,6 @@ def unique_phrases(values: list[str]) -> list[str]:
         seen.add(key)
         unique.append(normalized)
     return unique
-
-
-def _extract_seed_memory(memory_text: str) -> str:
-    marker = "\n## Document Plan\n"
-    if marker in memory_text:
-        return memory_text.split(marker, 1)[0]
-    return memory_text
 
 
 def _extract_markdown_section(memory_text: str, heading: str) -> str:

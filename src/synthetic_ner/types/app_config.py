@@ -7,7 +7,6 @@ from typing import Any
 @dataclass(frozen=True)
 class PathsConfig:
     output_dir: str
-    schema_dir: str
     memory_dir: str
 
 
@@ -85,14 +84,6 @@ class EntityVariantsConfig:
 
 
 @dataclass(frozen=True)
-class PlannerConfig:
-    active: bool
-    temperature: float
-    document_max_output_tokens: int
-    section_max_output_tokens: int
-
-
-@dataclass(frozen=True)
 class WriterConfig:
     active: bool
     chunk_words: int
@@ -123,10 +114,6 @@ class WorkflowPromptsConfig:
     polisher_user: str
     critic_system: str
     critic_user: str
-    document_planner_system: str = ""
-    document_planner_user: str = ""
-    section_planner_system: str = ""
-    section_planner_user: str = ""
 
 
 @dataclass(frozen=True)
@@ -135,7 +122,6 @@ class WorkflowConfig:
     max_revisions: int
     memory_summary_chars: int
     validators: dict[str, bool]
-    planner: PlannerConfig
     writer: WriterConfig
     critic: CriticConfig
     prompts: WorkflowPromptsConfig
@@ -205,7 +191,6 @@ class CaseConfig:
     collateral: str | list[dict[str, Any]]
     charged_orgs: str | list[dict[str, Any]]
     associated_orgs: str | list[dict[str, Any]]
-    schema: str | dict[str, Any]
     evidence_categories: list[str]
     prose: dict[str, str]
     counts: str | list[CountConfig]

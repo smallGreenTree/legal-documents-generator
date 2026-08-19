@@ -11,24 +11,74 @@ from prefect import flow, get_run_logger, task
 
 from src.synthetic_ner.prefect_flows.utils import resolve_flow_project_root
 from src.synthetic_ner.tasks.groundtruth import (
+    calculate_groundtruth_offsets,
     discover_document_packages,
-    generate_groundtruth_for_document,
+    groundtruth_failure_boundary,
+    load_groundtruth_source,
+    record_groundtruth_failure,
+    select_used_initial_entities,
+    validate_and_publish_groundtruth,
 )
 from src.synthetic_ner.utils import resolve_project_path
 
 DEFAULT_GROUNDTRUTH_CONTRACT_PATH = "groundtruth_contract.yaml"
 
 
-@task(name="generate-validated-groundtruth")
-def generate_validated_groundtruth(
+@task(name="load-frozen-groundtruth-inputs")
+def load_frozen_groundtruth_inputs(document_dir: str) -> dict[str, Any]:
+    """Load the final text and the initial entities saved before generation."""
+    source = load_groundtruth_source(Path(document_dir))
+    get_run_logger().info("Loaded frozen ground-truth inputs for %s", source["doc_id"])
+    return source
+
+
+@task(name="select-used-initial-entities")
+def select_used_groundtruth_entities(source: dict[str, Any]) -> list[dict[str, Any]]:
+    """Select exact initial entity surfaces present in the final document."""
+    references = select_used_initial_entities(source)
+    get_run_logger().info(
+        "Selected %s used initial entity surfaces for %s",
+        len(references),
+        source["doc_id"],
+    )
+    return references
+
+
+@task(name="calculate-groundtruth-offsets")
+def calculate_groundtruth_annotations(
     *,
-    document_dir: str,
+    source: dict[str, Any],
+    references: list[dict[str, Any]],
+    contract_path: str,
+) -> list[dict[str, Any]]:
+    """Calculate every occurrence offset for the selected surfaces."""
+    annotations = calculate_groundtruth_offsets(
+        source=source,
+        references=references,
+        contract_path=contract_path,
+    )
+    get_run_logger().info(
+        "Calculated %s occurrence offsets for %s",
+        len(annotations),
+        source["doc_id"],
+    )
+    return annotations
+
+
+@task(name="validate-publish-groundtruth")
+def publish_validated_groundtruth(
+    *,
+    source: dict[str, Any],
+    references: list[dict[str, Any]],
+    annotation_rows: list[dict[str, Any]],
     contract_path: str,
 ) -> dict[str, Any]:
-    """Build and publish one document's ground truth after complete validation."""
-    result = generate_groundtruth_for_document(
-        document_dir=Path(document_dir),
-        contract_path=Path(contract_path),
+    """Validate all offsets and atomically publish the TSV and manifest."""
+    result = validate_and_publish_groundtruth(
+        source=source,
+        references=references,
+        annotation_rows=annotation_rows,
+        contract_path=contract_path,
     )
     get_run_logger().info(
         "Ground truth completed for %s with %s annotations%s",
@@ -37,6 +87,12 @@ def generate_validated_groundtruth(
         " (reused)" if result.get("reused") else "",
     )
     return result
+
+
+@task(name="record-groundtruth-validation-failure")
+def record_groundtruth_validation_failure(document_dir: str, issues: list[str]) -> None:
+    """Write the validation error artifact for a failed modular stage."""
+    record_groundtruth_failure(document_dir, issues)
 
 
 @flow(name="synthetic-ner-groundtruth-document")
@@ -49,13 +105,29 @@ def generate_document_groundtruth(
     resolved_project_root = resolve_flow_project_root(project_root)
     resolved_document_dir = resolve_project_path(resolved_project_root, document_dir).resolve()
     resolved_contract_path = resolve_project_path(resolved_project_root, contract_path).resolve()
-    return generate_validated_groundtruth(
-        document_dir=str(resolved_document_dir),
-        contract_path=str(resolved_contract_path),
-    )
+    with groundtruth_failure_boundary(
+        resolved_document_dir,
+        failure_recorder=lambda issues: record_groundtruth_validation_failure(
+            str(resolved_document_dir),
+            issues,
+        ),
+    ):
+        source = load_frozen_groundtruth_inputs(str(resolved_document_dir))
+        references = select_used_groundtruth_entities(source)
+        annotation_rows = calculate_groundtruth_annotations(
+            source=source,
+            references=references,
+            contract_path=str(resolved_contract_path),
+        )
+        return publish_validated_groundtruth(
+            source=source,
+            references=references,
+            annotation_rows=annotation_rows,
+            contract_path=str(resolved_contract_path),
+        )
 
 
-@flow(name="synthetic-ner-groundtruth-directory")
+@flow(name="synthetic-ner-generate-groundtruth")
 def generate_groundtruth_directory(
     input_directory: str,
     project_root: str | None = None,
@@ -70,7 +142,8 @@ def generate_groundtruth_directory(
     document_directories = discover_document_packages(resolved_input_directory)
     if not document_directories:
         raise ValueError(
-            f"No document packages with document_manifest.json found in {resolved_input_directory}"
+            "No document packages containing a matching .txt file and document_inputs.json "
+            f"found in {resolved_input_directory}"
         )
 
     results: list[dict[str, Any]] = []

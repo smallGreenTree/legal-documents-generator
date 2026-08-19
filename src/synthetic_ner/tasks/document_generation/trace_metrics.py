@@ -109,10 +109,6 @@ def build_langgraph_node_metadata(
         "doc_id": _string_value(state.get("doc_id")) or doc_id,
     }
 
-    current_section = _string_value(state.get("current_section"))
-    if current_section:
-        metadata["current_section"] = current_section
-
     _add_state_counts(metadata, state)
     _add_text_lengths(metadata, state)
 
@@ -279,16 +275,9 @@ def _stage_rows(by_stage: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _add_state_counts(metadata: dict[str, Any], state: Mapping[str, Any]) -> None:
-    for field_name in ("section_index",):
-        field_value = state.get(field_name)
-        if isinstance(field_value, int):
-            metadata[field_name] = field_value
-
     collection_lengths = {
-        "issues_count": state.get("current_section_issues"),
         "section_order_count": state.get("section_order"),
         "section_outputs_count": state.get("section_outputs"),
-        "section_plans_count": state.get("section_plans"),
         "section_reviews_count": state.get("section_reviews"),
     }
     for field_name, field_value in collection_lengths.items():
@@ -299,9 +288,6 @@ def _add_state_counts(metadata: dict[str, Any], state: Mapping[str, Any]) -> Non
 def _add_text_lengths(metadata: dict[str, Any], state: Mapping[str, Any]) -> None:
     for field_name in (
         "memory_text",
-        "document_plan",
-        "current_section_plan",
-        "current_section_text",
         "final_text",
     ):
         field_value = state.get(field_name)

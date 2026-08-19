@@ -1,4 +1,4 @@
-"""LangGraph orchestration for planner/writer/critic workflows."""
+"""LangGraph orchestration for writer/critic workflows."""
 
 from __future__ import annotations
 
@@ -12,20 +12,19 @@ from pathlib import Path
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from src.synthetic_ner.document_ids import make_doc_id, next_counter
 from src.synthetic_ner.engine import (
     build_runtime_context,
     build_size_label,
     collect_section_output_problems,
     render_document_text,
     resolve_document_inputs,
-    resolve_schema_for_document,
     save_document_artifacts,
 )
 from src.synthetic_ner.models.factory import build_model_client, describe_stage_route
 from src.synthetic_ner.tasks.document_generation.critic import SectionCritic
 from src.synthetic_ner.tasks.document_generation.generation_report import write_generation_report
 from src.synthetic_ner.tasks.document_generation.memory_manager import CaseMemoryManager
-from src.synthetic_ner.tasks.document_generation.planner import Planner
 from src.synthetic_ner.tasks.document_generation.prompt_context import build_section_contract
 from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
 from src.synthetic_ner.tasks.document_generation.validators import (
@@ -47,11 +46,11 @@ def run_langgraph_workflow(args: Namespace, project_root: Path) -> None:
         )
 
         document = resolve_document_inputs(context)
-        doc_id, schema = resolve_schema_for_document(context, document, document_index)
+        counter = next_counter(context.output_dir, context.doc_type, context.fraud_type)
+        doc_id = make_doc_id(context.doc_type, context.fraud_type, counter)
         run_document_graph(
             context=context,
             document=document,
-            schema=schema,
             doc_id=doc_id,
         )
 
@@ -62,7 +61,6 @@ def run_document_graph(
     *,
     context,
     document,
-    schema: dict,
     doc_id: str,
     workflow_run_id: str | None = None,
     prefect_flow_run_id: str | None = None,
@@ -87,17 +85,9 @@ def run_document_graph(
         doc_type=context.doc_type,
         fraud_type=context.fraud_type,
         document=document,
-        schema=schema,
         section_order=list(context.section_word_targets.keys()),
     )
 
-    planner_client = None
-    if context.workflow_cfg.planner.active:
-        planner_client = build_model_client(
-            stage="planner",
-            routing=context.model_routing_cfg,
-            tracer=trace_store,
-        )
     writer_client = build_model_client(
         stage="writer",
         routing=context.model_routing_cfg,
@@ -120,16 +110,6 @@ def run_document_graph(
             for stage in _active_model_stages(context.workflow_cfg)
         )
     )
-    planner = None
-    if planner_client is not None:
-        planner = Planner(
-            client=planner_client,
-            prompts=prompts,
-            planner_temperature=context.workflow_cfg.planner.temperature,
-            document_max_output_tokens=(context.workflow_cfg.planner.document_max_output_tokens),
-            section_max_output_tokens=(context.workflow_cfg.planner.section_max_output_tokens),
-            prompt_clients=resolved_prompts.prompt_clients,
-        )
     writer = SectionWriter(
         client=writer_client,
         prompts=prompts,
@@ -170,7 +150,6 @@ def run_document_graph(
             "doc_type": context.doc_type,
             "fraud_type": context.fraud_type,
             "case_number": document.metadata["case_number"],
-            "planner_active": context.workflow_cfg.planner.active,
             "writer_active": context.workflow_cfg.writer.active,
             "critic_active": context.workflow_cfg.critic.active,
         },
@@ -184,11 +163,9 @@ def run_document_graph(
         graph = build_document_graph(
             context=context,
             document=document,
-            schema=schema,
             doc_id=doc_id,
             memory_path=memory_path,
             memory_manager=memory_manager,
-            planner=planner,
             writer=writer,
             critic=critic,
             trace_store=trace_store,
@@ -199,14 +176,9 @@ def run_document_graph(
                 "memory_path": memory_path,
                 "memory_text": seed_memory_text,
                 "section_order": list(context.section_word_targets.keys()),
-                "section_index": 0,
                 "section_outputs": {},
-                "section_plans": {},
                 "section_contracts": {},
                 "section_reviews": {},
-                "instruction_channel": {},
-                "review_channel": {},
-                "content_channel": {},
             }
         )
     finally:
@@ -220,8 +192,6 @@ def run_document_graph(
 
 def _active_model_stages(workflow_cfg) -> tuple[str, ...]:
     stages = ["writer"]
-    if workflow_cfg.planner.active:
-        stages.insert(0, "planner")
     if workflow_cfg.critic.active:
         stages.append("critic")
     return tuple(stages)
@@ -231,11 +201,9 @@ def build_document_graph(
     *,
     context,
     document,
-    schema: dict,
     doc_id: str,
     memory_path: Path,
     memory_manager: CaseMemoryManager,
-    planner: Planner | None,
     writer: SectionWriter,
     critic: SectionCritic | None,
     trace_store: TraceStore,
@@ -243,11 +211,9 @@ def build_document_graph(
     workflow = DocumentWorkflow(
         context=context,
         document=document,
-        schema=schema,
         doc_id=doc_id,
         memory_path=memory_path,
         memory_manager=memory_manager,
-        planner=planner,
         writer=writer,
         critic=critic,
         trace_store=trace_store,
@@ -261,22 +227,18 @@ class DocumentWorkflow:
         *,
         context,
         document,
-        schema: dict,
         doc_id: str,
         memory_path: Path,
         memory_manager: CaseMemoryManager,
-        planner: Planner | None,
         writer: SectionWriter,
         critic: SectionCritic | None,
         trace_store: TraceStore,
     ) -> None:
         self.context = context
         self.document = document
-        self.schema = schema
         self.doc_id = doc_id
         self.memory_path = memory_path
         self.memory_manager = memory_manager
-        self.planner = planner
         self.writer = writer
         self.critic = critic
         self.trace_store = trace_store
@@ -288,15 +250,6 @@ class DocumentWorkflow:
         return builder.compile()
 
     def _register_nodes(self, builder: StateGraph) -> None:
-        if self.planner is not None:
-            builder.add_node(
-                "document_planner",
-                self._trace_node(
-                    "document_planner",
-                    self.document_planner_node,
-                    next_node="process_sections",
-                ),
-            )
         builder.add_node(
             "process_sections",
             self._trace_node(
@@ -343,38 +296,13 @@ class DocumentWorkflow:
         return wrapped
 
     def _register_edges(self, builder: StateGraph) -> None:
-        if self.planner is None:
-            builder.add_edge(START, "process_sections")
-        else:
-            builder.add_edge(START, "document_planner")
-            builder.add_edge("document_planner", "process_sections")
+        builder.add_edge(START, "process_sections")
         builder.add_edge("process_sections", "render_document")
         builder.add_edge("render_document", END)
-
-    def document_planner_node(self, state: WorkflowState) -> WorkflowState:
-        if self.planner is None:
-            return {"document_plan": "", "instruction_channel": {}}
-        document_plan = self.planner.plan_document(
-            doc_id=self.doc_id,
-            parent_task_id=None,
-            memory_text=state["memory_text"],
-            doc_type=self.context.doc_type,
-            fraud_type=self.context.fraud_type,
-            case_number=self.document.metadata["case_number"],
-            section_order=state["section_order"],
-        )
-        self.memory_manager.append_document_plan(self.memory_path, document_plan)
-        instruction_channel = dict(state.get("instruction_channel", {}))
-        instruction_channel["document_plan"] = document_plan
-        return {
-            "document_plan": document_plan,
-            "instruction_channel": instruction_channel,
-        }
 
     def process_sections_node(self, state: WorkflowState) -> WorkflowState:
         section_order = state["section_order"]
         section_outputs = dict(state.get("section_outputs", {}))
-        section_plans = dict(state.get("section_plans", {}))
         section_contracts = dict(state.get("section_contracts", {}))
         section_reviews = dict(state.get("section_reviews", {}))
 
@@ -403,23 +331,19 @@ class DocumentWorkflow:
 
             for result in results:
                 section_outputs[result.section_name] = result.section_text
-                section_plans[result.section_name] = result.section_plan
                 section_contracts[result.section_name] = result.section_contract
                 section_reviews[result.section_name] = result.issues
                 self.memory_manager.append_section_result(
                     self.memory_path,
                     section_name=result.section_name,
-                    section_plan=result.section_plan,
                     section_text=result.section_text,
                     issues=result.issues,
                 )
 
         return {
             "section_outputs": section_outputs,
-            "section_plans": section_plans,
             "section_contracts": section_contracts,
             "section_reviews": section_reviews,
-            "section_index": len(section_order),
         }
 
     def _run_section_workflow(
@@ -428,27 +352,11 @@ class DocumentWorkflow:
         section_name: str,
     ) -> SectionWorkflowResult:
         section_contract = build_section_contract(section_name)
-        document_plan = state.get("document_plan", "")
-        section_plan = ""
-        writer_parent_task_id = None
-        if self.planner is not None:
-            section_plan = self.planner.plan_section(
-                doc_id=self.doc_id,
-                parent_task_id="planner_document",
-                memory_text=state["memory_text"],
-                document_plan=document_plan,
-                doc_type=self.context.doc_type,
-                section_name=section_name,
-                word_target=self.context.section_word_targets[section_name],
-            )
-            writer_parent_task_id = f"planner_{section_name}"
         section_text = self.writer.write_section(
             doc_id=self.doc_id,
-            parent_task_id=writer_parent_task_id,
+            parent_task_id=None,
             memory_text=state["memory_text"],
-            document_plan=document_plan,
             section_name=section_name,
-            section_plan=section_plan,
             case_number=self.document.metadata["case_number"],
             word_target=self.context.section_word_targets[section_name],
         )
@@ -461,7 +369,6 @@ class DocumentWorkflow:
                 parent_task_id=f"writer_{section_name}",
                 memory_text=state["memory_text"],
                 section_name=section_name,
-                section_plan=section_plan,
                 section_text=section_text,
                 revision_round=0,
             )
@@ -483,13 +390,11 @@ class DocumentWorkflow:
 
         final_text, final_issues = self._finalize_section_text(
             section_name=section_name,
-            section_plan=section_plan,
             section_text=section_text,
             issues=issues,
         )
         return SectionWorkflowResult(
             section_name=section_name,
-            section_plan=section_plan,
             section_contract=section_contract,
             section_text=final_text,
             issues=final_issues,
@@ -499,11 +404,9 @@ class DocumentWorkflow:
         self,
         *,
         section_name: str,
-        section_plan: str,
         section_text: str,
         issues: list[str],
     ) -> tuple[str, list[str]]:
-        del section_plan
         word_target = self.context.section_word_targets[section_name]
         memory_text = self.memory_manager.read_memory(self.memory_path)
         final_text = clean_generated_section_text(section_text)
@@ -552,16 +455,13 @@ class DocumentWorkflow:
             self.context,
             self.document,
             self.doc_id,
-            self.schema,
             rendered_text,
         )
         write_generation_report(
             context=self.context,
             doc_id=self.doc_id,
             memory_path=self.memory_path,
-            document_plan=state.get("document_plan", ""),
             section_contracts=state.get("section_contracts", {}),
-            section_plans=state.get("section_plans", {}),
             section_reviews=state.get("section_reviews", {}),
             trace_store=self.trace_store,
         )
