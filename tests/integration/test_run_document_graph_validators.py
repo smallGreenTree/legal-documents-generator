@@ -30,8 +30,18 @@ GENERATED_FACTS_TEXT = (
 
 
 def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, monkeypatch):
-    enabled = _run_graph(tmp_path / "enabled", monkeypatch, unknown_amounts=True)
-    disabled = _run_graph(tmp_path / "disabled", monkeypatch, unknown_amounts=False)
+    enabled = _run_graph(
+        tmp_path / "enabled",
+        monkeypatch,
+        unknown_amounts=True,
+        max_revisions=2,
+    )
+    disabled = _run_graph(
+        tmp_path / "disabled",
+        monkeypatch,
+        unknown_amounts=False,
+        max_revisions=2,
+    )
 
     writer_call = next(call for call in enabled.calls if call["stage"] == "writer")
     writer_calls = [call for call in enabled.calls if call["stage"] == "writer"]
@@ -40,9 +50,17 @@ def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, 
     assert "SECTION_CONTRACT:" in writer_call["user_prompt"]
     assert "Allowed Amounts" in writer_call["user_prompt"]
     assert "{% if" not in writer_call["user_prompt"]
-    assert len(writer_calls) == 1
-    assert len(critic_calls) == 1
-    assert not any("_r1" in call["task_id"] for call in enabled.calls)
+    assert len(writer_calls) == 3
+    assert len(critic_calls) == 3
+    assert all(call["client_stage"] == "writer" for call in writer_calls)
+    assert all(
+        call["client_stage"] == "polisher" for call in enabled.calls if call["stage"] == "polisher"
+    )
+    assert any("_r1" in call["task_id"] for call in enabled.calls)
+    assert any("_r2" in call["task_id"] for call in enabled.calls)
+    assert not any("_r3" in call["task_id"] for call in enabled.calls)
+    assert len([call for call in disabled.calls if call["stage"] == "writer"]) == 1
+    assert len([call for call in disabled.calls if call["stage"] == "critic"]) == 1
 
     assert UNKNOWN_AMOUNT_ISSUE in enabled.report_text
     assert UNKNOWN_AMOUNT_ISSUE not in disabled.report_text
@@ -54,6 +72,22 @@ def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, 
         "document_inputs.json",
         "generation_report.md",
     }
+
+
+def test_max_revisions_zero_disables_rewrites(tmp_path, monkeypatch):
+    generated = _run_graph(
+        tmp_path / "no-revisions",
+        monkeypatch,
+        unknown_amounts=True,
+        max_revisions=0,
+    )
+
+    writer_calls = [call for call in generated.calls if call["stage"] == "writer"]
+    critic_calls = [call for call in generated.calls if call["stage"] == "critic"]
+    assert len(writer_calls) == 1
+    assert len(critic_calls) == 1
+    assert not any("_r1" in call["task_id"] for call in generated.calls)
+    assert UNKNOWN_AMOUNT_ISSUE in generated.report_text
 
 
 def test_generated_report_and_text_are_sufficient_for_groundtruth(tmp_path, monkeypatch):
@@ -72,8 +106,18 @@ def test_generated_report_and_text_are_sufficient_for_groundtruth(tmp_path, monk
     assert ("£99,999", "AMOUNT") not in keys
 
 
-def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
-    context = _build_context(tmp_path, unknown_amounts=unknown_amounts)
+def _run_graph(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    unknown_amounts: bool,
+    max_revisions: int = 2,
+):
+    context = _build_context(
+        tmp_path,
+        unknown_amounts=unknown_amounts,
+        max_revisions=max_revisions,
+    )
     calls = []
     document = _document_inputs()
 
@@ -101,7 +145,12 @@ def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
     )
 
 
-def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
+def _build_context(
+    tmp_path: Path,
+    *,
+    unknown_amounts: bool,
+    max_revisions: int,
+) -> RuntimeContext:
     tmp_path.mkdir(parents=True)
     app_config = load_app_config(
         PROJECT_ROOT / "config.yaml",
@@ -110,7 +159,7 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
     validators = {**app_config.workflow.validators, "unknown_amounts": unknown_amounts}
     workflow_cfg = replace(
         app_config.workflow,
-        max_revisions=2,
+        max_revisions=max_revisions,
         validators=validators,
     )
     mlflow_cfg = replace(app_config.mlflow, enabled=False)
@@ -200,7 +249,7 @@ class FakeModelClient:
         self.calls = calls
 
     def invoke(self, **kwargs):
-        self.calls.append(kwargs)
+        self.calls.append({**kwargs, "client_stage": self.stage})
         if kwargs["stage"] == "writer":
             text = json.dumps(
                 {

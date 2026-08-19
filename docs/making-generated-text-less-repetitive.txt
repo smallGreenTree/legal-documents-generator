@@ -1,0 +1,158 @@
+Making generated indictment text less repetitive
+19 August 2026
+
+
+A short working note on why generated indictments read as a loop,
+and what to change so the writer produces more realistic legal prose
+across scenarios, not only for one thin case recipe.
+
+Gold is produced by the same software. The labels are not the
+problem. The text is. Filling one YAML file does not travel. The
+writer is shared. The context builder is shared. The fact inventory
+is shared. Those are the levers.
+
+
+THE ACTUAL PROBLEM
+------------------
+
+The writer is asked for about 4,300 words. The case only supplies a
+few hundred words of unique facts. With nothing new to say, the model
+retells the scenario brief until the word target is hit.
+
+That is why persons, companies, history, charges, facts, evidence and
+assessment all sound like the same paragraph. It is not a gold-contract
+failure, and it is not a mysterious model failure. The case is too thin
+for the length you requested.
+
+What the case currently has          What that causes
+----------------------------         --------------------------------
+No fraud_statutes                    Counts list is empty
+No evidence_categories               Evidence has nothing to organise
+                                     around
+associated_orgs is 0                 No transfers, so no fund-flow facts
+Offence period is auto / auto        Period is dropped and never reaches
+                                     memory
+One defendant, one company           Almost no plot to distribute across
+                                     sections
+
+At the same time, section word targets are high: persons 450, companies
+500, facts 1,000. A companies section for one VAT number and one
+address does not need 500 words.
+
+Facts at 1,000 also splits into two chunks, because chunk_words is 900.
+The second chunk is written from the same empty packet, so the facts
+section copies itself.
+
+
+THE FIRST 3 THINGS I WOULD DO
+-----------------------------
+
+This stack is the same for every scenario:
+
+    cast (people, orgs, amounts)
+        -> CASE_MEMORY
+        -> per-section context packet
+        -> writer (must not invent)
+        -> polisher
+        -> critic
+        -> render
+        -> gold = exact find() of catalogue strings
+
+That is why patching one case recipe does not help. Bribery, tax
+evasion, insider trading and procurement all hit the same gap: the
+writer is only allowed to use listed facts, and the listed facts are
+mostly identity. There is no general legal skeleton between the cast
+and the prose. So the model retells the brief, or the names, until
+the word target is hit.
+
+Realistic results here cannot come from letting the LLM invent
+warrants, invoices or exhibits. Those strings would not be in gold.
+Realism has to be generated as structured facts first, then written.
+The first three moves are therefore in the shared pipeline, not in
+any one YAML.
+
+
+1. Add a scenario-agnostic case skeleton between the cast and memory
+
+   Where: resolve_document_inputs() / CaseMemoryManager, not
+   config_case/case_1.yaml.
+
+   Today memory can contain Counts: none, Evidence Categories: none,
+   no Relationship Graph, and a dropped offence period. Facts and
+   assessment still ask for "listed relationship facts". The writer
+   then has nothing section-specific to say, in every scenario.
+
+   Build that skeleton from the cast, for any fraud type:
+
+   - Always resolve an offence period.
+   - Derive relationship facts from roles and organisations
+     (A controls company X, A instructed collateral B, X transferred
+     amount to Y when associated orgs exist).
+   - Derive counts from fraud_statutes when the scenario has them,
+     otherwise from a generic indictment count template.
+   - Derive evidence categories from the fraud family if the case
+     did not list them.
+
+   This is the missing middle layer. Identity generation already
+   generalises. Section writing already generalises. The skeleton
+   does not. Until it exists, every scenario produces a cast list
+   stretched into an indictment.
+
+
+2. Give each section only its slice, and size the draft to that slice
+
+   Where: prompt_context.py, writer.py, profile.section_words.
+
+   Two shared bugs, not scenario bugs:
+
+   - build_section_context() still injects the same plot (or the
+     same identity block) into every section. Persons is supposed
+     to identify people. Evidence is supposed to explain categories.
+     Both currently receive the whole story, so both write the whole
+     story.
+   - Word targets are a quota (persons 450, facts 1000, then a
+     second chunk at chunk_words 900). Length wins over facts. The
+     polisher is told to keep the length band, so it will not cut
+     the padding.
+
+   Change both, once, for all scenarios:
+
+   - Persons / companies: identity facts only.
+   - History / charges: references, dates, counts.
+   - Facts: relationships, counts, amounts, chronology.
+   - Evidence: evidence categories and what they support.
+   - Assessment: legal characterisation of facts already written.
+   - Word target is a ceiling from the number of unique facts in
+     that slice. If the facts run out, stop. Do not open a second
+     chunk unless unused facts remain.
+
+   Align SECTION_DESCRIPTIONS with the section contracts at the
+   same time. Constants still say evidence is "a numbered list of
+   exhibits" and history includes "search warrants". Contracts
+   forbid inventing those. That contradiction is in every run.
+
+
+3. Put repetition on the write path, not in the report
+
+   Where: config.yaml validators, orchestrator revision loop,
+   generation_report.py (currently hardcodes the loop as disabled).
+
+   The critic already flags memory-dump style. Validators for
+   repeated long sentences and repeated fragments already exist.
+   They are off, and critic findings are report-only. That is true
+   for every scenario.
+
+   Turn those validators on. Make a failed check actually request
+   r1. Confirm max_revisions is greater than 0 at runtime and that
+   issues are not discarded when the average rubric is 3.5 or
+   above.
+
+   This does not make the plot richer. It stops the shared writer
+   from copying the same paragraph to fill space once the skeleton
+   and section slices exist.
+
+After those three, a thin scenario writes a short, section-faithful
+document. A rich scenario writes a longer one. Neither needs a
+hand-edited YAML per fraud type. Prompt wording and alias coverage
+come after.
+

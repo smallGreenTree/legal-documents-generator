@@ -131,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         default="writer",
-        choices=("writer", "critic"),
+        choices=("writer", "polisher", "critic"),
         help="Configured model route to test. Defaults to writer.",
     )
     parser.add_argument("--min-words", type=int, default=180)

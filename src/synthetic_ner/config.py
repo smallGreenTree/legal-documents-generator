@@ -143,7 +143,7 @@ def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
 
 def _build_model_routing_config(raw: dict[str, Any]) -> ModelRoutingConfig:
     stages_raw = _require_mapping(raw["stages"], "model_routing.stages")
-    required_stages = ("writer", "critic")
+    required_stages = ("writer", "polisher", "critic")
     missing_stages = [stage_name for stage_name in required_stages if stage_name not in stages_raw]
     if missing_stages:
         raise ValueError(

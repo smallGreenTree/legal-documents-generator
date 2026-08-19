@@ -93,6 +93,11 @@ def run_document_graph(
         routing=context.model_routing_cfg,
         tracer=trace_store,
     )
+    polisher_client = build_model_client(
+        stage="polisher",
+        routing=context.model_routing_cfg,
+        tracer=trace_store,
+    )
     critic_client = None
     if context.workflow_cfg.critic.active:
         critic_client = build_model_client(
@@ -112,6 +117,7 @@ def run_document_graph(
     )
     writer = SectionWriter(
         client=writer_client,
+        polisher_client=polisher_client,
         prompts=prompts,
         chunk_words=context.workflow_cfg.writer.chunk_words,
         context_tail_chars=context.workflow_cfg.writer.context_tail_chars,
@@ -191,7 +197,7 @@ def run_document_graph(
 
 
 def _active_model_stages(workflow_cfg) -> tuple[str, ...]:
-    stages = ["writer"]
+    stages = ["writer", "polisher"]
     if workflow_cfg.critic.active:
         stages.append("critic")
     return tuple(stages)
@@ -362,31 +368,64 @@ class DocumentWorkflow:
         )
         section_text = clean_generated_section_text(section_text)
         issues: list[str] = []
+        revision_count = 0
 
-        if self.critic is not None:
-            review = self.critic.review_section(
-                doc_id=self.doc_id,
-                parent_task_id=f"writer_{section_name}",
-                memory_text=state["memory_text"],
+        while True:
+            issues = []
+            critic_instruction = ""
+            if self.critic is not None:
+                review = self.critic.review_section(
+                    doc_id=self.doc_id,
+                    parent_task_id=f"writer_{section_name}_r{revision_count}",
+                    memory_text=state["memory_text"],
+                    section_name=section_name,
+                    section_text=section_text,
+                    revision_round=revision_count,
+                )
+                issues = list(review.issues)
+                critic_instruction = review.revision_instruction
+                if review.blocking and not issues:
+                    issues.append("Critic marked the section as blocking.")
+
+            validator_issues = validate_section_text(
                 section_name=section_name,
                 section_text=section_text,
-                revision_round=0,
+                memory_text=state["memory_text"],
+                word_target=self.context.section_word_targets[section_name],
+                min_completion_ratio=self.context.workflow_cfg.writer.min_completion_ratio,
+                enabled_validators=self.context.workflow_cfg.validators,
             )
-            issues = list(review.issues)
-            if review.blocking and not issues:
-                issues.append("Critic marked the section as blocking.")
+            for issue in validator_issues:
+                if issue not in issues:
+                    issues.append(issue)
 
-        validator_issues = validate_section_text(
-            section_name=section_name,
-            section_text=section_text,
-            memory_text=state["memory_text"],
-            word_target=self.context.section_word_targets[section_name],
-            min_completion_ratio=self.context.workflow_cfg.writer.min_completion_ratio,
-            enabled_validators=self.context.workflow_cfg.validators,
-        )
-        for issue in validator_issues:
-            if issue not in issues:
-                issues.append(issue)
+            if not issues or revision_count >= self.context.workflow_cfg.max_revisions:
+                break
+
+            revision_count += 1
+            section_text = self.writer.write_section(
+                doc_id=self.doc_id,
+                parent_task_id=(
+                    f"critic_{section_name}_r{revision_count - 1}"
+                    if self.critic is not None
+                    else f"validator_{section_name}_r{revision_count - 1}"
+                ),
+                memory_text=state["memory_text"],
+                section_name=section_name,
+                case_number=self.document.metadata["case_number"],
+                word_target=self.context.section_word_targets[section_name],
+                revision_instruction=_combine_revision_instruction(
+                    critic_instruction=critic_instruction,
+                    issues=issues,
+                ),
+                revision_round=revision_count,
+                temperature=(
+                    0.0
+                    if revision_count >= self.context.workflow_cfg.max_revisions
+                    else self.context.workflow_cfg.writer.temperature
+                ),
+            )
+            section_text = clean_generated_section_text(section_text)
 
         final_text, final_issues = self._finalize_section_text(
             section_name=section_name,
@@ -491,3 +530,22 @@ def _parallel_section_groups(section_order: list[str]) -> list[list[str]]:
         remaining = [section_name for section_name in remaining if section_name not in ready]
 
     return groups
+
+
+def _combine_revision_instruction(
+    *,
+    critic_instruction: str,
+    issues: list[str],
+) -> str:
+    selected_issues = issues[:6]
+    parts = [
+        "Rewrite the section from SECTION_CONTEXT and SECTION_CONTRACT.",
+        "Resolve these issues:",
+        *(f"- {issue}" for issue in selected_issues),
+    ]
+    if len(issues) > len(selected_issues):
+        parts.append(f"- plus {len(issues) - len(selected_issues)} related issue(s)")
+    normalized_critic_instruction = critic_instruction.strip()
+    if normalized_critic_instruction and normalized_critic_instruction.lower() != "keep as is":
+        parts.extend(["", normalized_critic_instruction])
+    return "\n".join(parts)

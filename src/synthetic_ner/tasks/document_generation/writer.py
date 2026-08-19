@@ -35,6 +35,7 @@ class SectionWriter:
         self,
         *,
         client,
+        polisher_client,
         prompts: WorkflowPromptsConfig,
         chunk_words: int,
         context_tail_chars: int,
@@ -47,6 +48,7 @@ class SectionWriter:
         partial_output_dir: Path | None = None,
     ) -> None:
         self.client = client
+        self.polisher_client = polisher_client
         self.prompts = prompts
         self.chunk_words = chunk_words
         self.context_tail_chars = context_tail_chars
@@ -138,7 +140,7 @@ class SectionWriter:
                 minimum_words=minimum_words,
                 requested_minimum_words=requested_minimum_words,
             )
-            polished_result = self.client.invoke(
+            polished_result = self.polisher_client.invoke(
                 doc_id=doc_id,
                 task_id=f"polish_{section_name}_r{revision_round}_chunk_{chunk_index:02d}",
                 stage="polisher",

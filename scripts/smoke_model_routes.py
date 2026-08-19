@@ -21,7 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.synthetic_ner.config import load_app_config  # noqa: E402
 
-DEFAULT_STAGES = ("writer", "critic")
+DEFAULT_STAGES = ("writer", "polisher", "critic")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--stage",
         action="append",
         choices=DEFAULT_STAGES,
-        help="Stage to test. May be repeated. Defaults to writer and critic.",
+        help="Stage to test. May be repeated. Defaults to writer, polisher and critic.",
     )
     parser.add_argument(
         "--prompt",
@@ -116,7 +116,7 @@ def _smoke_ollama_stage(
     max_output_tokens: int,
 ) -> dict[str, Any]:
     options: dict[str, Any] = {
-        "temperature": 0.0 if stage == "critic" else 0.2,
+        "temperature": 0.0 if stage in {"polisher", "critic"} else 0.2,
         "num_predict": max_output_tokens,
     }
     if num_ctx is not None:

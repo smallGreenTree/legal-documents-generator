@@ -16,6 +16,19 @@ model_routing:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated - ERROR dude]"
+    polisher:
+      provider: ollama
+      base_url: http://localhost:11434
+      model: qwen3.6:27b
+      num_ctx: 8192
+      think: false
+      top_p: 0.9
+      timeout: 900
+      recovery:
+        max_generate_attempts: 1
+        retry_backoff_seconds: 5
+        controlled_empty_section: "[section not generated - ERROR dude]"
+
     critic:
       provider: ollama
       base_url: http://localhost:11434
@@ -92,7 +105,7 @@ workflow:
     active: true
     chunk_words: 900
     context_tail_chars: 900
-    temperature: 1
+    temperature: 0.6
     max_output_tokens: 2500
     min_output_tokens: 1200
     output_token_multiplier: 1.8
