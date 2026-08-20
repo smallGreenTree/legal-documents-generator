@@ -39,6 +39,6 @@ class RuntimeContext:
     template_name: str
     sections: dict
     labels: dict
-    section_word_targets: dict[str, int]
+    section_order: list[str]
     documents: int
     prose_overrides: dict[str, str]

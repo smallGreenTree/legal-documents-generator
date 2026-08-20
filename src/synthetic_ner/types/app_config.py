@@ -86,13 +86,8 @@ class EntityVariantsConfig:
 @dataclass(frozen=True)
 class WriterConfig:
     active: bool
-    chunk_words: int
-    context_tail_chars: int
     temperature: float
     max_output_tokens: int
-    min_output_tokens: int
-    output_token_multiplier: float
-    min_completion_ratio: float
 
 
 @dataclass(frozen=True)
@@ -140,7 +135,7 @@ class ProfileConfig:
     doc_type: str
     fraud_type: str
     documents: int
-    section_words: dict[str, int]
+    sections: list[str]
 
 
 @dataclass(frozen=True)

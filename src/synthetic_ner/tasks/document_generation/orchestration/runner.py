@@ -34,7 +34,7 @@ def run_document_graph(
             "doc_id": doc_id,
             "doc_type": context.doc_type,
             "fraud_type": context.fraud_type,
-            "section_order": list(context.section_word_targets),
+            "section_order": context.section_order,
         },
         metadata={
             "doc_id": doc_id,
@@ -63,7 +63,7 @@ def run_document_graph(
                 "doc_id": doc_id,
                 "memory_path": components.memory_path,
                 "memory_text": seed_memory_text,
-                "section_order": list(context.section_word_targets),
+                "section_order": context.section_order,
                 "section_outputs": {},
                 "section_contracts": {},
                 "section_reviews": {},

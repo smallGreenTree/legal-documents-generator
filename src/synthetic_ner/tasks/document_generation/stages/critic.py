@@ -136,7 +136,7 @@ class SectionCritic:
                 "Revise the section to improve grounded fact coverage and completeness. "
                 "Use only SECTION_CONTEXT and SECTION_CONTRACT."
             )
-        elif _overall_rubric_score(rubrics) >= self.acceptance_threshold:
+        elif not edits and _overall_rubric_score(rubrics) >= self.acceptance_threshold:
             blocking = False
             issues = []
             revision_instruction = "keep as is"

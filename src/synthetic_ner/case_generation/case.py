@@ -416,7 +416,7 @@ def resolve_prose_overrides(
     extra = [name for name in prose_cfg if name not in section_order]
     if extra:
         raise ValueError(
-            "case.prose has unknown sections for configured section_words: " + ", ".join(extra)
+            "case.prose has unknown sections for the configured document: " + ", ".join(extra)
         )
 
     resolved = {}

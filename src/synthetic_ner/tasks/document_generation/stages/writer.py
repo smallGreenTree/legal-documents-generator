@@ -28,25 +28,15 @@ class SectionWriter:
         *,
         client,
         prompts: WorkflowPromptsConfig,
-        chunk_words: int,
-        context_tail_chars: int,
         writer_temperature: float,
         max_output_tokens: int,
-        min_output_tokens: int,
-        output_token_multiplier: float,
-        min_completion_ratio: float,
         prompt_clients: dict[str, Any] | None = None,
         partial_output_dir: Path | None = None,
     ) -> None:
         self.client = client
         self.prompts = prompts
-        self.chunk_words = chunk_words
-        self.context_tail_chars = context_tail_chars
         self.writer_temperature = writer_temperature
         self.max_output_tokens = max_output_tokens
-        self.min_output_tokens = min_output_tokens
-        self.output_token_multiplier = output_token_multiplier
-        self.min_completion_ratio = min_completion_ratio
         self.prompt_clients = prompt_clients or {}
         self._partial_store = PartialSectionStore(
             partial_output_dir,
@@ -61,103 +51,59 @@ class SectionWriter:
         memory_text: str,
         section_name: str,
         case_number: str,
-        word_target: int,
     ) -> str:
-        chunks = []
-        words_so_far = 0
-        chunk_index = 1
-        max_chunks = 1 if word_target <= self.chunk_words else None
-        while words_so_far < word_target:
-            if max_chunks is not None and chunk_index > max_chunks:
-                break
-            remaining = word_target - words_so_far
-            chunk_target = min(self.chunk_words, remaining)
-            minimum_words = max(60, int(chunk_target * self.min_completion_ratio))
-            requested_minimum_words = _prompt_minimum_words(minimum_words, chunk_target)
-            previous_tail = chunks[-1][-self.context_tail_chars :] if chunks else "n/a"
-            prompt_client = self.prompt_clients.get("writer_user")
-            section_contract = build_section_contract(section_name)
-            user_prompt = render_prompt_template(
-                self.prompts.writer_user,
-                prompt_client=prompt_client,
-                memory_text=memory_text,
-                section_context=build_section_context(memory_text, section_name),
-                section_contract=section_contract,
-                section_name=section_name,
-                section_description=SECTION_DESCRIPTIONS.get(section_name, section_name),
-                case_number=case_number,
-                word_target=chunk_target,
-                minimum_words=minimum_words,
-                requested_minimum_words=requested_minimum_words,
-                previous_tail=previous_tail,
-            )
-            task_id = f"writer_{section_name}_r0_chunk_{chunk_index:02d}"
-            result = self.client.invoke(
-                doc_id=doc_id,
-                task_id=task_id,
-                stage="writer",
-                system_prompt=self.prompts.writer_system,
-                user_prompt=user_prompt,
-                parent_task_id=parent_task_id,
-                temperature=self.writer_temperature,
-                max_output_tokens=_estimate_writer_output_tokens(
-                    chunk_target,
-                    max_output_tokens=self.max_output_tokens,
-                    min_output_tokens=self.min_output_tokens,
-                    output_token_multiplier=self.output_token_multiplier,
-                ),
-                prompt_object=prompt_client,
-            )
-            writer_packet = parse_writer_packet(result.text)
-            text = clean_generated_section_text(writer_packet.content)
-            if not text:
-                break
-            chunks.append(text)
-            metadata = dict(result.metadata)
-            metadata.update(
-                {
-                    "writer_json_valid": writer_packet.valid_json,
-                    "writer_json_parse_error": writer_packet.parse_error,
-                    "facts_used_count": len(writer_packet.facts_used),
-                    "legal_risks_count": len(writer_packet.legal_risks),
-                    "tone": writer_packet.tone,
-                }
-            )
-            self._partial_store.write(
-                doc_id=doc_id,
-                section_name=section_name,
-                revision_round=0,
-                chunk_index=chunk_index,
-                chunk_text=text,
-                combined_text=clean_generated_section_text("\n\n".join(chunks)),
-                task_id=task_id,
-                metadata=metadata,
-                complete=True,
-                writer_packet_json=_writer_packet_json(writer_packet),
-            )
-            words_so_far += len(text.split())
-            chunk_index += 1
-
-        self._partial_store.flush()
-        if not chunks:
+        prompt_client = self.prompt_clients.get("writer_user")
+        section_contract = build_section_contract(section_name)
+        user_prompt = render_prompt_template(
+            self.prompts.writer_user,
+            prompt_client=prompt_client,
+            memory_text=memory_text,
+            section_context=build_section_context(memory_text, section_name),
+            section_contract=section_contract,
+            section_name=section_name,
+            section_description=SECTION_DESCRIPTIONS.get(section_name, section_name),
+            case_number=case_number,
+        )
+        task_id = f"writer_{section_name}_r0"
+        result = self.client.invoke(
+            doc_id=doc_id,
+            task_id=task_id,
+            stage="writer",
+            system_prompt=self.prompts.writer_system,
+            user_prompt=user_prompt,
+            parent_task_id=parent_task_id,
+            temperature=self.writer_temperature,
+            max_output_tokens=self.max_output_tokens,
+            prompt_object=prompt_client,
+        )
+        writer_packet = parse_writer_packet(result.text)
+        text = clean_generated_section_text(writer_packet.content)
+        if not text:
             return "[section not generated]"
-        return clean_generated_section_text("\n\n".join(chunks))
-
-
-def _estimate_writer_output_tokens(
-    chunk_words: int,
-    *,
-    max_output_tokens: int,
-    min_output_tokens: int,
-    output_token_multiplier: float,
-) -> int:
-    estimated = int(chunk_words * output_token_multiplier)
-    return max(min_output_tokens, min(max_output_tokens, estimated))
-
-
-def _prompt_minimum_words(minimum_words: int, word_target: int) -> int:
-    buffer_words = max(25, int(word_target * 0.08))
-    return min(word_target, minimum_words + buffer_words)
+        metadata = dict(result.metadata)
+        metadata.update(
+            {
+                "writer_json_valid": writer_packet.valid_json,
+                "writer_json_parse_error": writer_packet.parse_error,
+                "facts_used_count": len(writer_packet.facts_used),
+                "legal_risks_count": len(writer_packet.legal_risks),
+                "tone": writer_packet.tone,
+            }
+        )
+        self._partial_store.write(
+            doc_id=doc_id,
+            section_name=section_name,
+            revision_round=0,
+            chunk_index=1,
+            chunk_text=text,
+            combined_text=text,
+            task_id=task_id,
+            metadata=metadata,
+            complete=True,
+            writer_packet_json=_writer_packet_json(writer_packet),
+        )
+        self._partial_store.flush()
+        return text
 
 
 def parse_writer_packet(raw_text: str) -> WriterPacket:

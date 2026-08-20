@@ -183,14 +183,9 @@ class DocumentWorkflow:
             for section_name in state["section_order"]
         ]
         problems = collect_section_output_problems(
-            self.context.section_word_targets,
+            self.context.section_order,
             ordered_sections,
-            min_completion_ratio=self.context.workflow_cfg.writer.min_completion_ratio,
         )
-        if not self.context.workflow_cfg.validators.get("minimum_length", True):
-            problems = [
-                problem for problem in problems if " is too short for its target " not in problem
-            ]
         if problems:
             raise RuntimeError(
                 "Document render aborted because one or more sections are incomplete: "

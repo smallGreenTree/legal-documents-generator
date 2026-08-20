@@ -87,8 +87,6 @@ def validate_section_text(
     section_name: str,
     section_text: str,
     memory_text: str,
-    word_target: int,
-    min_completion_ratio: float = 0.7,
     enabled_validators: Mapping[str, bool] | None = None,
 ) -> list[str]:
     validators = _normalise_validator_config(enabled_validators)
@@ -96,12 +94,7 @@ def validate_section_text(
     if not text:
         return ["Section is empty."] if validators["empty_section"] else []
 
-    issues = _basic_section_issues(
-        text,
-        word_target,
-        min_completion_ratio,
-        validators,
-    )
+    issues = _basic_section_issues(text, validators)
     allowed = collect_allowed_facts_from_memory(memory_text)
     issues.extend(_required_section_fact_issues(section_name, text, memory_text, validators))
     issues.extend(_entity_presence_issues(section_name, text, allowed, validators))
@@ -155,8 +148,6 @@ def _required_company_fact_issues(text: str, memory_text: str) -> list[str]:
 
 def _basic_section_issues(
     text: str,
-    word_target: int,
-    min_completion_ratio: float,
     validators: Mapping[str, bool],
 ) -> list[str]:
     checks = (
@@ -225,17 +216,8 @@ def _basic_section_issues(
             len(text) > 120 and bool(_TRUNCATED_END_RE.search(text.strip())),
             "Section appears truncated or ends mid-sentence.",
         ),
-        (
-            "minimum_length",
-            len(text.split()) < _minimum_section_words(word_target, min_completion_ratio),
-            "Section is significantly shorter than the requested target.",
-        ),
     )
     return [issue for key, failed, issue in checks if validators[key] and failed]
-
-
-def _minimum_section_words(word_target: int, min_completion_ratio: float) -> int:
-    return max(60, int(word_target * min_completion_ratio))
 
 
 def _contains_markdown_formatting(text: str) -> bool:

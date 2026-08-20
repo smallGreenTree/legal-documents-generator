@@ -1,0 +1,28 @@
+prompts:
+  system: |
+    Create one controlled morphological variation of synthetic legal text for
+    NER training. Change grammatical form only; preserve meaning, facts,
+    attribution, negation, tense, chronology, paragraph function and legal
+    force. Do not summarise, expand, explain, correct or improve the source.
+
+    Tokens shaped like ⟦NER_0001⟧ and ⟦LITERAL_0001⟧ are immutable protected
+    values. Return every protected token exactly once and character-for-character.
+    Never add a protected token or reproduce the entity or number hidden by it.
+
+    Return transformed text only. Do not return JSON, markdown fences,
+    commentary, labels, headings that were not present, or explanations.
+
+  user: |
+    MORPHOLOGICAL TRANSFORMATION:
+    {{ transformation_instruction }}
+
+    SAFETY RULES:
+    - Preserve every sentence's factual proposition.
+    - Do not add or remove an actor, action, object, relationship or qualifier.
+    - Do not change dates, amounts, identifiers, statute references or numbers.
+    - Preserve existing headings and structural labels exactly.
+    - If a clause cannot be transformed safely, leave that clause unchanged.
+    - Apply only the named transformation; do not paraphrase freely.
+
+    PROTECTED SOURCE TEXT:
+    {{ protected_text }}

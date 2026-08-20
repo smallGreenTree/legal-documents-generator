@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import argparse
 
+from src.synthetic_ner.prefect_flows.augmentation import generate_morphological_variations
 from src.synthetic_ner.prefect_flows.generation import generate_dataset
 from src.synthetic_ner.prefect_flows.groundtruth import generate_groundtruth_directory
 
-__all__ = ["generate_dataset", "generate_groundtruth_directory"]
+__all__ = [
+    "generate_dataset",
+    "generate_groundtruth_directory",
+    "generate_morphological_variations",
+]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,6 +26,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--groundtruth-contract",
         default="groundtruth_contract.yaml",
         help="Ground-truth contract path relative to project root.",
+    )
+    parser.add_argument(
+        "--morphology",
+        action="store_true",
+        help="Run the morphological augmentation flow.",
+    )
+    parser.add_argument(
+        "--morphology-input",
+        default="",
+        help="A .txt file, document package, or parent package folder.",
+    )
+    parser.add_argument(
+        "--review-morphology",
+        action="store_true",
+        help="Pause with the input-path field and transformation checkboxes.",
     )
     parser.add_argument(
         "--case-config",
@@ -57,6 +77,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.morphology:
+        generate_morphological_variations(
+            input_path=args.morphology_input,
+            project_root=args.project_root,
+            review=args.review_morphology,
+            review_timeout_seconds=args.review_timeout_seconds,
+        )
+        return
     if args.groundtruth_directory is not None:
         generate_groundtruth_directory(
             input_directory=args.groundtruth_directory,

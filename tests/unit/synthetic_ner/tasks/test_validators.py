@@ -1,3 +1,4 @@
+from src.synthetic_ner.tasks.document_generation.constants import DEFAULT_WORKFLOW_VALIDATORS
 from src.synthetic_ner.tasks.document_generation.validation.validators import (
     clean_generated_section_text,
     validate_section_text,
@@ -77,7 +78,6 @@ def test_validate_section_text_flags_unknown_values_and_markdown():
             "- Alice Smith mentioned UNKNOWN LTD and CPS/2026/9999 during the alleged scheme."
         ),
         memory_text=MEMORY_TEXT,
-        word_target=300,
     )
 
     assert "Section contains markdown/list formatting; output must be plain prose." in issues
@@ -90,7 +90,6 @@ def test_validate_section_text_flags_unknown_amounts():
         section_name="facts",
         section_text="Alice Smith caused loss of £99,999 through ACME TRADING LTD.",
         memory_text=MEMORY_TEXT,
-        word_target=300,
     )
 
     assert "Section mentions unknown amount '£99,999'." in issues
@@ -101,7 +100,6 @@ def test_validate_section_text_respects_disabled_validator():
         section_name="facts",
         section_text="Alice Smith caused loss of £99,999 through ACME TRADING LTD.",
         memory_text=MEMORY_TEXT,
-        word_target=300,
         enabled_validators={"unknown_amounts": False},
     )
 
@@ -114,3 +112,41 @@ def test_clean_generated_section_text_does_not_repair_unknown_value():
     assert "<think>" not in cleaned
     assert "UNKNOWN LTD" in cleaned
     assert cleaned == "Alice Smith dealt with UNKNOWN LTD"
+
+
+def test_validate_section_text_flags_repeated_long_sentences():
+    sentence = (
+        "Alice Smith instructed Bob Jones to route the recorded funds through "
+        "ACME TRADING LTD during the charged period without adding any new allegation."
+    )
+    validators = {key: False for key in DEFAULT_WORKFLOW_VALIDATORS}
+    validators["repeated_long_sentences"] = True
+
+    issues = validate_section_text(
+        section_name="facts",
+        section_text=f"{sentence} {sentence}",
+        memory_text=MEMORY_TEXT,
+        enabled_validators=validators,
+    )
+
+    assert issues == ["Section contains repeated long sentences/paragraphs."]
+
+
+def test_validate_section_text_flags_repeated_sentence_openings():
+    validators = {key: False for key in DEFAULT_WORKFLOW_VALIDATORS}
+    validators["repeated_sentence_fragments"] = True
+    text = (
+        "The procurement committee reviewed every submitted tender against the published "
+        "scoring criteria before selecting ACME TRADING LTD. "
+        "The procurement committee reviewed every submitted tender against the published "
+        "scoring criteria during its final deliberations."
+    )
+
+    issues = validate_section_text(
+        section_name="facts",
+        section_text=text,
+        memory_text=MEMORY_TEXT,
+        enabled_validators=validators,
+    )
+
+    assert issues == ["Section contains repeated sentence fragments."]

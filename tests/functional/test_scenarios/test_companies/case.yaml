@@ -2,8 +2,8 @@ profile:
   doc_type: companies_test
   fraud_type: financial_fraud
   documents: 1
-  section_words:
-    companies: 300
+  sections:
+    - companies
 
 case:
   metadata:

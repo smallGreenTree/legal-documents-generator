@@ -28,29 +28,6 @@ from src.synthetic_ner.types.document_inputs import DOCUMENT_INPUTS_FILENAME, Do
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 
 
-def build_section_word_targets(
-    profile: ProfileConfig,
-) -> dict[str, int]:
-    configured = profile.section_words
-    section_order = list(configured)
-
-    invalid = [
-        name
-        for name in section_order
-        if name in configured and (not isinstance(configured[name], int) or configured[name] <= 0)
-    ]
-
-    problems = []
-    if invalid:
-        problems.append(f"non-positive integer values: {', '.join(invalid)}")
-    if not section_order:
-        problems.append("at least one section is required")
-    if problems:
-        raise ValueError(f"Invalid profile.section_words: {'; '.join(problems)}")
-
-    return {name: configured[name] for name in section_order}
-
-
 def resolve_documents_to_generate(profile: ProfileConfig) -> int:
     return profile.documents
 
@@ -111,10 +88,7 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
     memory_dir.mkdir(exist_ok=True)
 
     try:
-        section_word_targets = build_section_word_targets(
-            profile,
-        )
-        section_order = list(section_word_targets)
+        section_order = list(profile.sections)
         documents = resolve_documents_to_generate(profile)
         prose_overrides = resolve_prose_overrides(
             app_config.case,
@@ -144,15 +118,14 @@ def build_runtime_context(args: Namespace, project_root: Path) -> RuntimeContext
         template_name=template_path.name,
         sections=build_section_labels(doc_type, section_order),
         labels=EN_LABELS,
-        section_word_targets=section_word_targets,
+        section_order=section_order,
         documents=documents,
         prose_overrides=prose_overrides,
     )
 
 
 def build_size_label(context: RuntimeContext) -> str:
-    total_prose_words = sum(context.section_word_targets.values())
-    return f"{total_prose_words}w prose"
+    return f"{len(context.section_order)} sections"
 
 
 def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
@@ -201,17 +174,15 @@ def resolve_document_inputs(context: RuntimeContext) -> DocumentInputs:
 
 
 def collect_section_output_problems(
-    section_targets: dict[str, int],
+    section_order: list[str],
     section_texts: list[str],
-    min_completion_ratio: float = 0.7,
 ) -> list[str]:
     problems = []
-    section_names = list(section_targets.keys())
 
-    if len(section_texts) != len(section_names):
-        problems.append(f"expected {len(section_names)} sections, got {len(section_texts)}")
+    if len(section_texts) != len(section_order):
+        problems.append(f"expected {len(section_order)} sections, got {len(section_texts)}")
 
-    for index, section_name in enumerate(section_names):
+    for index, section_name in enumerate(section_order):
         if index >= len(section_texts):
             problems.append(f"section '{section_name}' is missing")
             continue
@@ -223,13 +194,6 @@ def collect_section_output_problems(
         if text in INCOMPLETE_SECTION_MARKERS:
             problems.append(f"section '{section_name}' is incomplete: {text}")
             continue
-
-        minimum_words = max(60, int(section_targets[section_name] * min_completion_ratio))
-        if len(text.split()) < minimum_words:
-            problems.append(
-                f"section '{section_name}' is too short for its target "
-                f"({len(text.split())}w < {minimum_words}w minimum)"
-            )
 
     return problems
 

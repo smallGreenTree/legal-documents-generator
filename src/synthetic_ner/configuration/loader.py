@@ -119,7 +119,7 @@ def _build_paths_config(raw: dict[str, Any]) -> PathsConfig:
 
 def _build_model_routing_config(raw: dict[str, Any]) -> ModelRoutingConfig:
     stages_raw = _require_mapping(raw["stages"], "model_routing.stages")
-    required_stages = ("writer", "polisher", "critic")
+    required_stages = ("writer", "polisher", "critic", "morphology")
     missing_stages = [stage_name for stage_name in required_stages if stage_name not in stages_raw]
     if missing_stages:
         raise ValueError(
@@ -249,19 +249,6 @@ def _build_workflow_config(
     critic_cfg = _build_critic_config(_require_mapping(raw["critic"], "workflow.critic"))
     writer = _require_mapping(raw["writer"], "workflow.writer")
     polisher = _require_mapping(raw["polisher"], "workflow.polisher")
-    writer_max_output_tokens = _require_positive_int(
-        writer["max_output_tokens"],
-        "workflow.writer.max_output_tokens",
-    )
-    writer_min_output_tokens = _require_positive_int(
-        writer["min_output_tokens"],
-        "workflow.writer.min_output_tokens",
-    )
-    if writer_min_output_tokens > writer_max_output_tokens:
-        raise ValueError(
-            "workflow.writer.min_output_tokens must be less than or equal to "
-            "workflow.writer.max_output_tokens"
-        )
 
     return WorkflowConfig(
         mode=_require_string(raw["mode"], "workflow.mode"),
@@ -279,27 +266,13 @@ def _build_workflow_config(
                 writer.get("active", True),
                 "workflow.writer.active",
             ),
-            chunk_words=_require_positive_int(
-                writer["chunk_words"],
-                "workflow.writer.chunk_words",
-            ),
-            context_tail_chars=_require_positive_int(
-                writer["context_tail_chars"],
-                "workflow.writer.context_tail_chars",
-            ),
             temperature=_require_number(
                 writer["temperature"],
                 "workflow.writer.temperature",
             ),
-            max_output_tokens=writer_max_output_tokens,
-            min_output_tokens=writer_min_output_tokens,
-            output_token_multiplier=_require_positive_number(
-                writer["output_token_multiplier"],
-                "workflow.writer.output_token_multiplier",
-            ),
-            min_completion_ratio=_require_ratio(
-                writer["min_completion_ratio"],
-                "workflow.writer.min_completion_ratio",
+            max_output_tokens=_require_positive_int(
+                writer["max_output_tokens"],
+                "workflow.writer.max_output_tokens",
             ),
         ),
         polisher=PolisherConfig(
@@ -439,10 +412,8 @@ def _build_critic_config(raw: dict[str, Any]) -> CriticConfig:
 
 
 def _build_profile_config(raw: dict[str, Any], *, scenario_id: str = "") -> ProfileConfig:
-    section_words = _build_required_int_mapping(
-        raw["section_words"],
-        "profile.section_words",
-    )
+    doc_type = _require_string(raw["doc_type"], "profile.doc_type")
+    sections = _build_profile_sections(raw, doc_type)
     profile_fraud_type = str(raw.get("fraud_type") or "").strip()
     if scenario_id and profile_fraud_type and scenario_id != profile_fraud_type:
         raise ValueError(
@@ -453,11 +424,31 @@ def _build_profile_config(raw: dict[str, Any], *, scenario_id: str = "") -> Prof
     if not fraud_type:
         raise ValueError("scenario.id is required when profile.fraud_type is omitted")
     return ProfileConfig(
-        doc_type=_require_string(raw["doc_type"], "profile.doc_type"),
+        doc_type=doc_type,
         fraud_type=fraud_type,
         documents=_require_positive_int(raw["documents"], "profile.documents"),
-        section_words=section_words,
+        sections=sections,
     )
+
+
+def _build_profile_sections(raw: dict[str, Any], doc_type: str) -> list[str]:
+    configured = raw.get("sections")
+    if configured is not None:
+        sections = _build_optional_string_list(configured, "profile.sections")
+    elif isinstance(raw.get("section_words"), dict):
+        # Backward compatibility for saved case configs. Word values are ignored.
+        sections = [
+            _require_string(name, f"profile.section_words key {name!r}")
+            for name in raw["section_words"]
+        ]
+    else:
+        sections = resolve_section_order(doc_type)
+
+    if not sections:
+        raise ValueError("profile.sections must contain at least one section")
+    if len(set(sections)) != len(sections):
+        raise ValueError("profile.sections must not contain duplicate section names")
+    return sections
 
 
 def _optional_scenario_id(raw: dict[str, Any]) -> str:
@@ -683,14 +674,6 @@ def _build_statute_list(raw: list[Any], path: str) -> list[CountConfig]:
             )
         )
     return statutes
-
-
-def _build_required_int_mapping(
-    value: Any,
-    path: str,
-) -> dict[str, int]:
-    raw = _require_mapping(value, path)
-    return {key: _require_positive_int(item, f"{path}.{key}") for key, item in raw.items()}
 
 
 def _build_string_mapping(

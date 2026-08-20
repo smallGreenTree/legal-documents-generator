@@ -11,12 +11,14 @@ PREFECT_API_URL ?= http://localhost:4200/api
 PREFECT_POOL ?= synthetic-ner-local
 PREFECT_DEPLOYMENT ?= document-generation
 PREFECT_GROUNDTRUTH_DEPLOYMENT ?= generate-groundtruth
+PREFECT_MORPHOLOGY_DEPLOYMENT ?= morphological-augmentation
 PREFECT_WORKER_NAME ?= synthetic-ner-worker
+MORPHOLOGY_INPUT ?= output
 COVERAGE_MIN ?= 59
 COMPLEXITY_MAX ?= 23
 QUALITY_PATHS ?= src tests main.py prefect_pipeline.py scripts/smoke_model_routes.py scripts/smoke_prompt_contract.py scripts/check_complexity.py
 
-.PHONY: help install generate groundtruth sync-mlflow generator-deploy generator-worker
+.PHONY: help install generate groundtruth morphology sync-mlflow generator-deploy generator-worker
 .PHONY: smoke-model-routes smoke-prompt-contract
 .PHONY: format format-check test coverage lint complexity sast dependency-audit security
 .PHONY: check ci-quality pre-commit-install pre-commit docker-build
@@ -26,6 +28,7 @@ help:
 	@echo "  make install          Install application dependencies"
 	@echo "  make generate         Generate documents with the LangGraph workflow"
 	@echo "  make groundtruth      Generate ground truth for GROUNDTRUTH_DIRECTORY=$(GROUNDTRUTH_DIRECTORY)"
+	@echo "  make morphology       Open the Prefect morphology selection dialogue"
 	@echo "  make sync-mlflow      Synchronize prompt templates to MLflow"
 	@echo "  make generator-deploy Register the application flows with Prefect"
 	@echo "  make generator-worker Start the application Prefect worker"
@@ -56,6 +59,12 @@ generator-deploy:
 		--name "$(PREFECT_GROUNDTRUTH_DEPLOYMENT)" \
 		--pool "$(PREFECT_POOL)" \
 		--params '{"input_directory":"$(GROUNDTRUTH_DIRECTORY)","contract_path":"$(GROUNDTRUTH_CONTRACT)"}'
+	PREFECT_HOME="$(PREFECT_HOME)" PREFECT_API_URL="$(PREFECT_API_URL)" \
+		$(PREFECT) --no-prompt deploy \
+		prefect_pipeline.py:generate_morphological_variations \
+		--name "$(PREFECT_MORPHOLOGY_DEPLOYMENT)" \
+		--pool "$(PREFECT_POOL)" \
+		--params '{"input_path":"","review":true,"active_to_passive":true,"verbal_to_nominal":true,"possessive_reframe":true,"intentional_typos":false,"random_layout":false}'
 
 generator-worker:
 	mkdir -p "$(PREFECT_HOME)"
@@ -72,6 +81,12 @@ groundtruth:
 	$(PYTHON) prefect_pipeline.py \
 		--groundtruth-directory "$(GROUNDTRUTH_DIRECTORY)" \
 		--groundtruth-contract "$(GROUNDTRUTH_CONTRACT)"
+
+morphology:
+	$(PYTHON) prefect_pipeline.py \
+		--morphology \
+		--morphology-input "$(MORPHOLOGY_INPUT)" \
+		--review-morphology
 
 smoke-model-routes:
 	$(PYTHON) scripts/smoke_model_routes.py --case-config "$(CASE_CONFIG)"

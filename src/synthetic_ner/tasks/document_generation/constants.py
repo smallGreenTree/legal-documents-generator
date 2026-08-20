@@ -184,7 +184,6 @@ DEFAULT_WORKFLOW_VALIDATORS = {
     "repeated_long_sentences": True,
     "repeated_sentence_fragments": True,
     "truncated_sentence": True,
-    "minimum_length": True,
     "required_person_facts": True,
     "required_company_facts": True,
     "known_entity_presence": True,

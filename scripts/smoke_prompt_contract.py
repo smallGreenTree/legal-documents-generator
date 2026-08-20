@@ -65,7 +65,8 @@ or unlisted entities. Do not include headings, bullets, markdown, or
 meta-commentary inside content.
 
 Output requirements:
-- content: 180-260 words, connected paragraphs only
+- content: concise connected paragraphs only; stop when the supplied evidence
+  categories and their relevance have been covered
 - facts_used: exact or close facts from SECTION_CONTEXT that you actually used
 - tone: short description of the tone
 - legal_risks: drafting risks avoided
@@ -134,8 +135,6 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("writer", "polisher", "critic"),
         help="Configured model route to test. Defaults to writer.",
     )
-    parser.add_argument("--min-words", type=int, default=180)
-    parser.add_argument("--max-words", type=int, default=260)
     parser.add_argument("--max-output-tokens", type=int, default=850)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--timeout", type=int, default=None)
@@ -167,7 +166,7 @@ def main() -> int:
         return 1
 
     text = str(result["response"]).strip()
-    failures = _validate_response(text, min_words=args.min_words, max_words=args.max_words)
+    failures = _validate_response(text)
     if failures:
         print("Prompt-contract smoke test failed:", file=sys.stderr)
         for failure in failures:
@@ -225,7 +224,7 @@ def _generate(provider: Any, args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _validate_response(text: str, *, min_words: int, max_words: int) -> list[str]:
+def _validate_response(text: str) -> list[str]:
     failures: list[str] = []
     if not text.startswith("{") or not text.endswith("}"):
         failures.append("response must be exactly one JSON object with no wrapper text")
@@ -239,7 +238,7 @@ def _validate_response(text: str, *, min_words: int, max_words: int) -> list[str
     failures.extend(_validate_payload_shape(payload))
     content = payload.get("content")
     if isinstance(content, str):
-        failures.extend(_validate_content(content, min_words=min_words, max_words=max_words))
+        failures.extend(_validate_content(content))
     return failures
 
 
@@ -258,14 +257,20 @@ def _validate_payload_shape(payload: dict[str, Any]) -> list[str]:
     return failures
 
 
-def _validate_content(content: str, *, min_words: int, max_words: int) -> list[str]:
+def _validate_content(content: str) -> list[str]:
+    from src.synthetic_ner.tasks.document_generation.validation.repetition import (
+        has_repeated_long_sentences,
+        has_repeated_sentence_fragments,
+    )
+
     failures: list[str] = []
     lower = content.lower()
-    words = _word_count(content)
-    if words < min_words or words > max_words:
-        failures.append(f"content word count {words} is outside {min_words}-{max_words}")
     if len(re.findall(r"[.!?](?:\s|$)", content)) < 4:
         failures.append("content must contain at least four complete sentences")
+    if has_repeated_long_sentences(content):
+        failures.append("content contains repeated long sentences or paragraphs")
+    if has_repeated_sentence_fragments(content):
+        failures.append("content contains repeated sentence fragments")
     failures.extend(_missing_required_content(lower))
     failures.extend(_formatting_failures(content))
     if sum(1 for marker in ENGLISH_MARKERS if marker in lower) < 7:

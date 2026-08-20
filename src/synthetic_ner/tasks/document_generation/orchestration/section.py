@@ -48,7 +48,6 @@ class SectionWorkflowRunner:
             memory_text=memory_text,
             section_name=section_name,
             case_number=self.document.metadata["case_number"],
-            word_target=self.context.section_word_targets[section_name],
         )
         section_text = clean_generated_section_text(section_text)
         issues: list[str] = []
@@ -148,8 +147,6 @@ class SectionWorkflowRunner:
             section_name=section_name,
             section_text=section_text,
             memory_text=memory_text,
-            word_target=self.context.section_word_targets[section_name],
-            min_completion_ratio=self.context.workflow_cfg.writer.min_completion_ratio,
             enabled_validators=self.context.workflow_cfg.validators,
         )
 

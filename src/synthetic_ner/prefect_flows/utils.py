@@ -24,6 +24,7 @@ from src.synthetic_ner.case_generation.case import resolve_counts, resolve_scena
 from src.synthetic_ner.case_generation.identifiers import counter_from_doc_id, make_doc_id
 from src.synthetic_ner.cli import load_env_files
 from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.configuration.loader import resolve_section_order
 from src.synthetic_ner.core.paths import resolve_project_path
 from src.synthetic_ner.document.engine import build_runtime_context, resolve_document_inputs
 from src.synthetic_ner.document.inputs import (
@@ -1905,14 +1906,13 @@ def _scenario_summary_text(scenario: dict[str, Any]) -> str:
 
 def _document_type_details_text(scenario: dict[str, Any]) -> str:
     profile = scenario.get("profile", {})
-    section_words = profile.get("section_words", {}) if isinstance(profile, dict) else {}
-    sections = [f"{name} (~{words} words)" for name, words in section_words.items()]
+    sections = _profile_sections(profile, scenario.get("doc_type"))
     template_path = scenario.get("template_path") or "not resolved"
     preview = scenario.get("template_preview") or "Template preview unavailable."
     return (
         f"`doc_type={scenario.get('doc_type')}` uses template `{template_path}`. "
         "The template supplies fixed headings, case references, count blocks, and "
-        "places generated LLM prose into `llm_sections`. Section targets: "
+        "places generated LLM prose into `llm_sections`. Generated sections: "
         f"{_join_or_none(sections)}.\n\nTemplate opening:\n{preview}"
     )
 
@@ -2000,11 +2000,9 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
             "meaning": "Number of synthetic documents to generate.",
         },
         {
-            "field": "profile.section_words",
-            "current_value": _review_value(profile.get("section_words", {}))
-            if isinstance(profile, dict)
-            else "",
-            "meaning": "Target prose length by generated section.",
+            "field": "profile.sections",
+            "current_value": _review_value(_profile_sections(profile, scenario.get("doc_type"))),
+            "meaning": "Generated section order; no section length is required.",
         },
         {
             "field": "case.cast",
@@ -2031,6 +2029,21 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
             "meaning": "Used for document sizing assumptions.",
         },
     ]
+
+
+def _profile_sections(profile: Any, doc_type: Any) -> list[str]:
+    if not isinstance(profile, dict):
+        return []
+    configured = profile.get("sections")
+    if isinstance(configured, list):
+        return [str(section) for section in configured]
+    legacy_targets = profile.get("section_words")
+    if isinstance(legacy_targets, dict):
+        return [str(section) for section in legacy_targets]
+    try:
+        return resolve_section_order(str(doc_type))
+    except ValueError:
+        return []
 
 
 def _auto_keys(payload: Any) -> list[str]:

@@ -5,7 +5,11 @@ from types import SimpleNamespace
 
 from src.synthetic_ner.configuration.loader import load_app_config
 from src.synthetic_ner.core.constants import EN_LABELS
-from src.synthetic_ner.document.engine import build_section_labels, build_template_environment
+from src.synthetic_ner.document.engine import (
+    build_section_labels,
+    build_template_environment,
+    collect_section_output_problems,
+)
 from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
 from src.synthetic_ner.tasks.groundtruth import (
     generate_groundtruth_for_document,
@@ -50,6 +54,7 @@ def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, 
     assert "SECTION_CONTEXT:" in writer_call["user_prompt"]
     assert "SECTION_CONTRACT:" in writer_call["user_prompt"]
     assert "Allowed Amounts" in writer_call["user_prompt"]
+    assert "Target length:" not in writer_call["user_prompt"]
     assert "{% if" not in writer_call["user_prompt"]
     assert len(writer_calls) == 1
     assert len(polisher_calls) == 2
@@ -138,6 +143,33 @@ def test_polisher_receives_explicit_critic_feedback(tmp_path, monkeypatch):
     assert "Status: approved" in generated.report_text
 
 
+def test_repetition_validator_sends_repeated_draft_to_polisher(tmp_path, monkeypatch):
+    generated = _run_graph(
+        tmp_path / "repetition-revision",
+        monkeypatch,
+        unknown_amounts=False,
+        writer_text=f"{GENERATED_FACTS_TEXT} {GENERATED_FACTS_TEXT}",
+        polisher_text=GENERATED_FACTS_TEXT,
+    )
+
+    polisher_calls = [call for call in generated.calls if call["stage"] == "polisher"]
+    assert len(polisher_calls) == 1
+    assert (
+        "Section contains repeated long sentences/paragraphs." in polisher_calls[0]["user_prompt"]
+    )
+    assert "Status: approved" in generated.report_text
+
+
+def test_short_complete_section_is_not_rejected_for_length():
+    assert (
+        collect_section_output_problems(
+            ["facts"],
+            ["Alice Smith acted for ACME TRADING LTD."],
+        )
+        == []
+    )
+
+
 def test_generated_report_and_text_are_sufficient_for_groundtruth(tmp_path, monkeypatch):
     generated = _run_graph(tmp_path / "generated", monkeypatch, unknown_amounts=True)
 
@@ -162,6 +194,7 @@ def _run_graph(
     max_revisions: int = 2,
     polisher_text: str = GENERATED_FACTS_TEXT,
     critic_issue_once: str | None = None,
+    writer_text: str = GENERATED_FACTS_TEXT,
 ):
     context = _build_context(
         tmp_path,
@@ -178,6 +211,7 @@ def _run_graph(
             calls,
             polisher_text=polisher_text,
             critic_issue_once=critic_issue_once,
+            writer_text=writer_text,
         )
 
     monkeypatch.setattr(
@@ -249,7 +283,7 @@ def _build_context(
         template_name=template_path.name,
         sections=build_section_labels("facts_test", ["facts"]),
         labels=EN_LABELS,
-        section_word_targets={"facts": 90},
+        section_order=["facts"],
         documents=1,
         prose_overrides={},
     )
@@ -306,11 +340,13 @@ class FakeModelClient:
         *,
         polisher_text: str,
         critic_issue_once: str | None,
+        writer_text: str,
     ):
         self.stage = stage
         self.calls = calls
         self.polisher_text = polisher_text
         self.critic_issue_once = critic_issue_once
+        self.writer_text = writer_text
         self.invocations = 0
 
     def invoke(self, **kwargs):
@@ -319,7 +355,7 @@ class FakeModelClient:
         if kwargs["stage"] == "writer":
             text = json.dumps(
                 {
-                    "content": GENERATED_FACTS_TEXT,
+                    "content": self.writer_text,
                     "facts_used": [
                         "Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD",
                     ],

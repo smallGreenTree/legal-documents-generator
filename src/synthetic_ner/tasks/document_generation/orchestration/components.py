@@ -38,7 +38,7 @@ def build_generation_components(
         doc_type=context.doc_type,
         fraud_type=context.fraud_type,
         document=document,
-        section_order=list(context.section_word_targets),
+        section_order=context.section_order,
     )
 
     writer_client = build_model_client(
@@ -75,13 +75,8 @@ def build_generation_components(
     writer = SectionWriter(
         client=writer_client,
         prompts=prompts,
-        chunk_words=context.workflow_cfg.writer.chunk_words,
-        context_tail_chars=context.workflow_cfg.writer.context_tail_chars,
         writer_temperature=context.workflow_cfg.writer.temperature,
         max_output_tokens=context.workflow_cfg.writer.max_output_tokens,
-        min_output_tokens=context.workflow_cfg.writer.min_output_tokens,
-        output_token_multiplier=context.workflow_cfg.writer.output_token_multiplier,
-        min_completion_ratio=context.workflow_cfg.writer.min_completion_ratio,
         prompt_clients=resolved_prompts.prompt_clients,
         partial_output_dir=context.output_dir / "_partial",
     )
