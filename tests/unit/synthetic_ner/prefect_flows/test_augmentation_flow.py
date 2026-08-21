@@ -15,6 +15,9 @@ class _Logger:
     def error(self, *_args, **_kwargs):
         return None
 
+    def warning(self, *_args, **_kwargs):
+        return None
+
 
 def test_flow_creates_one_variant_for_each_selected_checkbox(tmp_path, monkeypatch):
     source = SimpleNamespace(doc_id="doc1")
@@ -25,14 +28,15 @@ def test_flow_creates_one_variant_for_each_selected_checkbox(tmp_path, monkeypat
         "discover_morphology_documents",
         lambda _path, _contract: [source],
     )
-    monkeypatch.setattr(
-        augmentation,
-        "create_morphology_variant",
-        lambda **kwargs: (
-            calls.append((kwargs["source"].doc_id, kwargs["transformation"]))
-            or {"status": "completed", "variant_doc_id": str(kwargs["transformation"])}
-        ),
-    )
+
+    def document_flow(**kwargs):
+        calls.append((kwargs["source"].doc_id, kwargs["transformations"]))
+        return [
+            {"status": "completed", "variant_doc_id": transformation.value}
+            for transformation in kwargs["transformations"]
+        ]
+
+    monkeypatch.setattr(augmentation, "generate_document_morphological_variations", document_flow)
     monkeypatch.setattr(augmentation, "publish_morphology_batch_report", lambda **kwargs: kwargs)
     monkeypatch.setattr(augmentation, "get_run_logger", lambda: _Logger())
 
@@ -48,9 +52,14 @@ def test_flow_creates_one_variant_for_each_selected_checkbox(tmp_path, monkeypat
     )
 
     assert calls == [
-        ("doc1", MorphologyTransformation.ACTIVE_TO_PASSIVE),
-        ("doc1", MorphologyTransformation.POSSESSIVE_REFRAME),
-        ("doc1", MorphologyTransformation.INTENTIONAL_TYPOS),
+        (
+            "doc1",
+            (
+                MorphologyTransformation.ACTIVE_TO_PASSIVE,
+                MorphologyTransformation.POSSESSIVE_REFRAME,
+                MorphologyTransformation.INTENTIONAL_TYPOS,
+            ),
+        )
     ]
     assert len(result["results"]) == 3
 
@@ -81,21 +90,19 @@ def test_flow_creates_custom_style_variant_without_checkbox_selection(tmp_path, 
         "discover_morphology_documents",
         lambda _path, _contract: [source],
     )
-    monkeypatch.setattr(
-        augmentation,
-        "create_morphology_variant",
-        lambda **kwargs: (
-            calls.append(
-                (
-                    kwargs["transformation"],
-                    kwargs["style"],
-                    kwargs["style_temperature"],
-                    kwargs["reformat_with_style"],
-                )
+
+    def document_flow(**kwargs):
+        calls.append(
+            (
+                kwargs["transformations"],
+                kwargs["style"],
+                kwargs["style_temperature"],
+                kwargs["reformat_with_style"],
             )
-            or {"status": "completed", "variant_doc_id": "styled-doc1"}
-        ),
-    )
+        )
+        return [{"status": "completed", "variant_doc_id": "styled-doc1"}]
+
+    monkeypatch.setattr(augmentation, "generate_document_morphological_variations", document_flow)
     monkeypatch.setattr(augmentation, "publish_morphology_batch_report", lambda **kwargs: kwargs)
     monkeypatch.setattr(augmentation, "get_run_logger", lambda: _Logger())
 
@@ -115,7 +122,7 @@ def test_flow_creates_custom_style_variant_without_checkbox_selection(tmp_path, 
 
     assert calls == [
         (
-            MorphologyTransformation.CUSTOM_STYLE,
+            (MorphologyTransformation.CUSTOM_STYLE,),
             "poetic legal prose",
             1.1,
             True,
@@ -160,6 +167,42 @@ def test_review_form_makes_style_controls_prominent_and_bounded():
     assert properties["reformat_with_style"]["position"] == 3
 
 
+def test_document_subflow_processes_remaining_variants_after_failure(monkeypatch):
+    source = SimpleNamespace(doc_id="doc1")
+    processed = []
+
+    def create(**kwargs):
+        transformation = kwargs["transformation"]
+        processed.append(transformation)
+        if transformation is MorphologyTransformation.ACTIVE_TO_PASSIVE:
+            raise ValueError("unsafe variation")
+        return {"status": "completed", "variant_doc_id": transformation.value}
+
+    monkeypatch.setattr(augmentation, "create_morphology_variant", create)
+    monkeypatch.setattr(augmentation, "get_run_logger", lambda: _Logger())
+
+    results = augmentation.generate_document_morphological_variations.fn(
+        source=source,
+        transformations=(
+            MorphologyTransformation.ACTIVE_TO_PASSIVE,
+            MorphologyTransformation.VERBAL_TO_NOMINAL,
+        ),
+        project_root="/project",
+        config_path="config.yaml",
+        case_config="case.yaml",
+        contract_path="contract.yaml",
+        style="",
+        style_temperature=0.8,
+        reformat_with_style=False,
+    )
+
+    assert processed == [
+        MorphologyTransformation.ACTIVE_TO_PASSIVE,
+        MorphologyTransformation.VERBAL_TO_NOMINAL,
+    ]
+    assert [result["status"] for result in results] == ["failed", "completed"]
+
+
 def test_flow_processes_remaining_documents_and_reports_failures(tmp_path, monkeypatch):
     sources = [SimpleNamespace(doc_id="doc1"), SimpleNamespace(doc_id="doc2")]
     processed = []
@@ -171,33 +214,42 @@ def test_flow_processes_remaining_documents_and_reports_failures(tmp_path, monke
         lambda _path, _contract: sources,
     )
 
-    def create(**kwargs):
+    def document_flow(**kwargs):
         doc_id = kwargs["source"].doc_id
         processed.append(doc_id)
         if doc_id == "doc1":
             raise ValueError("unsafe variation")
-        return {"status": "completed", "variant_doc_id": f"{doc_id}-variant"}
+        return [{"status": "completed", "variant_doc_id": f"{doc_id}-variant"}]
 
     def report(**kwargs):
         captured_report.update(kwargs)
-        return {**kwargs, "report_path": str(tmp_path / "report.json")}
+        failed = any(result["status"] != "completed" for result in kwargs["results"])
+        return {
+            **kwargs,
+            "status": "failed" if failed else "completed",
+            "report_path": str(tmp_path / "report.json"),
+        }
 
-    monkeypatch.setattr(augmentation, "create_morphology_variant", create)
+    monkeypatch.setattr(
+        augmentation,
+        "generate_document_morphological_variations",
+        document_flow,
+    )
     monkeypatch.setattr(augmentation, "publish_morphology_batch_report", report)
     monkeypatch.setattr(augmentation, "get_run_logger", lambda: _Logger())
 
-    with pytest.raises(RuntimeError, match="1 of 2"):
-        augmentation.generate_morphological_variations.fn(
-            input_path="output",
-            project_root=str(tmp_path),
-            review=False,
-            active_to_passive=True,
-            verbal_to_nominal=False,
-            possessive_reframe=False,
-        )
+    result = augmentation.generate_morphological_variations.fn(
+        input_path="output",
+        project_root=str(tmp_path),
+        review=False,
+        active_to_passive=True,
+        verbal_to_nominal=False,
+        possessive_reframe=False,
+    )
 
     assert processed == ["doc1", "doc2"]
     assert [result["status"] for result in captured_report["results"]] == [
         "failed",
         "completed",
     ]
+    assert result["status"] == "failed"

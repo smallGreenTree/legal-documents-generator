@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from prefect import flow, get_run_logger
 from prefect.flow_runs import pause_flow_run
 
@@ -17,8 +19,62 @@ from src.synthetic_ner.tasks.augmentation.prefect_tasks import (
 )
 from src.synthetic_ner.types.augmentation import (
     MorphologyReviewInput,
+    MorphologySource,
     MorphologyTransformation,
 )
+
+
+@flow(name="synthetic-ner-morphological-document")
+def generate_document_morphological_variations(
+    *,
+    source: MorphologySource,
+    transformations: tuple[MorphologyTransformation, ...],
+    project_root: str,
+    config_path: str,
+    case_config: str,
+    contract_path: str,
+    style: str,
+    style_temperature: float,
+    reformat_with_style: bool,
+) -> list[dict[str, Any]]:
+    """Create every requested morphology variant for one source document."""
+    results: list[dict[str, Any]] = []
+    for transformation in transformations:
+        requested_style, requested_temperature, requested_reformat = _variant_options(
+            transformation=transformation,
+            style=style,
+            style_temperature=style_temperature,
+            reformat_with_style=reformat_with_style,
+        )
+        try:
+            result = create_morphology_variant(
+                source=source,
+                transformation=transformation,
+                project_root=project_root,
+                config_path=config_path,
+                case_config=case_config,
+                contract_path=contract_path,
+                style=requested_style,
+                style_temperature=requested_temperature,
+                reformat_with_style=requested_reformat,
+            )
+        except Exception as exc:
+            result = _failed_variant_result(
+                source=source,
+                transformation=transformation,
+                style=requested_style,
+                style_temperature=requested_temperature,
+                reformat_with_style=requested_reformat,
+                error=exc,
+            )
+            get_run_logger().error(
+                "Morphology augmentation failed for %s using %s: %s",
+                source.doc_id,
+                transformation.value,
+                exc,
+            )
+        results.append(result)
+    return results
 
 
 @flow(name="synthetic-ner-morphological-augmentation")
@@ -79,51 +135,35 @@ def generate_morphological_variations(
         str(resolved_input),
         str(resolved_contract),
     )
-    results = []
+    results: list[dict[str, Any]] = []
     for source in sources:
-        for transformation in transformations:
-            requested_style = (
-                style if transformation is MorphologyTransformation.CUSTOM_STYLE else None
+        try:
+            document_results = generate_document_morphological_variations(
+                source=source,
+                transformations=transformations,
+                project_root=str(root),
+                config_path=config_path,
+                case_config=case_config,
+                contract_path=contract_path,
+                style=style,
+                style_temperature=style_temperature,
+                reformat_with_style=reformat_with_style,
             )
-            requested_style_temperature = (
-                style_temperature
-                if transformation is MorphologyTransformation.CUSTOM_STYLE
-                else None
+        except Exception as exc:
+            document_results = _failed_document_results(
+                source=source,
+                transformations=transformations,
+                style=style,
+                style_temperature=style_temperature,
+                reformat_with_style=reformat_with_style,
+                error=exc,
             )
-            requested_reformat = (
-                reformat_with_style
-                if transformation is MorphologyTransformation.CUSTOM_STYLE
-                else False
+            get_run_logger().error(
+                "Morphology document flow failed for %s: %s",
+                source.doc_id,
+                exc,
             )
-            try:
-                result = create_morphology_variant(
-                    source=source,
-                    transformation=transformation,
-                    project_root=str(root),
-                    config_path=config_path,
-                    case_config=case_config,
-                    contract_path=contract_path,
-                    style=requested_style,
-                    style_temperature=requested_style_temperature,
-                    reformat_with_style=requested_reformat,
-                )
-            except Exception as exc:
-                result = {
-                    "status": "failed",
-                    "source_doc_id": source.doc_id,
-                    "transformation": transformation.value,
-                    "style": requested_style,
-                    "style_temperature": requested_style_temperature,
-                    "reformat_with_style": requested_reformat,
-                    "error": str(exc),
-                }
-                get_run_logger().error(
-                    "Morphology augmentation failed for %s using %s: %s",
-                    source.doc_id,
-                    transformation.value,
-                    exc,
-                )
-            results.append(result)
+        results.extend(document_results)
     report = publish_morphology_batch_report(
         input_path=str(resolved_input),
         results=results,
@@ -135,11 +175,75 @@ def generate_morphological_variations(
     )
     failed = sum(result.get("status") != "completed" for result in results)
     if failed:
-        raise RuntimeError(
-            f"Morphology augmentation completed all requests but {failed} of "
-            f"{len(results)} failed; see {report['report_path']}"
+        get_run_logger().warning(
+            "Morphology augmentation completed all documents with %s of %s variants failed; see %s",
+            failed,
+            len(results),
+            report["report_path"],
         )
     return report
+
+
+def _variant_options(
+    *,
+    transformation: MorphologyTransformation,
+    style: str,
+    style_temperature: float,
+    reformat_with_style: bool,
+) -> tuple[str | None, float | None, bool]:
+    if transformation is MorphologyTransformation.CUSTOM_STYLE:
+        return style, style_temperature, reformat_with_style
+    return None, None, False
+
+
+def _failed_variant_result(
+    *,
+    source: MorphologySource,
+    transformation: MorphologyTransformation,
+    style: str | None,
+    style_temperature: float | None,
+    reformat_with_style: bool,
+    error: Exception,
+) -> dict[str, Any]:
+    return {
+        "status": "failed",
+        "source_doc_id": source.doc_id,
+        "transformation": transformation.value,
+        "style": style,
+        "style_temperature": style_temperature,
+        "reformat_with_style": reformat_with_style,
+        "error": str(error),
+    }
+
+
+def _failed_document_results(
+    *,
+    source: MorphologySource,
+    transformations: tuple[MorphologyTransformation, ...],
+    style: str,
+    style_temperature: float,
+    reformat_with_style: bool,
+    error: Exception,
+) -> list[dict[str, Any]]:
+    return [
+        _failed_variant_result(
+            source=source,
+            transformation=transformation,
+            style=requested_style,
+            style_temperature=requested_temperature,
+            reformat_with_style=requested_reformat,
+            error=error,
+        )
+        for transformation in transformations
+        for requested_style, requested_temperature, requested_reformat in (
+            _variant_options(
+                transformation=transformation,
+                style=style,
+                style_temperature=style_temperature,
+                reformat_with_style=reformat_with_style,
+            ),
+        )
+    ]
 
 
 def _review_selection(
