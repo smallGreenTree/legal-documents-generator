@@ -64,7 +64,7 @@ generator-deploy:
 		prefect_pipeline.py:generate_morphological_variations \
 		--name "$(PREFECT_MORPHOLOGY_DEPLOYMENT)" \
 		--pool "$(PREFECT_POOL)" \
-		--params '{"input_path":"","review":true,"active_to_passive":true,"verbal_to_nominal":true,"possessive_reframe":true,"intentional_typos":false,"random_layout":false}'
+		--params '{"input_path":"","review":true,"active_to_passive":true,"verbal_to_nominal":true,"possessive_reframe":true,"intentional_typos":false,"random_layout":false,"style":"","style_temperature":0.8,"reformat_with_style":true}'
 
 generator-worker:
 	mkdir -p "$(PREFECT_HOME)"

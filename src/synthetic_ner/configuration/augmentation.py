@@ -27,6 +27,30 @@ def load_morphology_workflow_config(config_path: Path | str) -> MorphologyWorkfl
         raise ValueError("augmentation.minimum_change_ratio must be less than maximum_change_ratio")
     return MorphologyWorkflowConfig(
         temperature=_number(raw.get("temperature"), "augmentation.temperature"),
+        style_temperature=_number(
+            raw.get("style_temperature"),
+            "augmentation.style_temperature",
+        ),
+        style_retry_temperature=_number(
+            raw.get("style_retry_temperature"),
+            "augmentation.style_retry_temperature",
+        ),
+        style_maximum_change_ratio=_ratio(
+            raw.get("style_maximum_change_ratio"),
+            "augmentation.style_maximum_change_ratio",
+        ),
+        style_max_chunk_chars=_positive_int(
+            raw.get("style_max_chunk_chars"),
+            "augmentation.style_max_chunk_chars",
+        ),
+        style_max_protected_tokens=_positive_int(
+            raw.get("style_max_protected_tokens"),
+            "augmentation.style_max_protected_tokens",
+        ),
+        style_max_sentences_per_chunk=_positive_int(
+            raw.get("style_max_sentences_per_chunk"),
+            "augmentation.style_max_sentences_per_chunk",
+        ),
         max_output_tokens=_positive_int(
             raw.get("max_output_tokens"),
             "augmentation.max_output_tokens",
@@ -35,11 +59,28 @@ def load_morphology_workflow_config(config_path: Path | str) -> MorphologyWorkfl
             raw.get("max_chunk_chars"),
             "augmentation.max_chunk_chars",
         ),
+        max_chunk_attempts=_positive_int(
+            raw.get("max_chunk_attempts"),
+            "augmentation.max_chunk_attempts",
+        ),
         minimum_change_ratio=minimum,
         maximum_change_ratio=maximum,
         prompts=MorphologyPromptsConfig(
             system=_string(prompts.get("system"), "augmentation.prompts.system"),
             user=_string(prompts.get("user"), "augmentation.prompts.user"),
+            retry=_string(prompts.get("retry"), "augmentation.prompts.retry"),
+            style_system=_string(
+                prompts.get("style_system"),
+                "augmentation.prompts.style_system",
+            ),
+            style_user=_string(
+                prompts.get("style_user"),
+                "augmentation.prompts.style_user",
+            ),
+            style_retry=_string(
+                prompts.get("style_retry"),
+                "augmentation.prompts.style_retry",
+            ),
         ),
         deterministic_minimum_change_ratio=_ratio(
             raw.get("deterministic_minimum_change_ratio"),

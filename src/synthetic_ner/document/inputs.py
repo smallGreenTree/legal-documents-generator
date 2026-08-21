@@ -18,6 +18,7 @@ _LIST_FIELDS = (
     "counts_list",
 )
 _MAPPING_FIELDS = ("metadata", "amounts")
+ENTITY_REFERENCES_FIELD = "entity_references"
 
 
 def document_inputs_from_payload(
@@ -67,6 +68,31 @@ def load_document_inputs(path: Path | str) -> DocumentInputs:
     input_path = Path(path)
     payload = json.loads(input_path.read_text(encoding="utf-8"))
     return document_inputs_from_payload(payload, source=input_path.name)
+
+
+def entity_references_from_payload(
+    payload: Mapping[str, Any],
+    *,
+    source: str = DOCUMENT_INPUTS_FILENAME,
+) -> list[dict[str, Any]]:
+    """Validate optional direct entity references used by imported corpora."""
+    raw = payload.get(ENTITY_REFERENCES_FIELD, [])
+    if not isinstance(raw, list):
+        raise ValueError(f"{source}.{ENTITY_REFERENCES_FIELD} must be a list")
+    references: list[dict[str, Any]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, Mapping):
+            raise ValueError(f"{source}.{ENTITY_REFERENCES_FIELD}[{index}] must be an object")
+        entity_text = item.get("entity_text")
+        label = item.get("label")
+        if not isinstance(entity_text, str) or not entity_text.strip():
+            raise ValueError(
+                f"{source}.{ENTITY_REFERENCES_FIELD}[{index}].entity_text must be non-empty"
+            )
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"{source}.{ENTITY_REFERENCES_FIELD}[{index}].label must be non-empty")
+        references.append(dict(item))
+    return references
 
 
 def write_document_inputs(path: Path | str, document: DocumentInputs) -> Path:

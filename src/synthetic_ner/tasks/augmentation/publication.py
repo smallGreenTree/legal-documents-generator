@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.synthetic_ner.document.inputs import ENTITY_REFERENCES_FIELD
 from src.synthetic_ner.tasks.augmentation.constants import (
     AUGMENTATION_DIRECTORY_NAME,
     AUGMENTATION_MANIFEST_FILENAME,
@@ -39,6 +40,10 @@ def existing_variant_result(
     source: MorphologySource,
     variant_doc_id: str,
     transformation: MorphologyTransformation,
+    *,
+    style: str | None = None,
+    style_temperature: float | None = None,
+    reformat_with_style: bool = False,
 ) -> dict[str, Any] | None:
     target = _variant_directory(source, variant_doc_id)
     if not target.exists():
@@ -59,6 +64,10 @@ def existing_variant_result(
         "source_document_sha256": sha256_file(source.document_path),
         "source_groundtruth_sha256": sha256_file(source.groundtruth_path),
     }
+    if style is not None:
+        expected["style"] = style
+        expected["style_temperature"] = style_temperature
+        expected["reformat_with_style"] = reformat_with_style
     if any(manifest.get(key) != value for key, value in expected.items()):
         raise MorphologyError(f"Existing morphology output does not match this request: {target}")
     return _result(target, manifest, reused=True)
@@ -84,10 +93,7 @@ def publish_morphology_variant(
         pending_package.mkdir()
         document_path = pending_package / f"{variant.doc_id}.txt"
         document_path.write_text(variant.text, encoding="utf-8")
-        shutil.copy2(
-            source.document_inputs_path,
-            pending_package / DOCUMENT_INPUTS_FILENAME,
-        )
+        _write_variant_inputs(source, pending_package / DOCUMENT_INPUTS_FILENAME)
         groundtruth = generate_groundtruth_for_document(
             document_dir=pending_package,
             contract_path=contract_path,
@@ -102,7 +108,7 @@ def publish_morphology_variant(
             "source_doc_id": source.doc_id,
             "variant_doc_id": variant.doc_id,
             "transformation": variant.transformation.value,
-            "transformation_explanation": TRANSFORMATION_INSTRUCTIONS[variant.transformation],
+            "transformation_explanation": _transformation_explanation(variant),
             "change_ratio": round(variant.change_ratio, 6),
             "source_document_sha256": sha256_file(source.document_path),
             "source_groundtruth_sha256": sha256_file(source.groundtruth_path),
@@ -111,6 +117,12 @@ def publish_morphology_variant(
             "annotation_count": len(published_annotations),
             "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }
+        if variant.style is not None:
+            manifest["style"] = variant.style
+            manifest["style_temperature"] = variant.style_temperature
+            manifest["reformat_with_style"] = variant.reformat_with_style
+            manifest["style_fallback_chunk_indices"] = list(variant.style_fallback_chunk_indices)
+            manifest["style_fallback_chunk_count"] = len(variant.style_fallback_chunk_indices)
         write_json_atomic(pending_package / AUGMENTATION_MANIFEST_FILENAME, manifest)
         os.replace(pending_package, target)
     return _result(target, manifest, reused=False)
@@ -149,8 +161,33 @@ def _variant_directory(source: MorphologySource, variant_doc_id: str) -> Path:
     return source.package_dir / AUGMENTATION_DIRECTORY_NAME / variant_doc_id
 
 
+def _write_variant_inputs(source: MorphologySource, target: Path) -> None:
+    if source.document_inputs_path is not None:
+        shutil.copy2(source.document_inputs_path, target)
+        return
+    write_json_atomic(
+        target,
+        {
+            "defendants": [],
+            "collateral": [],
+            "charged_orgs": [],
+            "associated_orgs": [],
+            "metadata": {},
+            "amounts": {},
+            "counts_list": [],
+            ENTITY_REFERENCES_FIELD: list(source.entity_references),
+        },
+    )
+
+
 def _annotation_values(rows) -> list[tuple[str, str, int, int]]:
     return sorted((row.entity_text, row.label, row.start_char, row.end_char) for row in rows)
+
+
+def _transformation_explanation(variant: MorphologyVariant) -> str:
+    if variant.transformation is MorphologyTransformation.CUSTOM_STYLE:
+        return f"Rewrite eligible prose in the user-requested style: {variant.style}"
+    return TRANSFORMATION_INSTRUCTIONS[variant.transformation]
 
 
 def _result(target: Path, manifest: dict[str, Any], *, reused: bool) -> dict[str, Any]:
@@ -159,6 +196,10 @@ def _result(target: Path, manifest: dict[str, Any], *, reused: bool) -> dict[str
         "source_doc_id": manifest["source_doc_id"],
         "variant_doc_id": manifest["variant_doc_id"],
         "transformation": manifest["transformation"],
+        "style": manifest.get("style"),
+        "style_temperature": manifest.get("style_temperature"),
+        "reformat_with_style": manifest.get("reformat_with_style", False),
+        "style_fallback_chunk_count": manifest.get("style_fallback_chunk_count", 0),
         "variant_directory": str(target),
         "document_path": str(target / f"{manifest['variant_doc_id']}.txt"),
         "groundtruth_path": str(target / GROUNDTRUTH_FILENAME),

@@ -19,6 +19,7 @@ from prefect.context import get_run_context
 from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
 from pydantic import Field, create_model
+from pydantic_core import PydanticUndefined
 
 from src.synthetic_ner.case_generation.case import resolve_counts, resolve_scenario_brief
 from src.synthetic_ner.case_generation.identifiers import counter_from_doc_id, make_doc_id
@@ -382,10 +383,16 @@ def _required_prefilled_input_model(
             if original_field
             else type(value)
         )
-        fields[key] = (
-            field_type,
-            Field(..., json_schema_extra={"default": value}),
-        )
+        if original_field is None:
+            field = Field(..., json_schema_extra={"default": value})
+        else:
+            field = copy.deepcopy(original_field)
+            field.default = PydanticUndefined
+            schema_extra = (
+                dict(field.json_schema_extra) if isinstance(field.json_schema_extra, dict) else {}
+            )
+            field.json_schema_extra = {**schema_extra, "default": value}
+        fields[key] = (field_type, field)
 
     model = create_model(base_cls.__name__, **fields, __base__=base_cls)
     model._description = description

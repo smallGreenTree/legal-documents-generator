@@ -67,6 +67,10 @@ def reconstruct_morphology_variant(
     minimum_change_ratio: float,
     maximum_change_ratio: float,
     contract_path: Path | str,
+    style: str | None = None,
+    style_temperature: float | None = None,
+    reformat_with_style: bool = False,
+    style_fallback_chunk_indices: tuple[int, ...] = (),
 ) -> MorphologyVariant:
     """Restore protected values, rebuild offsets, and validate exact occurrences."""
     token_values = {
@@ -155,6 +159,10 @@ def reconstruct_morphology_variant(
         text=restored_text,
         annotations=annotations,
         change_ratio=change_ratio,
+        style=style,
+        style_temperature=style_temperature,
+        reformat_with_style=reformat_with_style,
+        style_fallback_chunk_indices=style_fallback_chunk_indices,
     )
 
 

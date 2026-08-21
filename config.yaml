@@ -69,8 +69,15 @@ generation:
 
 augmentation:
   temperature: 0.2
+  style_temperature: 0.8
+  style_retry_temperature: 0.2
+  style_maximum_change_ratio: 0.95
+  style_max_chunk_chars: 1800
+  style_max_protected_tokens: 8
+  style_max_sentences_per_chunk: 6
   max_output_tokens: 2500
-  max_chunk_chars: 6000
+  max_chunk_chars: 3000
+  max_chunk_attempts: 2
   minimum_change_ratio: 0.01
   deterministic_minimum_change_ratio: 0.0001
   maximum_change_ratio: 0.45

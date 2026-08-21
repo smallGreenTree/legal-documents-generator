@@ -8,6 +8,18 @@ MORPHOLOGY_BATCH_REPORT_FILENAME = "morphology_batch_report.json"
 VARIANT_VERSION = 1
 MORPHOLOGY_MODEL_STAGE = "morphology"
 MORPHOLOGY_PIPELINE_STAGE = "morphological_augmentation"
+MAX_CUSTOM_STYLE_CHARS = 200
+MAX_STYLE_SLUG_CHARS = 48
+MIN_STYLE_TEMPERATURE = 0.0
+MAX_STYLE_TEMPERATURE = 1.5
+FLAT_GROUNDTRUTH_PREFIX = "groundtruth_"
+FLAT_GROUNDTRUTH_HEADER = (
+    "doc_id",
+    "entity_text",
+    "label",
+    "should_propose",
+    "notes",
+)
 
 DETERMINISTIC_TRANSFORMATIONS = frozenset(
     {

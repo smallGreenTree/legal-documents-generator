@@ -11,7 +11,7 @@ from typing import Any
 
 from src.synthetic_ner.document.inputs import (
     document_inputs_from_payload,
-    load_document_inputs,
+    entity_references_from_payload,
 )
 from src.synthetic_ner.tasks.groundtruth.annotations import (
     build_mention_annotations,
@@ -47,7 +47,11 @@ def load_groundtruth_source(document_dir: Path | str) -> dict[str, Any]:
     document_path = doc_dir / f"{doc_id}.txt"
     document_inputs_path = doc_dir / DOCUMENT_INPUTS_FILENAME
     _require_source_files(doc_id, document_path, document_inputs_path)
-    document_inputs = load_document_inputs(document_inputs_path)
+    inputs_payload = read_json_object(document_inputs_path)
+    document_inputs = document_inputs_from_payload(
+        inputs_payload,
+        source=document_inputs_path.name,
+    )
     return {
         "document_dir": str(doc_dir),
         "doc_id": doc_id,
@@ -55,15 +59,22 @@ def load_groundtruth_source(document_dir: Path | str) -> dict[str, Any]:
         "document_sha256": sha256_file(document_path),
         "document_inputs_sha256": sha256_file(document_inputs_path),
         "document_inputs": asdict(document_inputs),
+        "entity_references": entity_references_from_payload(
+            inputs_payload,
+            source=document_inputs_path.name,
+        ),
     }
 
 
 def select_used_initial_entities(source: dict[str, Any]) -> list[dict[str, Any]]:
     """Select exact initial entity surfaces that occur in the frozen document."""
-    document = document_inputs_from_payload(source["document_inputs"])
+    references = source.get("entity_references")
+    if not references:
+        document = document_inputs_from_payload(source["document_inputs"])
+        references = build_entity_references(document)
     return select_present_entity_references(
         source["document_text"],
-        build_entity_references(document),
+        references,
     )
 
 

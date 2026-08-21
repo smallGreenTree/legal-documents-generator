@@ -35,6 +35,9 @@ def generate_morphological_variations(
     possessive_reframe: bool = True,
     intentional_typos: bool = False,
     random_layout: bool = False,
+    style: str = "",
+    style_temperature: float = 0.8,
+    reformat_with_style: bool = True,
 ) -> dict:
     """Create one validated package per selected transformation and source document."""
     root = resolve_flow_project_root(project_root)
@@ -47,6 +50,9 @@ def generate_morphological_variations(
             possessive_reframe=possessive_reframe,
             intentional_typos=intentional_typos,
             random_layout=random_layout,
+            style=style,
+            style_temperature=style_temperature,
+            reformat_with_style=reformat_with_style,
         )
         input_path = selection.input_path
         active_to_passive = selection.active_to_passive
@@ -54,20 +60,41 @@ def generate_morphological_variations(
         possessive_reframe = selection.possessive_reframe
         intentional_typos = selection.intentional_typos
         random_layout = selection.random_layout
+        style = selection.style
+        style_temperature = selection.style_temperature
+        reformat_with_style = selection.reformat_with_style
     transformations = _selected_transformations(
         active_to_passive=active_to_passive,
         verbal_to_nominal=verbal_to_nominal,
         possessive_reframe=possessive_reframe,
         intentional_typos=intentional_typos,
         random_layout=random_layout,
+        style=style,
     )
     if not input_path.strip():
         raise ValueError("A document .txt path or package folder path is required")
     resolved_input = resolve_project_path(root, input_path).expanduser().resolve()
-    sources = discover_morphology_documents(str(resolved_input))
+    resolved_contract = resolve_project_path(root, contract_path)
+    sources = discover_morphology_documents(
+        str(resolved_input),
+        str(resolved_contract),
+    )
     results = []
     for source in sources:
         for transformation in transformations:
+            requested_style = (
+                style if transformation is MorphologyTransformation.CUSTOM_STYLE else None
+            )
+            requested_style_temperature = (
+                style_temperature
+                if transformation is MorphologyTransformation.CUSTOM_STYLE
+                else None
+            )
+            requested_reformat = (
+                reformat_with_style
+                if transformation is MorphologyTransformation.CUSTOM_STYLE
+                else False
+            )
             try:
                 result = create_morphology_variant(
                     source=source,
@@ -76,12 +103,18 @@ def generate_morphological_variations(
                     config_path=config_path,
                     case_config=case_config,
                     contract_path=contract_path,
+                    style=requested_style,
+                    style_temperature=requested_style_temperature,
+                    reformat_with_style=requested_reformat,
                 )
             except Exception as exc:
                 result = {
                     "status": "failed",
                     "source_doc_id": source.doc_id,
                     "transformation": transformation.value,
+                    "style": requested_style,
+                    "style_temperature": requested_style_temperature,
+                    "reformat_with_style": requested_reformat,
                     "error": str(exc),
                 }
                 get_run_logger().error(
@@ -118,14 +151,22 @@ def _review_selection(
     possessive_reframe: bool,
     intentional_typos: bool,
     random_layout: bool,
+    style: str,
+    style_temperature: float,
+    reformat_with_style: bool,
 ) -> MorphologyReviewInput:
     review_input = _required_prefilled_input_model(
         MorphologyReviewInput,
         description=(
             "Paste a local .txt, document-package folder, or parent folder path. "
-            "Each selected checkbox creates one variant per discovered document."
+            "Each selected checkbox creates one variant per discovered document. "
+            "CUSTOM STYLE REQUEST creates one additional variant; its temperature "
+            "and reformat switch do not affect the checkbox transformations."
         ),
         input_path=input_path,
+        style=style,
+        style_temperature=style_temperature,
+        reformat_with_style=reformat_with_style,
         active_to_passive=active_to_passive,
         verbal_to_nominal=verbal_to_nominal,
         possessive_reframe=possessive_reframe,
@@ -140,6 +181,9 @@ def _review_selection(
     if response is None:
         return MorphologyReviewInput(
             input_path=input_path,
+            style=style,
+            style_temperature=style_temperature,
+            reformat_with_style=reformat_with_style,
             active_to_passive=active_to_passive,
             verbal_to_nominal=verbal_to_nominal,
             possessive_reframe=possessive_reframe,
@@ -148,6 +192,9 @@ def _review_selection(
         )
     return MorphologyReviewInput(
         input_path=response.input_path,
+        style=response.style,
+        style_temperature=response.style_temperature,
+        reformat_with_style=response.reformat_with_style,
         active_to_passive=response.active_to_passive,
         verbal_to_nominal=response.verbal_to_nominal,
         possessive_reframe=response.possessive_reframe,
@@ -163,6 +210,7 @@ def _selected_transformations(
     possessive_reframe: bool,
     intentional_typos: bool,
     random_layout: bool,
+    style: str,
 ) -> tuple[MorphologyTransformation, ...]:
     selected = tuple(
         transformation
@@ -172,9 +220,10 @@ def _selected_transformations(
             (possessive_reframe, MorphologyTransformation.POSSESSIVE_REFRAME),
             (intentional_typos, MorphologyTransformation.INTENTIONAL_TYPOS),
             (random_layout, MorphologyTransformation.RANDOM_LAYOUT),
+            (bool(style.strip()), MorphologyTransformation.CUSTOM_STYLE),
         )
         if enabled
     )
     if not selected:
-        raise ValueError("Select at least one morphological transformation")
+        raise ValueError("Select at least one transformation or provide a custom style")
     return selected
