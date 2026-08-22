@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from prefect import flow, get_run_logger
 
+from src.synthetic_ner.prefect_flows.groundtruth import generate_document_groundtruth
 from src.synthetic_ner.prefect_flows.utils import (
     _current_flow_run_id,
     audit_created_files,
-    build_case_schema,
     construct_case_yaml_from_setup,
     ingest_configs,
     resolve_entities,
@@ -15,6 +15,7 @@ from src.synthetic_ner.prefect_flows.utils import (
     review_document_entities,
     review_selected_scenario,
     run_langgraph_mlflow,
+    save_resolved_entities,
     select_doc_id,
     select_scenario,
 )
@@ -27,7 +28,6 @@ def generate_dataset(
     documents: int | None = None,
     doc_type: str | None = None,
     fraud_type: str | None = None,
-    from_schema: str | None = None,
     project_root: str | None = None,
     review_scenario: bool = False,
     review_entities: bool = False,
@@ -42,7 +42,6 @@ def generate_dataset(
         documents=documents,
         doc_type=doc_type,
         fraud_type=fraud_type,
-        from_schema=from_schema,
     )
     if review_scenario:
         scenario = review_selected_scenario(
@@ -57,7 +56,7 @@ def generate_dataset(
     prefect_flow_run_id = _current_flow_run_id()
 
     doc_ids: list[str] = []
-    for document_index in range(base_context.documents):
+    for _ in range(base_context.documents):
         selected_doc_id = select_doc_id(base_context)
         document_scenario = scenario
         context = base_context
@@ -78,13 +77,18 @@ def generate_dataset(
                 document,
                 review_timeout_seconds,
             )
-        doc_id, schema = build_case_schema(
-            context,
-            document,
-            document_index,
-            selected_doc_id,
+        doc_id = selected_doc_id
+        save_resolved_entities(context, document, doc_id)
+        run_langgraph_mlflow(context, document, doc_id, prefect_flow_run_id)
+        groundtruth_result = generate_document_groundtruth(
+            document_dir=str(context.output_dir / doc_id),
+            project_root=str(resolved_project_root),
         )
-        run_langgraph_mlflow(context, document, schema, doc_id, prefect_flow_run_id)
+        if (
+            groundtruth_result.get("status") != "completed"
+            or groundtruth_result.get("doc_id") != doc_id
+        ):
+            raise RuntimeError(f"Ground truth did not complete successfully for {doc_id}")
         audit_created_files(context, doc_id)
         doc_ids.append(doc_id)
 

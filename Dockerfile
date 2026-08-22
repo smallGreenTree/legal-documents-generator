@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-root
 
-COPY config.yaml generator_versions.yaml main.py prefect_pipeline.py ./
+COPY config.yaml groundtruth_contract.yaml main.py prefect_pipeline.py ./
 COPY config_case ./config_case
 COPY prompts ./prompts
 COPY src ./src

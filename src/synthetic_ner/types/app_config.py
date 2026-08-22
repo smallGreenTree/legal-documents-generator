@@ -7,7 +7,6 @@ from typing import Any
 @dataclass(frozen=True)
 class PathsConfig:
     output_dir: str
-    schema_dir: str
     memory_dir: str
 
 
@@ -85,23 +84,17 @@ class EntityVariantsConfig:
 
 
 @dataclass(frozen=True)
-class PlannerConfig:
+class WriterConfig:
     active: bool
     temperature: float
-    document_max_output_tokens: int
-    section_max_output_tokens: int
+    max_output_tokens: int
 
 
 @dataclass(frozen=True)
-class WriterConfig:
+class PolisherConfig:
     active: bool
-    chunk_words: int
-    context_tail_chars: int
     temperature: float
     max_output_tokens: int
-    min_output_tokens: int
-    output_token_multiplier: float
-    min_completion_ratio: float
 
 
 @dataclass(frozen=True)
@@ -123,10 +116,6 @@ class WorkflowPromptsConfig:
     polisher_user: str
     critic_system: str
     critic_user: str
-    document_planner_system: str = ""
-    document_planner_user: str = ""
-    section_planner_system: str = ""
-    section_planner_user: str = ""
 
 
 @dataclass(frozen=True)
@@ -135,8 +124,8 @@ class WorkflowConfig:
     max_revisions: int
     memory_summary_chars: int
     validators: dict[str, bool]
-    planner: PlannerConfig
     writer: WriterConfig
+    polisher: PolisherConfig
     critic: CriticConfig
     prompts: WorkflowPromptsConfig
 
@@ -146,7 +135,7 @@ class ProfileConfig:
     doc_type: str
     fraud_type: str
     documents: int
-    section_words: dict[str, int]
+    sections: list[str]
 
 
 @dataclass(frozen=True)
@@ -205,7 +194,6 @@ class CaseConfig:
     collateral: str | list[dict[str, Any]]
     charged_orgs: str | list[dict[str, Any]]
     associated_orgs: str | list[dict[str, Any]]
-    schema: str | dict[str, Any]
     evidence_categories: list[str]
     prose: dict[str, str]
     counts: str | list[CountConfig]

@@ -1,22 +1,9 @@
 paths:
   output_dir: output
-  schema_dir: schemas
   memory_dir: memory
 
 model_routing:
   stages:
-    planner:
-      provider: ollama
-      base_url: http://localhost:11434
-      model:  qwen3.6:27b
-      num_ctx: 8192
-      think: false
-      top_p: 0.9
-      timeout: 900
-      recovery:
-        max_generate_attempts: 1
-        retry_backoff_seconds: 5
-        controlled_empty_section: "[section not generated- ERROR dude]]"
     writer:
       provider: ollama
       base_url: http://localhost:11434
@@ -29,6 +16,19 @@ model_routing:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated - ERROR dude]"
+    polisher:
+      provider: ollama
+      base_url: http://localhost:11434
+      model: qwen3.6:27b
+      num_ctx: 8192
+      think: false
+      top_p: 0.9
+      timeout: 900
+      recovery:
+        max_generate_attempts: 1
+        retry_backoff_seconds: 5
+        controlled_empty_section: "[section not generated - ERROR dude]"
+
     critic:
       provider: ollama
       base_url: http://localhost:11434
@@ -41,6 +41,18 @@ model_routing:
         max_generate_attempts: 1
         retry_backoff_seconds: 5
         controlled_empty_section: "[section not generated- ERROR dude]"
+    morphology:
+      provider: ollama
+      base_url: http://localhost:11434
+      model: qwen3.6:27b
+      num_ctx: 8192
+      think: false
+      top_p: 0.9
+      timeout: 900
+      recovery:
+        max_generate_attempts: 1
+        retry_backoff_seconds: 5
+        controlled_empty_section: "[morphology variation not generated]"
 
 mlflow:
   enabled: true
@@ -54,6 +66,25 @@ mlflow:
 
 generation:
   words_per_page: 500
+
+augmentation:
+  temperature: 0.2
+  style_temperature: 0.8
+  style_retry_temperature: 0.2
+  style_maximum_change_ratio: 0.95
+  style_max_chunk_chars: 1800
+  style_max_protected_tokens: 8
+  style_max_sentences_per_chunk: 6
+  max_output_tokens: 2500
+  max_chunk_chars: 3000
+  max_chunk_attempts: 2
+  minimum_change_ratio: 0.01
+  deterministic_minimum_change_ratio: 0.0001
+  maximum_change_ratio: 0.45
+  typo_rate: 0.005
+  max_typos: 10
+  layout_widths: [72, 88, 100]
+  prompts_config_path: prompts/morphology_prompts.yaml
 
 entity_variants:
   persons:
@@ -78,7 +109,6 @@ workflow:
     placeholder_markers: true
     review_metadata: true
     markdown_formatting: true
-    minimum_length: false
     required_person_facts: true
     required_company_facts: true
     known_entity_presence: true
@@ -89,6 +119,8 @@ workflow:
     unknown_organisations: true
     unknown_titled_people: true
     unknown_initials: true
+    repeated_long_sentences: true
+    repeated_sentence_fragments: true
 
     # Optional/legacy prose-shaping checks.
     meta_summary_style: false
@@ -96,27 +128,18 @@ workflow:
     dangling_between_phrase: false
     unresolved_timeline_placeholder: false
     partial_vat_identifier: false
-    repeated_long_sentences: false
-    repeated_sentence_fragments: false
     truncated_sentence: false
     facts_contract: false
 
-  planner:
-    active: false
-    temperature: 0.0
-    max_output_tokens:
-      document: 2000
-      section: 1200
-
   writer:
     active: true
-    chunk_words: 900
-    context_tail_chars: 900
-    temperature: 1
+    temperature: 0.6
     max_output_tokens: 2500
-    min_output_tokens: 1200
-    output_token_multiplier: 1.8
-    min_completion_ratio: 0.7
+
+  polisher:
+    active: true
+    temperature: 0.0
+    max_output_tokens: 2500
 
   critic:
     active: true

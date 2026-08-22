@@ -1,25 +1,39 @@
 prompts:
   writer_system: |
     Write one section for synthetic legal NER/anonymization test data.
-    Use only SECTION_CONTEXT and SECTION_CONTRACT.
+    Use only SECTION_CONTEXT, SECTION_CONTRACT and the section-specific source
+    gate in the user prompt. The source gate is authoritative, followed by
+    SECTION_CONTRACT.
     Never explain the contract, the writing process, section compliance, or how
     the text was structured. Simply write natural legal prose.
     Cover the facts required by SECTION_CONTRACT. Treat allowed references as
     boundaries, not as a checklist to repeat. Use only the context facts needed
     for this section's purpose.
-    If SECTION_CONTEXT contains an Investigator Scenario Brief, treat it as the
-    binding case theory. Use generated people, organisations, dates, amounts
-    and references to instantiate that scenario; do not replace it with a
-    generic fraud narrative.
+    The Investigator Scenario Brief is grounding reference material, not
+    content that must be reproduced. SECTION_CONTRACT is authoritative. Do not
+    summarise or retell the Scenario Brief. Select only the facts strictly
+    necessary to perform the current section's purpose, and omit facts outside
+    its scope even when they appear in the Scenario Brief. Repeating an entity
+    name where naturally required is allowed; repeating the same case narrative
+    without a new section-specific function is not allowed.
+    The document is NER training material. Preserve natural occurrences of
+    supplied entities when they perform a function in the current section. Do
+    not force irrelevant entities or enumerate allowed variants merely to raise
+    entity count.
     Use varied natural sentence contexts without repeating long phrases.
+    Use only as many words as the supplied facts require. Once the section
+    contract is satisfied, stop; never pad the section to reach a length.
     Return exactly one JSON object and no surrounding text.
     The object must have exactly these fields:
     - content: draft formal legal prose as a string
     - facts_used: array of exact or near-exact facts used from SECTION_CONTEXT
     - tone: concise description of the tone
     - legal_risks: array of factual risks to avoid
-    Do not add facts, identifiers, conclusions, headings, bullets, markdown,
-    commentary, or explanations.
+    Every facts_used item must describe a fact, entity, or authorised synthetic
+    category that actually appears in content. Never claim an unused input fact
+    in facts_used.
+    Do not add unsupported facts, identifiers, conclusions, headings, bullets,
+    markdown, commentary, or explanations.
 
   writer_user: |
     SECTION_CONTEXT:
@@ -29,14 +43,34 @@ prompts:
     {{ section_contract }}
 
     Section: {{ section_name }}
-    Target length: {{ requested_minimum_words }}-{{ word_target }} words.
-    Previous text tail:
-    {{ previous_tail }}
+
+    GLOBAL OUTPUT CHECK:
+    Before returning the JSON, inspect every content sentence. Keep it only if
+    it performs the current section's legal function, is grounded in an
+    authorised source, and is not a restatement of a point already made. Build
+    facts_used after content and remove every item not actually expressed in
+    content.
+
+    {% if section_name == "persons" -%}
+    FINAL SOURCE GATE — PERSONS:
+    Use only Person Identity Facts for content. The Investigator Scenario Brief,
+    fixed case facts, organisations, amounts, statutes and allegations are
+    background only and must not appear. Include every concrete identity field
+    listed for each required person, including an address when supplied. Omit
+    missing fields instead of describing their absence. Allowed forms are
+    permissions, not a checklist; do not enumerate or force variants.
+    {% endif -%}
 
     {% if section_name == "companies" -%}
+    FINAL SOURCE GATE — COMPANIES:
+    Use only Organisations and their explicitly recorded roles or statuses for
+    content. Do not retell the alleged scheme or procurement chronology. Do not
+    infer that an organisation was charged merely because it participated in a
+    recorded event.
+
     COMPANY SECTION GUIDANCE:
-    Write direct legal identification prose. Include each charged organisation's
-    exact name, VAT number, address, and charged status. Use at most one
+    Write direct legal identification prose. Include each listed organisation's
+    exact name, VAT number, address, and explicitly recorded status. Use at most one
     introductory sentence and one closing sentence. Do not write any sentence
     whose purpose is to explain what was omitted, what the contract requires, or
     why the section is limited. Do not use phrases such as "contractual
@@ -44,94 +78,88 @@ prompts:
     additional information", "outside the permitted scope", "required facts",
     "in full accordance", or "strictly encompasses".
     {% endif -%}
-    {% if section_name == "evidence" -%}
-    EVIDENCE SECTION GUIDANCE:
-    You are a precise legal data synthesis specialist creating synthetic
-    evidence sections for criminal NER/anonymization test datasets. Your only
-    job is to follow the rules below with maximum fidelity.
 
-    CRITICAL OUTPUT RULE:
-    Your entire response must be exactly one valid JSON object and nothing
-    else. No text before the opening {, no text after the closing }, no
-    explanations, no markdown, no apologies. The JSON must be syntactically
-    perfect.
-
-    Perform these steps internally and do not output them:
-    1. Read SECTION_CONTEXT and SECTION_CONTRACT carefully.
-    2. Draft the content as 5-6 substantial, connected paragraphs of formal
-       legal prose, target 530-620 words. Integrate the evidence category
-       descriptions naturally. Use varied sentence length and smooth
-       transitions. Write in the voice of an experienced Crown Prosecution
-       Service lawyer preparing a confidential evidence memorandum.
-    3. Extract only facts, dates, amounts, entity names, and category
-       descriptions that you actually used.
-    4. Identify the main drafting risks you successfully avoided.
-    5. Verify: nothing was invented; no exhibit numbers, labels, emails,
-       witnesses, bank details, invoice numbers, or document labels were added;
-       VAT numbers and full addresses were not listed; the content contains
-       only connected paragraphs with no bullets or headings; and the word count
-       is within target.
-
-    EVIDENCE SECTION REQUIREMENTS:
-    The content field must describe the categories of evidence and what each
-    category tends to prove. Use the four Evidence Categories as the structural
-    backbone. Weave in case references, dates, organisations, transfer amounts,
-    and total alleged loss only where they help explain the relevance of a
-    specific evidence category. Write natural flowing paragraphs only. Never use
-    lists, bullets, numbered exhibits, or headings inside the content. Do not
-    retell the full alleged scheme or quote the counts in full. Stay strictly
-    within the facts provided in SECTION_CONTEXT. Invent nothing.
-
-    STRICT CONTENT RULES:
-    The content field must contain only continuous formal legal prose written in
-    connected paragraphs. Never include document headers, court names, file
-    numbers, "SECTION I", "EVIDENCE", or any structural labels inside the
-    content string. Never write any sentence that explains your own decisions,
-    justifies why you avoided certain things, mentions "the absence of invented
-    exhibits", or comments on the structure or presentation of the evidence.
-    The prose must read as if it was written by a human CPS lawyer for other
-    lawyers, with no meta-commentary of any kind. When mentioning
-    organisations, use only their short names. Do not mention VAT numbers, full
-    addresses, or say that such details "are included for clarity". These
-    details are not required in this section.
-
-    INTERNAL VERIFICATION STEP:
-    Before writing the final JSON, remove any text that explains the writing
-    process or compliance. Ensure the content starts directly with substantive
-    legal prose, without headers. Remove VAT numbers and full addresses. Keep
-    only sentences necessary to describe evidence categories and their
-    relevance.
-
-    JSON OUTPUT FORMAT:
-    {
-      "content": "string of formal legal prose, 530-620 words, connected paragraphs only",
-      "facts_used": ["array of exact or very close paraphrases of facts, dates, amounts, entity names, and evidence category descriptions from SECTION_CONTEXT that you actually used"],
-      "tone": "short description of the tone used",
-      "legal_risks": ["array of the main factual or drafting risks you successfully avoided in this generation"]
-    }
+    {% if section_name == "history" -%}
+    FINAL SOURCE GATE — HISTORY:
+    Use only supplied case references, filing dates, offence periods, counts and
+    explicitly recorded procedural events. Do not use the allegations or case
+    narrative as procedural history. Never treat a filing date as the start of
+    an investigation or offence. If few procedural facts are supplied, write a
+    short section. Never state that counts, dates, periods, events, or other
+    information are absent, missing, omitted, unlisted, or not supplied.
     {% endif -%}
 
-    {% if revision_instruction and revision_instruction != "none" -%}
-    REVISION REQUIREMENTS:
-    {{ revision_instruction }}
+    {% if section_name == "charges" -%}
+    FINAL SOURCE GATE — CHARGES:
+    Use Defendants, Organisations, Counts, Amounts and only the legal basis and
+    particulars needed to formulate the recorded allegations. Use an amount only
+    when SECTION_CONTEXT explicitly connects it to alleged conduct. Do not
+    provide a complete chronology, identity inventory, evidence discussion, or
+    unsupported allegation against an organisation.
+    {% endif -%}
 
-    Rewrite from SECTION_CONTEXT and SECTION_CONTRACT. Resolve every blocking
-    issue without adding facts that are not listed in SECTION_CONTEXT.
+    {% if section_name == "facts" -%}
+    FINAL SOURCE GATE — FACTS:
+    This is the primary section for the detailed case narrative. Use the
+    Investigator Scenario Brief, recorded relationships, counts and connected
+    amounts. State each event once in a coherent chronology. Reuse a supplied
+    entity only when the later occurrence adds a distinct relationship or
+    grammatical context useful for NER.
+    {% endif -%}
+
+    {% if section_name == "evidence" -%}
+    FINAL SOURCE GATE — EVIDENCE:
+    If Evidence Categories contains real categories, use them. If it contains
+    only "none", derive generic synthetic categories solely from events that the
+    Investigator Scenario Brief explicitly records. A derived category may name
+    material associated with a recorded event, such as tender submission,
+    evaluation or ranking, contract award, transaction, or administrative
+    correction material. It must not introduce a new event.
+
+    Explain what each category supports. Use "supports", "records",
+    "associates", or "connects" rather than "proves", "confirms", or
+    "establishes". Do not claim authenticity, admissibility, conclusiveness, or
+    independent verification. Do not invent exhibit labels, document titles,
+    identifiers, dates, quotations, signatures, communications, witnesses,
+    accounts, transactions, or detailed contents not supplied in context.
+
+    Preserve supplied NER entities when they have an evidential function. Case
+    references may identify the matter but are not themselves evidence. Do not
+    include VAT numbers, full addresses, dates, amounts, or variants merely for
+    coverage. Use entities in varied grammatical roles, and allow a repeated
+    entity only when the later occurrence adds a different evidential
+    relationship. Do not retell the complete alleged scheme.
+    {% endif -%}
+
+    {% if section_name == "assessment" -%}
+    FINAL SOURCE GATE — ASSESSMENT:
+    Use supplied legal provisions and only the established facts needed to apply
+    them. Transform facts into legal characterisation; do not repeat the case
+    chronology. Every factual reference must be followed by or integrated with
+    its legal significance. Do not introduce a conclusion or remedy not supplied
+    by SECTION_CONTEXT or required by SECTION_CONTRACT.
     {% endif -%}
 
     Return the structured drafting packet for this section. Write connected
     paragraphs, not a list. Use natural variation from SECTION_CONTEXT, but do
     not invent anything.
-    If SECTION_CONTEXT includes Person Identity Facts, include every listed
-    field for every listed person.
 
   polisher_system: |
-    You polish one generated section for NER/anonymization test data.
-    Use only the JSON packet, SECTION_CONTEXT and SECTION_CONTRACT.
-    Preserve required fact coverage and the required length band.
-    Preserve alignment with the Investigator Scenario Brief when it is present.
+    You revise an existing legal section for NER/anonymization test data.
+    Use only CURRENT_DRAFT, REVISION_REQUIREMENTS, SECTION_CONTEXT and
+    SECTION_CONTRACT. Apply every requested correction to the current draft.
+    Preserve correct grounded facts and required fact coverage.
+    The Investigator Scenario Brief is grounding reference material, not a
+    narrative that must be reproduced. SECTION_CONTRACT is authoritative.
+    Preserve only in-scope alignment with the brief and never add its narrative
+    to pad or broaden the section.
+    Preserve natural supplied-entity occurrences when they perform distinct
+    section-specific functions. Do not remove an entity merely because its name
+    appears elsewhere in the document.
     Do not add facts or identifiers that are not listed in SECTION_CONTEXT.
-    Return final polished prose only. Do not return JSON, markdown, headings,
+    Remove repetition and unnecessary elaboration even when that makes the
+    section shorter. Do not rewrite unaffected passages without a reason.
+    Return revised prose only. Do not return JSON, markdown, headings,
     bullets, commentary, or explanations.
 
   polisher_user: |
@@ -141,35 +169,40 @@ prompts:
     SECTION_CONTRACT:
     {{ section_contract }}
 
-    WRITER_JSON:
-    {{ writer_json }}
+    CURRENT_DRAFT:
+    {{ current_section }}
 
-    Polish the content field into final formal legal prose for section "{{ section_name }}".
-    Target length: {{ requested_minimum_words }}-{{ word_target }} words.
+    REVISION_REQUIREMENTS:
+    {{ revision_instruction }}
+
+    Revise the existing draft for section "{{ section_name }}". Resolve every
+    listed issue while leaving correct, unaffected content intact.
     {% if section_name == "companies" -%}
-    For companies, keep the prose concise and direct: identify each charged
-    organisation by exact name, VAT number, address, and charged status. Do not
-    add an explanation of the contract, scope, drafting process, compliance, or
-    omitted facts. Delete any sentence whose main purpose is to say that no
-    further information is included, that the facts are required, or that the
-    section complies with instructions.
+    For companies, keep the prose concise and direct: identify each listed
+    organisation by exact name, VAT number, address, and explicitly recorded
+    role or status. Do not infer charged status. Do not add an explanation of
+    the contract, scope, drafting process, compliance, or omitted facts. Delete
+    any sentence whose main purpose is to say that no further information is
+    included, that the facts are required, or that the section complies with
+    instructions.
     {% endif -%}
     {% if section_name == "evidence" -%}
-    For evidence, organise the final prose around Evidence Categories. Delete
-    repeated relationship inventory, repeated identity particulars, and any
-    sentence whose main purpose is to explain the prompt, contract, scope, or
-    absence of invented exhibits. The final text should read like a natural
-    evidence overview, not a memory dump.
+    For evidence, organise the final prose around supplied categories or generic
+    synthetic categories derived only from explicitly recorded events. Explain
+    what each category supports without claiming that it proves, confirms, or
+    establishes an allegation. Preserve relevant supplied entities in varied
+    evidential contexts. Delete repeated relationship inventory, repeated
+    narrative, and any sentence whose main purpose is to explain the prompt,
+    contract, scope, or absence of invented exhibits.
     {% endif -%}
-    Preserve every required fact already present, add missing required facts only
-    from SECTION_CONTEXT, remove repetition, and vary sentence structure.
+    Preserve every required fact already present. Add a missing required fact
+    only when REVISION_REQUIREMENTS identifies it and SECTION_CONTEXT supplies it.
+    Remove repetition and vary sentence structure.
     Ruthlessly delete any meta-commentary, contract-compliance explanations,
     self-referential sentences, or boilerplate such as "The legal prose is
     structured to...", "This approach guarantees...", "The section is intended
     to serve as...", "ensuring compliance...", or "No additional information
     beyond the required facts...".
-    Remove repetition and vary sentence structure while preserving every
-    required fact.
     Do not add any new facts or explanations.
 
   critic_system: |
@@ -187,6 +220,8 @@ prompts:
       and chronology
     Each edit must contain target, action, reason, and replacement fields.
     Use replacement as an empty string when no exact replacement is needed.
+    Before calling a detail fabricated, search all of SECTION_CONTEXT for it.
+    A supplied name or phrase is grounded even when it is unusual.
 
   critic_user: |
     SECTION_CONTEXT:
@@ -199,14 +234,26 @@ prompts:
     {{ section_text }}
 
     Return specific edits for consistency, hallucinations, missing required facts, and prose quality.
+    Repetition is a blocking prose-quality defect. Add a specific edit when a
+    sentence, paragraph, entity inventory, or factual point is duplicated or
+    restated without adding meaning. Name the redundant passage in target and
+    use action "delete" or "merge" so the polisher can apply it directly.
+    Repeating a supplied entity name is not by itself a defect. Add a repetition
+    edit only when the later occurrence duplicates the same factual or legal
+    function without adding a distinct grammatical, evidential, or legal
+    relationship useful for NER.
     Add an edit if the draft copies CASE_MEMORY structure, repeatedly lists the same
     entities, starts with formulaic summary language, uses bullets/markdown, or
     reads like disconnected inventory instead of a legal section.
     Add a blocking edit if the draft contradicts, ignores, or materially weakens
     the Investigator Scenario Brief where that brief is relevant to the section.
-    For evidence sections, add an edit if the draft mainly repeats relationship
-    facts or identity particulars instead of explaining evidence categories and
-    what those categories support.
+    For evidence sections, allow generic synthetic evidence categories derived
+    only from events explicitly recorded in SECTION_CONTEXT. Add an edit if a
+    category introduces a new event, entity, identifier, date, amount, or
+    detailed document content, or if the draft mainly repeats relationship facts
+    instead of explaining what each category supports. Prefer "supports",
+    "records", "associates", or "connects" over conclusive verbs such as
+    "proves", "confirms", or "establishes".
     Treat out-of-scope allegations, fabricated identifiers, chronology conflicts,
     mechanical memory-dump style, and repeated entity inventories as blocking issues.
     Treat any detail outside SECTION_CONTEXT as a hallucination.

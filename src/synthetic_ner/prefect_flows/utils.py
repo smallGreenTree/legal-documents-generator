@@ -19,31 +19,23 @@ from prefect.context import get_run_context
 from prefect.flow_runs import pause_flow_run
 from prefect.input import RunInput
 from pydantic import Field, create_model
+from pydantic_core import PydanticUndefined
 
-from src.synthetic_ner.case import resolve_counts, resolve_scenario_brief
+from src.synthetic_ner.case_generation.case import resolve_counts, resolve_scenario_brief
+from src.synthetic_ner.case_generation.identifiers import counter_from_doc_id, make_doc_id
 from src.synthetic_ner.cli import load_env_files
-from src.synthetic_ner.engine import (
-    build_runtime_context,
-    resolve_document_inputs,
-    resolve_project_path,
-    resolve_schema_for_document,
+from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.configuration.loader import resolve_section_order
+from src.synthetic_ner.core.paths import resolve_project_path
+from src.synthetic_ner.document.engine import build_runtime_context, resolve_document_inputs
+from src.synthetic_ner.document.inputs import (
+    document_inputs_from_payload,
+    document_inputs_payload,
+    write_document_inputs,
 )
-from src.synthetic_ner.schema import counter_from_doc_id, doc_id_prefix, make_doc_id
 from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
-from src.synthetic_ner.tasks.document_quality.quality_overview import (
-    build_quality_overview,
-    fetch_mlflow_rubric_summary,
-    format_audit_confidence_markdown,
-    format_model_workflow_markdown,
-    format_run_health_markdown,
-)
-from src.synthetic_ner.tasks.document_quality.quality_report import (
-    build_quality_report,
-    format_markdown_report,
-    load_quality_scoring_config,
-)
-from src.synthetic_ner.types.document_inputs import DocumentInputs
-from src.synthetic_ner.utils import load_config
+from src.synthetic_ner.tasks.groundtruth import require_completed_groundtruth
+from src.synthetic_ner.types.document_inputs import DOCUMENT_INPUTS_FILENAME, DocumentInputs
 
 ARTIFACT_TEXT_LIMIT = 24_000
 DEFAULT_GENERATED_CASE_CONFIG_PATTERN = "config_case/generated/{doc_id}.yaml"
@@ -139,11 +131,6 @@ class EntityReviewInput(RunInput):
     refresh_counts: bool = True
 
 
-class QualityDocumentSelectionInput(RunInput):
-    doc_id: str = ""
-    candidate_documents: str = ""
-
-
 def _current_flow_run_id() -> str | None:
     """Return the active Prefect flow run id when running inside a flow."""
     try:
@@ -162,8 +149,6 @@ def select_scenario(
     documents: int | None,
     doc_type: str | None,
     fraud_type: str | None,
-    from_schema: str | None,
-    quality_config: str | None = None,
     publish_artifacts: bool = True,
 ) -> dict[str, Any]:
     """Resolve the selected scenario and publish the input files used by the run."""
@@ -174,8 +159,6 @@ def select_scenario(
         documents=documents,
         doc_type=doc_type,
         fraud_type=fraud_type,
-        from_schema=from_schema,
-        quality_config=quality_config,
     )
     if publish_artifacts:
         _publish_scenario_artifacts(scenario)
@@ -303,8 +286,6 @@ def review_selected_scenario(
         documents=response.documents,
         doc_type=response.doc_type,
         fraud_type=_reviewed_fraud_type(response, scenario),
-        from_schema=scenario["from_schema"],
-        quality_config=scenario.get("quality_config"),
     )
     person_specs, person_variant_generation = review_person_setup(
         scenario=reviewed_scenario,
@@ -402,10 +383,16 @@ def _required_prefilled_input_model(
             if original_field
             else type(value)
         )
-        fields[key] = (
-            field_type,
-            Field(..., json_schema_extra={"default": value}),
-        )
+        if original_field is None:
+            field = Field(..., json_schema_extra={"default": value})
+        else:
+            field = copy.deepcopy(original_field)
+            field.default = PydanticUndefined
+            schema_extra = (
+                dict(field.json_schema_extra) if isinstance(field.json_schema_extra, dict) else {}
+            )
+            field.json_schema_extra = {**schema_extra, "default": value}
+        fields[key] = (field_type, field)
 
     model = create_model(base_cls.__name__, **fields, __base__=base_cls)
     model._description = description
@@ -484,8 +471,6 @@ def construct_case_yaml_from_setup(
         documents=scenario["documents"],
         doc_type=scenario["doc_type"],
         fraud_type=scenario["fraud_type"],
-        from_schema=scenario["from_schema"],
-        quality_config=scenario.get("quality_config"),
     )
     rebuilt["source_case_config"] = source_case_config
     rebuilt["case_setup"] = case_setup
@@ -646,208 +631,6 @@ def review_document_entities(
     return reviewed_document
 
 
-@task(name="quality-document-selection")
-def publish_quality_document_selection(
-    context: Any,
-    timeout_seconds: int,
-) -> list[dict[str, Any]]:
-    """Collect candidate document ids before pausing for quality scoring input."""
-    candidates = _quality_document_candidates(context)
-    get_run_logger().info(
-        "Quality document selection has %s candidate(s). Pause timeout is %s seconds.",
-        len(candidates),
-        timeout_seconds,
-    )
-    return candidates
-
-
-def select_quality_document(
-    *,
-    context: Any,
-    doc_id: str | None,
-    timeout_seconds: int,
-    review_document_selection: bool = True,
-) -> str:
-    """Resolve or request the document id to analyze in the quality flow."""
-    requested_doc_id = (doc_id or "").strip()
-    if requested_doc_id and not review_document_selection:
-        _ensure_quality_document_exists(context, requested_doc_id)
-        return requested_doc_id
-
-    candidates = publish_quality_document_selection(context, timeout_seconds)
-    if not candidates:
-        raise SystemExit("No generated documents are available for this doc_type/fraud_type.")
-
-    review_input = _required_prefilled_input_model(
-        QualityDocumentSelectionInput,
-        description=(
-            "Select the generated document to analyze. Enter one doc_id from "
-            "candidate_documents, then submit the form to score it."
-        ),
-        doc_id=requested_doc_id,
-        candidate_documents=_quality_candidate_summary(candidates),
-    )
-    response = pause_flow_run(
-        wait_for_input=review_input,
-        timeout=timeout_seconds,
-        key="quality-document-selection",
-    )
-    if response is None:
-        raise SystemExit("Document quality selection timed out without a doc_id.")
-
-    selected_doc_id = response.doc_id.strip()
-    if not selected_doc_id:
-        raise SystemExit("Document quality selection requires a doc_id.")
-    _ensure_quality_document_exists(context, selected_doc_id)
-    get_run_logger().info("Selected document for quality analysis: %s", selected_doc_id)
-    return selected_doc_id
-
-
-def _quality_document_candidates(context: Any) -> list[dict[str, Any]]:
-    prefix = doc_id_prefix(context.doc_type, context.fraud_type)
-    doc_ids: set[str] = set()
-
-    if context.output_dir.exists():
-        doc_ids.update(
-            path.name
-            for path in context.output_dir.iterdir()
-            if path.is_dir() and path.name.startswith(prefix)
-        )
-
-    partial_root = context.output_dir / "_partial"
-    if partial_root.exists():
-        doc_ids.update(
-            path.name
-            for path in partial_root.iterdir()
-            if path.is_dir() and path.name.startswith(prefix)
-        )
-
-    if context.memory_dir.exists():
-        doc_ids.update(
-            path.name.removeprefix("case_")
-            for path in context.memory_dir.iterdir()
-            if path.is_dir() and path.name.startswith(f"case_{prefix}")
-        )
-
-    if context.schema_dir.exists():
-        doc_ids.update(
-            path.stem for path in context.schema_dir.glob(f"{prefix}*.json") if path.is_file()
-        )
-
-    return [
-        _quality_document_candidate_record(context, doc_id)
-        for doc_id in sorted(
-            doc_ids,
-            key=lambda item: _quality_document_sort_key(context, item),
-        )
-    ]
-
-
-def _quality_document_sort_key(context: Any, doc_id: str) -> tuple[int, str]:
-    try:
-        counter = counter_from_doc_id(doc_id, context.doc_type, context.fraud_type)
-    except ValueError:
-        counter = -1
-    return (-counter, doc_id)
-
-
-def _quality_document_candidate_record(context: Any, doc_id: str) -> dict[str, Any]:
-    doc_dir = context.output_dir / doc_id
-    partial_sections = context.output_dir / "_partial" / doc_id / "sections"
-    memory_dir = context.memory_dir / f"case_{doc_id}"
-    schema_path = context.schema_dir / f"{doc_id}.json"
-    document_path = doc_dir / f"{doc_id}.txt"
-    generation_report_path = doc_dir / "generation_report.md"
-
-    return {
-        "doc_id": doc_id,
-        "final_document": document_path.exists(),
-        "generation_report": generation_report_path.exists(),
-        "case_memory": (memory_dir / "CASE_MEMORY.md").exists(),
-        "schema": schema_path.exists(),
-        "section_artifacts": _section_artifact_count(partial_sections),
-        "last_modified": _latest_modified_at(
-            [doc_dir, context.output_dir / "_partial" / doc_id, memory_dir, schema_path]
-        ),
-    }
-
-
-def _section_artifact_count(partial_sections: Path) -> int:
-    if not partial_sections.exists():
-        return 0
-    return sum(1 for path in partial_sections.iterdir() if path.is_dir())
-
-
-def _latest_modified_at(paths: list[Path]) -> str:
-    latest_timestamp = 0.0
-    for path in paths:
-        if not path.exists():
-            continue
-        latest_timestamp = max(latest_timestamp, path.stat().st_mtime)
-        if path.is_dir():
-            for child in path.rglob("*"):
-                if child.exists():
-                    latest_timestamp = max(latest_timestamp, child.stat().st_mtime)
-    if not latest_timestamp:
-        return ""
-    return datetime.fromtimestamp(latest_timestamp, UTC).isoformat(timespec="seconds")
-
-
-def _quality_candidate_summary(candidates: list[dict[str, Any]]) -> str:
-    if not candidates:
-        return "No generated documents found for this doc_type/fraud_type."
-    lines = []
-    for candidate in candidates:
-        readiness = []
-        if candidate["final_document"]:
-            readiness.append("final document")
-        if candidate["generation_report"]:
-            readiness.append("generation report")
-        if candidate["case_memory"]:
-            readiness.append("case memory")
-        readiness_text = ", ".join(readiness) if readiness else "incomplete artifacts"
-        lines.append(
-            f"{candidate['doc_id']} | sections={candidate['section_artifacts']} | "
-            f"{readiness_text} | modified={candidate['last_modified'] or 'unknown'}"
-        )
-    return "\n".join(lines)
-
-
-def _quality_candidate_markdown_table(candidates: list[dict[str, Any]]) -> str:
-    if not candidates:
-        return "No generated documents found for this doc_type/fraud_type."
-
-    lines = [
-        "| Document ID | Final | Report | Memory | Schema | Sections | Modified |",
-        "| --- | --- | --- | --- | --- | ---: | --- |",
-    ]
-    for candidate in candidates:
-        lines.append(
-            "| "
-            f"`{candidate['doc_id']}` | "
-            f"`{candidate['final_document']}` | "
-            f"`{candidate['generation_report']}` | "
-            f"`{candidate['case_memory']}` | "
-            f"`{candidate['schema']}` | "
-            f"{candidate['section_artifacts']} | "
-            f"`{candidate['last_modified'] or 'unknown'}` |"
-        )
-    return "\n".join(lines)
-
-
-def _ensure_quality_document_exists(context: Any, doc_id: str) -> None:
-    candidates = _quality_document_candidates(context)
-    candidate_ids = {candidate["doc_id"] for candidate in candidates}
-    if doc_id in candidate_ids:
-        return
-    known = ", ".join(sorted(candidate_ids)) or "none"
-    expected_prefix = doc_id_prefix(context.doc_type, context.fraud_type)
-    raise SystemExit(
-        f"Unknown document id for this quality context: {doc_id}. "
-        f"Expected prefix {expected_prefix!r}. Available documents: {known}."
-    )
-
-
 def _build_scenario(
     *,
     project_root: Path,
@@ -856,8 +639,6 @@ def _build_scenario(
     documents: int | None,
     doc_type: str | None,
     fraud_type: str | None,
-    from_schema: str | None,
-    quality_config: str | None = None,
 ) -> dict[str, Any]:
     root_config_path = project_root / "config.yaml"
     case_config_path = resolve_project_path(project_root, case_config)
@@ -912,22 +693,6 @@ def _build_scenario(
                 required=True,
             )
         )
-    if from_schema:
-        input_files.append(
-            _input_file_record(
-                "source schema",
-                resolve_project_path(project_root, from_schema),
-                required=True,
-            )
-        )
-    if quality_config:
-        input_files.append(
-            _input_file_record(
-                "quality scoring config",
-                resolve_project_path(project_root, quality_config),
-                required=True,
-            )
-        )
     for env_name in (".env", ".env.mlflow"):
         env_path = project_root / env_name
         if env_path.exists():
@@ -942,8 +707,6 @@ def _build_scenario(
         "scenario_name": scenario_options.get(selected_fraud_type, selected_fraud_type),
         "scenario_options": scenario_options,
         "specific_scenario_options": specific_scenario_options,
-        "from_schema": from_schema,
-        "quality_config": quality_config,
         "input_files": input_files,
         "profile": profile,
         "case": case_section,
@@ -976,7 +739,6 @@ def ingest_configs(
         documents=scenario["documents"],
         doc_type=scenario["doc_type"],
         fraud_type=scenario["fraud_type"],
-        from_schema=scenario["from_schema"],
     )
     context = build_runtime_context(args, project_root)
     logger = get_run_logger()
@@ -1012,6 +774,17 @@ def resolve_entities(context: Any) -> Any:
     return document
 
 
+@task(name="save-resolved-entities")
+def save_resolved_entities(context: Any, document: Any, doc_id: str) -> Path:
+    """Persist the complete resolved inputs before document generation starts."""
+    path = write_document_inputs(
+        context.output_dir / doc_id / DOCUMENT_INPUTS_FILENAME,
+        document,
+    )
+    get_run_logger().info("Saved resolved document inputs for %s to %s", doc_id, path)
+    return path
+
+
 @task(name="select-doc-id")
 def select_doc_id(context: Any) -> str:
     """Select the next document id using all known artifact roots."""
@@ -1019,36 +792,16 @@ def select_doc_id(context: Any) -> str:
     next_counter = (max(used_counters) + 1) if used_counters else 1
     doc_id = make_doc_id(context.doc_type, context.fraud_type, next_counter)
     get_run_logger().info(
-        "Selected doc_id=%s after scanning output, partials, schemas and memory",
+        "Selected doc_id=%s after scanning output, partials, generated configs and memory",
         doc_id,
     )
     return doc_id
-
-
-@task(name="case-schema")
-def build_case_schema(
-    context: Any,
-    document: Any,
-    document_index: int,
-    doc_id: str,
-) -> tuple[str, dict]:
-    """Build or load the relationship schema for one document."""
-    doc_id, schema = resolve_schema_for_document(
-        context,
-        document,
-        document_index,
-        doc_id_override=doc_id,
-    )
-    get_run_logger().info("Resolved schema for %s with %s edges", doc_id, len(schema["edges"]))
-    _publish_schema_artifacts(doc_id, schema)
-    return doc_id, schema
 
 
 @task(name="langgraph-mlflow-generation")
 def run_langgraph_mlflow(
     context: Any,
     document: Any,
-    schema: dict,
     doc_id: str,
     prefect_flow_run_id: str | None = None,
 ) -> str:
@@ -1057,7 +810,6 @@ def run_langgraph_mlflow(
         run_document_graph(
             context=context,
             document=document,
-            schema=schema,
             doc_id=doc_id,
             workflow_run_id=prefect_flow_run_id or doc_id,
             prefect_flow_run_id=prefect_flow_run_id,
@@ -1071,6 +823,7 @@ def run_langgraph_mlflow(
 @task(name="end-of-pipeline-file-audit")
 def audit_created_files(context: Any, doc_id: str) -> Path:
     """Write a document-level manifest of generated files and checksums."""
+    require_completed_groundtruth(context.output_dir / doc_id, doc_id)
     audit_path = context.output_dir / doc_id / "file_audit.json"
     files = _collect_document_files(context, doc_id, exclude={audit_path})
     payload = {
@@ -1079,7 +832,6 @@ def audit_created_files(context: Any, doc_id: str) -> Path:
         "roots": {
             "output": str(context.output_dir / doc_id),
             "partial_output": str(context.output_dir / "_partial" / doc_id),
-            "schema": str(context.schema_dir / f"{doc_id}.json"),
             "memory": str(context.memory_dir / f"case_{doc_id}"),
         },
         "files": files,
@@ -1099,33 +851,6 @@ def audit_created_files(context: Any, doc_id: str) -> Path:
     return audit_path
 
 
-@task(name="score-document-quality")
-def score_document_quality(
-    context: Any,
-    doc_id: str,
-    quality_config: str,
-) -> dict[str, Any]:
-    """Score one existing generated document from current artifacts."""
-    quality_config_path = resolve_project_path(context.project_root, quality_config)
-    scoring_config = load_quality_scoring_config(quality_config_path)
-    report = build_quality_report(context, doc_id, scoring_config)
-    rubric_summary = fetch_mlflow_rubric_summary(context, doc_id)
-    overview = build_quality_overview(
-        context=context,
-        doc_id=doc_id,
-        quality_report=report,
-        rubric_summary=rubric_summary,
-    )
-    _publish_quality_analysis_artifact(doc_id, report, overview)
-    get_run_logger().info(
-        "Scored %s quality as %s (%s)",
-        doc_id,
-        report["overall_score"],
-        report["verdict"],
-    )
-    return report
-
-
 def _build_args(
     *,
     case_config: str,
@@ -1133,7 +858,6 @@ def _build_args(
     documents: int | None,
     doc_type: str | None,
     fraud_type: str | None,
-    from_schema: str | None,
 ) -> Namespace:
     return Namespace(
         case_config=case_config,
@@ -1141,7 +865,6 @@ def _build_args(
         documents=documents,
         doc_type=doc_type,
         fraud_type=fraud_type,
-        from_schema=from_schema,
         workflow_mode="langgraph",
     )
 
@@ -2190,14 +1913,13 @@ def _scenario_summary_text(scenario: dict[str, Any]) -> str:
 
 def _document_type_details_text(scenario: dict[str, Any]) -> str:
     profile = scenario.get("profile", {})
-    section_words = profile.get("section_words", {}) if isinstance(profile, dict) else {}
-    sections = [f"{name} (~{words} words)" for name, words in section_words.items()]
+    sections = _profile_sections(profile, scenario.get("doc_type"))
     template_path = scenario.get("template_path") or "not resolved"
     preview = scenario.get("template_preview") or "Template preview unavailable."
     return (
         f"`doc_type={scenario.get('doc_type')}` uses template `{template_path}`. "
         "The template supplies fixed headings, case references, count blocks, and "
-        "places generated LLM prose into `llm_sections`. Section targets: "
+        "places generated LLM prose into `llm_sections`. Generated sections: "
         f"{_join_or_none(sections)}.\n\nTemplate opening:\n{preview}"
     )
 
@@ -2285,11 +2007,9 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
             "meaning": "Number of synthetic documents to generate.",
         },
         {
-            "field": "profile.section_words",
-            "current_value": _review_value(profile.get("section_words", {}))
-            if isinstance(profile, dict)
-            else "",
-            "meaning": "Target prose length by generated section.",
+            "field": "profile.sections",
+            "current_value": _review_value(_profile_sections(profile, scenario.get("doc_type"))),
+            "meaning": "Generated section order; no section length is required.",
         },
         {
             "field": "case.cast",
@@ -2306,7 +2026,7 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
         {
             "field": "workflow",
             "current_value": _review_value(workflow),
-            "meaning": "Controls LangGraph planner/writer/critic flow and prompt path.",
+            "meaning": "Controls LangGraph writer/critic flow and prompt path.",
         },
         {
             "field": "generation.words_per_page",
@@ -2316,6 +2036,21 @@ def _scenario_config_review_rows(scenario: dict[str, Any]) -> list[dict[str, Any
             "meaning": "Used for document sizing assumptions.",
         },
     ]
+
+
+def _profile_sections(profile: Any, doc_type: Any) -> list[str]:
+    if not isinstance(profile, dict):
+        return []
+    configured = profile.get("sections")
+    if isinstance(configured, list):
+        return [str(section) for section in configured]
+    legacy_targets = profile.get("section_words")
+    if isinstance(legacy_targets, dict):
+        return [str(section) for section in legacy_targets]
+    try:
+        return resolve_section_order(str(doc_type))
+    except ValueError:
+        return []
 
 
 def _auto_keys(payload: Any) -> list[str]:
@@ -2381,8 +2116,6 @@ def _publish_scenario_artifacts(scenario: dict[str, Any]) -> None:
                 f"| Document type | `{scenario['doc_type']}` |",
                 f"| Fraud type | `{scenario['fraud_type']}` |",
                 f"| Documents | `{scenario['documents']}` |",
-                f"| Quality config | `{scenario['quality_config'] or 'none'}` |",
-                "",
                 "## Input Files",
                 "",
                 "| Role | Exists | Path |",
@@ -2397,17 +2130,7 @@ def _publish_scenario_artifacts(scenario: dict[str, Any]) -> None:
 
 
 def _document_to_payload(document: Any, *, context: Any | None = None) -> dict[str, Any]:
-    payload = {
-        "defendants": document.defendants,
-        "collateral": document.collateral,
-        "charged_orgs": document.charged_orgs,
-        "associated_orgs": document.associated_orgs,
-        "metadata": document.metadata,
-        "amounts": document.amounts,
-        "counts_list": document.counts_list,
-        "evidence_categories": document.evidence_categories,
-        "scenario_brief": document.scenario_brief,
-    }
+    payload = document_inputs_payload(document)
     scenario = _document_payload_scenario(context)
     if scenario:
         return {"scenario": scenario, **payload}
@@ -2608,43 +2331,10 @@ def _document_from_review_json(document_json: str) -> DocumentInputs:
         payload = json.loads(document_json)
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Entity review document_json is invalid JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise SystemExit("Entity review document_json must be a JSON object.")
-
-    required_lists = (
-        "defendants",
-        "collateral",
-        "charged_orgs",
-        "associated_orgs",
-        "counts_list",
-    )
-    for key in required_lists:
-        if not isinstance(payload.get(key), list):
-            raise SystemExit(f"Entity review document_json.{key} must be a list.")
-    if not isinstance(payload.get("metadata"), dict):
-        raise SystemExit("Entity review document_json.metadata must be an object.")
-    if not isinstance(payload.get("amounts"), dict):
-        raise SystemExit("Entity review document_json.amounts must be an object.")
-    scenario_brief = payload.get("scenario_brief", {})
-    if not isinstance(scenario_brief, dict):
-        raise SystemExit("Entity review document_json.scenario_brief must be an object.")
-    evidence_categories = payload.get("evidence_categories", [])
-    if not isinstance(evidence_categories, list) or not all(
-        isinstance(category, str) for category in evidence_categories
-    ):
-        raise SystemExit("Entity review document_json.evidence_categories must be a string list.")
-
-    return DocumentInputs(
-        defendants=payload["defendants"],
-        collateral=payload["collateral"],
-        charged_orgs=payload["charged_orgs"],
-        associated_orgs=payload["associated_orgs"],
-        metadata=payload["metadata"],
-        amounts=payload["amounts"],
-        counts_list=payload["counts_list"],
-        evidence_categories=evidence_categories,
-        scenario_brief=scenario_brief,
-    )
+    try:
+        return document_inputs_from_payload(payload, source="Entity review document_json")
+    except ValueError as exc:
+        raise SystemExit(f"{exc}.") from exc
 
 
 def _document_json_matches_payload(document_json: str, payload: dict[str, Any]) -> bool:
@@ -2682,7 +2372,6 @@ def _collect_document_files(
     roots = [
         context.output_dir / doc_id,
         context.output_dir / "_partial" / doc_id,
-        context.schema_dir / f"{doc_id}.json",
         context.memory_dir / f"case_{doc_id}",
     ]
     excluded = {path.resolve() for path in exclude}
@@ -2721,11 +2410,6 @@ def _artifact_doc_ids(context: Any) -> set[str]:
             continue
         doc_ids.update(
             path.name for path in root.iterdir() if path.is_dir() and path.name.startswith(prefix)
-        )
-
-    if context.schema_dir.exists():
-        doc_ids.update(
-            path.stem for path in context.schema_dir.glob(f"{prefix}*.json") if path.is_file()
         )
 
     generated_case_dir = context.project_root / "config_case" / "generated"
@@ -2775,7 +2459,6 @@ def _publish_config_artifacts(
                 f"| Fraud type | `{context.fraud_type}` |",
                 f"| Documents | `{context.documents}` |",
                 f"| Output directory | `{context.output_dir}` |",
-                f"| Schema directory | `{context.schema_dir}` |",
                 f"| Memory directory | `{context.memory_dir}` |",
                 f"| Case config | `{case_config_path}` |",
                 f"| Template | `{template_path}` |",
@@ -2843,32 +2526,6 @@ def _publish_entity_artifacts(document: Any) -> None:
     )
 
 
-def _publish_schema_artifacts(doc_id: str, schema: dict) -> None:
-    create_markdown_artifact(
-        key=_artifact_key(doc_id, "schema-json"),
-        description=f"Case schema JSON for {doc_id}",
-        markdown=(
-            f"# Case Schema: `{doc_id}`\n\n"
-            "```json\n"
-            f"{json.dumps(schema, indent=2, ensure_ascii=False)}\n"
-            "```"
-        ),
-    )
-    create_table_artifact(
-        key=_artifact_key(doc_id, "schema-edges"),
-        description=f"Relationship graph edges for {doc_id}",
-        table=[
-            {
-                "from": edge.get("from"),
-                "to": edge.get("to"),
-                "type": edge.get("type"),
-                "label": edge.get("label"),
-            }
-            for edge in schema.get("edges", [])
-        ],
-    )
-
-
 def _publish_memory_artifacts(context: Any, doc_id: str) -> None:
     memory_dir = context.memory_dir / f"case_{doc_id}"
     _publish_file_markdown(
@@ -2886,9 +2543,10 @@ def _publish_memory_artifacts(context: Any, doc_id: str) -> None:
 def _publish_prefect_artifacts(context: Any, doc_id: str, audit_payload: dict[str, Any]) -> None:
     doc_dir = context.output_dir / doc_id
     memory_dir = context.memory_dir / f"case_{doc_id}"
-    schema_path = context.schema_dir / f"{doc_id}.json"
     document_path = doc_dir / f"{doc_id}.txt"
     report_path = doc_dir / "generation_report.md"
+    groundtruth_path = doc_dir / "groundtruth.tsv"
+    groundtruth_manifest_path = doc_dir / "groundtruth_manifest.json"
     audit_path = doc_dir / "file_audit.json"
 
     create_markdown_artifact(
@@ -2897,7 +2555,6 @@ def _publish_prefect_artifacts(context: Any, doc_id: str, audit_payload: dict[st
         markdown=_run_summary_markdown(
             doc_id=doc_id,
             document_path=document_path,
-            schema_path=schema_path,
             memory_dir=memory_dir,
             report_path=report_path,
             audit_path=audit_path,
@@ -2936,84 +2593,23 @@ def _publish_prefect_artifacts(context: Any, doc_id: str, audit_payload: dict[st
         path=report_path,
     )
     _publish_file_markdown(
-        key=_artifact_key(doc_id, "schema-json-final"),
-        description=f"Case schema JSON for {doc_id}",
-        path=schema_path,
+        key=_artifact_key(doc_id, "groundtruth-tsv"),
+        description=f"Validated occurrence-level ground truth for {doc_id}",
+        path=groundtruth_path,
+        language="tsv",
+    )
+    _publish_file_markdown(
+        key=_artifact_key(doc_id, "groundtruth-manifest"),
+        description=f"Ground-truth validation manifest for {doc_id}",
+        path=groundtruth_manifest_path,
         language="json",
     )
-
-
-def _publish_quality_analysis_artifact(
-    doc_id: str,
-    report: dict[str, Any],
-    overview: dict[str, Any],
-) -> None:
-    create_markdown_artifact(
-        key=_artifact_key(doc_id, "document-quality-analysis"),
-        description=f"Document quality analysis for {doc_id}",
-        markdown=_quality_analysis_markdown(doc_id, report, overview),
-    )
-
-
-def _quality_analysis_markdown(
-    doc_id: str,
-    report: dict[str, Any],
-    overview: dict[str, Any],
-) -> str:
-    report_with_links = _quality_report_with_mlflow_links(report, overview)
-    return (
-        "\n\n".join(
-            [
-                f"# Document Quality Analysis: `{doc_id}`",
-                _demote_markdown_headings(format_run_health_markdown(overview)),
-                _demote_markdown_headings(format_model_workflow_markdown(overview)),
-                _demote_markdown_headings(format_audit_confidence_markdown(overview)),
-                _demote_markdown_headings(format_markdown_report(report_with_links)),
-            ]
-        ).rstrip()
-        + "\n"
-    )
-
-
-def _quality_report_with_mlflow_links(
-    report: dict[str, Any],
-    overview: dict[str, Any],
-) -> dict[str, Any]:
-    workflow = overview.get("model_workflow") or {}
-    reference_by_section = {
-        str(row.get("section")): row
-        for row in workflow.get("prompt_response_refs", [])
-        if row.get("section")
-    }
-    rubric_by_section = {
-        str(row.get("section")): row
-        for row in workflow.get("section_rubrics", [])
-        if row.get("section")
-    }
-    enriched = dict(report)
-    enriched_sections = []
-    for section in report.get("sections", []):
-        section_name = str(section.get("section") or "")
-        reference = reference_by_section.get(section_name, {})
-        rubric = rubric_by_section.get(section_name, {})
-        enriched_section = dict(section)
-        enriched_section["mlflow_url"] = (
-            reference.get("text_url") or reference.get("critic_url") or rubric.get("mlflow_url")
-        )
-        enriched_sections.append(enriched_section)
-    enriched["sections"] = enriched_sections
-    return enriched
-
-
-def _demote_markdown_headings(markdown: str) -> str:
-    return re.sub(r"^(#{1,5}) ", r"#\1 ", markdown.strip(), flags=re.MULTILINE)
 
 
 def _run_summary_markdown(
     *,
     doc_id: str,
     document_path: Path,
-    schema_path: Path,
     memory_dir: Path,
     report_path: Path,
     audit_path: Path,
@@ -3025,7 +2621,6 @@ def _run_summary_markdown(
             "| Artifact | Path |",
             "| --- | --- |",
             f"| Document text | `{document_path}` |",
-            f"| Case schema | `{schema_path}` |",
             f"| Case memory | `{memory_dir / 'CASE_MEMORY.md'}` |",
             f"| Run history | `{memory_dir / 'RUN_HISTORY.md'}` |",
             f"| Generation report | `{report_path}` |",

@@ -1,4 +1,4 @@
-from src.synthetic_ner.case_entities import (
+from src.synthetic_ner.case_generation.entities import (
     clean_company_token,
     clean_person_part,
     make_person,

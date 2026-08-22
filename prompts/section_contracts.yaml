@@ -17,10 +17,10 @@ section_contracts:
     # SECTION_CONTRACT
 
     - Section: companies
-    - Purpose: Identify the charged organisations in natural legal prose, preserving exact company names, addresses and VAT numbers.
-    - Allowed scope: Charged organisation identity only.
-    - Required facts: Company names, VAT numbers, addresses, and charged status when listed.
-    - Forbidden content: Inferred directors, trading history, registration dates, business activity, fund-flow conclusions, or unlisted relationships.
+    - Purpose: Identify the organisations listed for this section in natural legal prose, preserving exact company names, addresses and VAT numbers.
+    - Allowed scope: Listed organisation identity and explicitly recorded role or status only.
+    - Required facts: Company names, VAT numbers, addresses, and roles or statuses when explicitly listed.
+    - Forbidden content: Inferred charged status, directors, trading history, registration dates, business activity, fund-flow conclusions, or unlisted relationships.
     - Style: Concise formal legal prose; no registry-style inventory.
     - Preferred shape: one connected paragraph of direct identification prose.
     - Do not include meta-compliance language about the contract, scope, prompt, required facts, or drafting process.
@@ -37,7 +37,7 @@ section_contracts:
     - Section: history
     - Purpose: Build a procedural and chronological bridge into the charges.
     - Allowed scope: Procedural and chronological bridge into the charges.
-    - Required facts: Case references, filing date, offence period, and listed counts.
+    - Required facts: Case references, filing date, offence period, and counts when explicitly supplied.
     - Forbidden content: Searches, warrants, exhibits, hearings, arrests, or procedural steps that are not listed in SECTION_CONTEXT.
     - Style: Chronological legal prose with minimal entity relisting.
 
@@ -45,6 +45,7 @@ section_contracts:
     - Treat this contract as stricter than any narrative plan.
     - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
     - If a plan conflicts with this contract, follow this contract.
+    - Never describe missing, absent, unlisted, or unsupplied procedural facts.
 
   charges: |
     # SECTION_CONTRACT
@@ -80,16 +81,19 @@ section_contracts:
     # SECTION_CONTRACT
 
     - Section: evidence
-    - Purpose: Describe the categories of evidence that support the recorded allegations.
-    - Allowed scope: Evidence categories listed in SECTION_CONTEXT and the limited facts they support.
-    - Required facts: Evidence categories, related organisations, related relationships, case references, and amount facts when listed.
-    - Forbidden content: Invented exhibit labels, emails, searches, bank account numbers, witnesses, invoice numbers, document labels, or evidence sources not listed in SECTION_CONTEXT.
-    - Style: Natural evidential overview explaining relevance without argument, repetition, or relationship dumping.
+    - Purpose: Describe supplied or authorised synthetic evidence categories and the recorded facts they support.
+    - Allowed scope: Listed evidence categories; when none are listed, generic synthetic categories derived only from events explicitly recorded in SECTION_CONTEXT; and the limited facts and entities those categories support.
+    - Required facts: Each used category's evidential function and the supplied entities, case references, relationships, and amounts naturally relevant to it.
+    - Forbidden content: New events, entities, dates, amounts, references, exhibit labels, document titles or identifiers, emails, searches, bank account numbers, witnesses, invoice numbers, quotations, signatures, or detailed document contents not supplied in SECTION_CONTEXT.
+    - Style: Natural evidential overview explaining relevance without argument, repetitive narration, or relationship dumping.
 
     ## Contract Rules
     - Treat this contract as stricter than any narrative plan.
     - If SECTION_CONTEXT contains extra facts outside this scope, omit them.
     - If a plan conflicts with this contract, follow this contract.
+    - Derived categories may organise an explicitly recorded event but must not introduce a new event or factual detail.
+    - Use "supports", "records", "associates", or "connects" rather than claiming that material proves, confirms, or establishes an allegation.
+    - Preserve supplied entities when they perform a natural evidential function; do not add them merely for entity count.
     - Do not state that evidence was not invented or that the section follows the contract.
 
   assessment: |

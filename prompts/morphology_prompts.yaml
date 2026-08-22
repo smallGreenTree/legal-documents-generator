@@ -1,0 +1,117 @@
+prompts:
+  system: |
+    Create one controlled language variation of synthetic legal text for NER
+    training. Apply only the requested grammatical or writing-style change;
+    preserve facts, attribution, negation, tense, chronology, paragraph function
+    and legal force. Do not summarise, expand, explain, correct or improve the
+    source beyond the requested transformation.
+
+    Text enclosed by the protected-token brackets is immutable when its token
+    name begins with NER_ or LITERAL_. Return only protected tokens that occur in
+    the source, exactly once and character-for-character. Never invent a token or
+    reproduce the entity or number hidden by it.
+
+    Return transformed text only. Do not return JSON, markdown fences,
+    commentary, labels, headings that were not present, or explanations.
+
+  user: |
+    MORPHOLOGICAL TRANSFORMATION:
+    {{ transformation_instruction }}
+
+    SAFETY RULES:
+    - Preserve every sentence's factual proposition.
+    - Do not add or remove an actor, action, object, relationship or qualifier.
+    - Do not change dates, amounts, identifiers, statute references or numbers.
+    - Preserve existing headings and structural labels exactly.
+    - If a clause cannot be transformed safely, leave that clause unchanged.
+    - Apply only the named transformation; do not paraphrase freely.
+
+    PROTECTED SOURCE TEXT:
+    {{ protected_text }}
+
+  style_system: |
+    Create a strongly stylised variation of synthetic text for NER training.
+    After factual and protected-token safety, THE USER'S REQUESTED STYLE IS THE
+    PRIMARY REQUIREMENT. It must be unmistakable throughout the result. Do not
+    treat fact preservation as a requirement to retain the original syntax,
+    register, cadence, lineation or sentence boundaries.
+
+    Text enclosed by the protected-token brackets is immutable when its token
+    name begins with NER_ or LITERAL_. Return only protected tokens that occur in
+    the source, exactly once and character-for-character. Never invent a token or
+    reproduce the entity or number hidden by it.
+
+    Return transformed text only. Do not return JSON, markdown fences,
+    commentary or explanations.
+
+  style_user: |
+    ==================== PRIMARY STYLE DIRECTIVE ====================
+    {{ requested_style }}
+    =================================================================
+
+    REFORMATTING MODE:
+    {{ reformatting_instruction }}
+
+    STYLE EXECUTION RULES:
+    - Apply the requested style clearly and consistently to every eligible prose
+      sentence. Do not merely replace a few words with informal synonyms.
+    - Reshape syntax, cadence, imagery and rhetorical pattern as the style requires.
+    - If the request mentions poetry or music, use audible
+      rhythm plus internal or end rhyme. Build rhyming neighboring lines or
+      sentence pairs wherever the protected facts permit.
+    - If the request names a writer or performer, use broad high-level traits;
+      do not quote, copy or closely reproduce existing lyrics or passages.
+    - You may split or merge sentence boundaries to make the style convincing.
+    - Write no more than two output lines for each source sentence. Do not add a
+      chorus, refrain, recap, commentary, or repeated line.
+    - Never repeat a fact or protected value merely to create rhythm or rhyme.
+    - Never use not-politically correct or offensive language and terms.
+
+    FACT AND TOKEN RULES:
+    - Preserve every factual proposition, actor, action, object, relationship,
+      qualifier, date, amount, identifier and statute reference.
+    - Preserve headings and structural labels exactly.
+    - Return every protected token exactly once and character-for-character.
+    - Do not introduce new people, organisations, events, amounts or relationships.
+
+    PROTECTED SOURCE TEXT:
+    {{ protected_text }}
+
+    FINAL STYLE DIRECTIVE — APPLY THIS PROMINENTLY THROUGHOUT THE OUTPUT:
+    {{ requested_style }}
+
+  style_retry: |
+    ==================== PRIMARY STYLE DIRECTIVE ====================
+    {{ requested_style }}
+    =================================================================
+
+    The previous attempt was rejected because:
+    {{ validation_error }}
+
+    EXPECTED PROTECTED TOKEN SEQUENCE:
+    {{ expected_tokens }}
+
+    Rewrite the original short source below. Return every listed protected token
+    exactly once, in the listed order. Repeated names and titles are intentional;
+    do not consolidate them. Preserve every factual proposition. Keep the style
+    clear, but token preservation takes priority on this correction attempt.
+    If the expected sequence is `none`, do not output any protected token. Do not
+    add a refrain, recap, commentary, or repeated line.
+    Return transformed text only.
+
+    PROTECTED SOURCE TEXT:
+    {{ protected_text }}
+
+  retry: |
+    {{ original_prompt }}
+
+    CORRECTION REQUIRED:
+    The previous output failed the deterministic safety check:
+    {{ validation_error }}
+
+    PREVIOUS REJECTED OUTPUT:
+    {{ previous_text }}
+
+    Return a new complete transformation of PROTECTED SOURCE TEXT. Correct the
+    reported token inventory exactly. Do not copy a sentence twice, omit a
+    sentence, or add material. Return transformed text only.

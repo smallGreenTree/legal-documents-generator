@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from src.synthetic_ner.config import load_app_config
+from src.synthetic_ner.configuration.loader import load_app_config
 
 
 def build_parser(project_root: Path) -> argparse.ArgumentParser:
@@ -39,11 +39,6 @@ def build_parser(project_root: Path) -> argparse.ArgumentParser:
         "--fraud-type",
         metavar="TYPE",
         help="Override scenario.id",
-    )
-    parser.add_argument(
-        "--from-schema",
-        metavar="PATH",
-        help="Load an existing case schema instead of auto-generating one",
     )
     parser.add_argument(
         "--workflow-mode",

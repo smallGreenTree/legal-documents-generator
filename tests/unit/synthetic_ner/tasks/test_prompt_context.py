@@ -1,4 +1,4 @@
-from src.synthetic_ner.tasks.document_generation.prompt_context import build_section_context
+from src.synthetic_ner.tasks.document_generation.context.prompts import build_section_context
 
 MEMORY_TEXT = "\n".join(
     [

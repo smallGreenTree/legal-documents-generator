@@ -2,8 +2,8 @@ profile:
   doc_type: persons_test
   fraud_type: financial_fraud
   documents: 1
-  section_words:
-    persons: 450
+  sections:
+    - persons
 
 case:
   metadata:

@@ -2,8 +2,8 @@ profile:
   doc_type: indictment
   fraud_type: money_laundering
   documents: 1
-  section_words:
-    history: 350
+  sections:
+    - history
 
 case:
   metadata:

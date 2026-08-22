@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
+from src.synthetic_ner.tasks.document_generation.observability.tracer import TraceStore
 from src.synthetic_ner.types.app_config import MlflowConfig
 
 
@@ -68,7 +68,7 @@ class FakeMlflow:
 def test_mlflow_spans_are_started_and_completed(monkeypatch):
     fake = FakeMlflow()
     monkeypatch.setattr(
-        "src.synthetic_ner.tasks.document_generation.tracer.mlflow",
+        "src.synthetic_ner.tasks.document_generation.observability.tracer.mlflow",
         fake,
     )
     trace_store = TraceStore(

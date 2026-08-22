@@ -3,10 +3,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from src.synthetic_ner.config import build_app_config, load_app_config
-from src.synthetic_ner.models.factory import build_model_client
-from src.synthetic_ner.tasks.document_generation.tracer import TraceStore
-from src.synthetic_ner.utils import load_config
+from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.configuration.loader import build_app_config, load_app_config
+from src.synthetic_ner.model_providers.factory import build_model_client
+from src.synthetic_ner.tasks.document_generation.observability.tracer import TraceStore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -15,42 +15,49 @@ def test_config_loads_think_false_for_ollama_and_all_routed_stages():
     app_config = load_app_config(PROJECT_ROOT / "config.yaml")
 
     assert not hasattr(app_config, "ollama")
-    assert app_config.model_routing.stages["planner"].think is False
+    assert set(app_config.model_routing.stages) == {
+        "writer",
+        "polisher",
+        "critic",
+        "morphology",
+    }
     assert app_config.model_routing.stages["writer"].think is False
+    assert app_config.model_routing.stages["polisher"].think is False
     assert app_config.model_routing.stages["critic"].think is False
-    assert app_config.model_routing.stages["planner"].top_p == 0.9
+    assert app_config.model_routing.stages["morphology"].think is False
     assert app_config.model_routing.stages["writer"].top_p == 0.9
+    assert app_config.model_routing.stages["polisher"].top_p == 0.9
     assert app_config.model_routing.stages["critic"].top_p == 0.9
-
-
-def test_inactive_planner_prompts_are_not_required():
-    app_config = load_app_config(PROJECT_ROOT / "config.yaml")
-
-    assert app_config.workflow.planner.active is False
-    assert app_config.workflow.prompts.document_planner_system == ""
-    assert app_config.workflow.prompts.section_planner_user == ""
+    assert app_config.model_routing.stages["morphology"].top_p == 0.9
+    assert app_config.workflow.polisher.active is True
+    assert app_config.workflow.polisher.temperature == 0.0
+    assert app_config.workflow.polisher.max_output_tokens == 2500
+    assert app_config.workflow.validators["repeated_long_sentences"] is True
+    assert app_config.workflow.validators["repeated_sentence_fragments"] is True
+    assert app_config.profile.sections == [
+        "persons",
+        "companies",
+        "history",
+        "charges",
+        "facts",
+        "evidence",
+        "assessment",
+    ]
+    assert not hasattr(app_config.workflow.writer, "min_output_tokens")
+    assert not hasattr(app_config.workflow.writer, "min_completion_ratio")
+    assert not hasattr(app_config.workflow.writer, "output_token_multiplier")
+    assert "Target length:" not in app_config.workflow.prompts.writer_user
+    assert "530-620" not in app_config.workflow.prompts.writer_user
     assert app_config.workflow.prompts.writer_system.strip()
 
 
-def test_planner_active_requires_planner_prompts():
+@pytest.mark.parametrize("stage", ["writer", "polisher", "critic", "morphology"])
+def test_config_requires_explicit_stage_routes(stage):
     raw_config = load_config(PROJECT_ROOT / "config.yaml")
     case_config = load_config(PROJECT_ROOT / "config_case" / "case_1.yaml")
-    raw_config["workflow"]["planner"]["active"] = True
+    del raw_config["model_routing"]["stages"][stage]
 
-    with pytest.raises(ValueError, match="document_planner_system"):
-        build_app_config(
-            raw_config,
-            case_cfg=case_config,
-            config_path=PROJECT_ROOT / "config.yaml",
-        )
-
-
-def test_config_requires_explicit_stage_routes():
-    raw_config = load_config(PROJECT_ROOT / "config.yaml")
-    case_config = load_config(PROJECT_ROOT / "config_case" / "case_1.yaml")
-    del raw_config["model_routing"]["stages"]["writer"]
-
-    with pytest.raises(ValueError, match="writer"):
+    with pytest.raises(ValueError, match=stage):
         build_app_config(
             raw_config,
             case_cfg=case_config,
@@ -82,7 +89,7 @@ def test_case_config_entity_variants_override_global_defaults():
     assert app_config.entity_variants.persons.misspelling_variants == 0
 
 
-@pytest.mark.parametrize("stage", ["planner", "writer", "critic"])
+@pytest.mark.parametrize("stage", ["writer", "polisher", "critic", "morphology"])
 def test_ollama_stage_clients_send_think_false(monkeypatch, stage):
     app_config = load_app_config(PROJECT_ROOT / "config.yaml")
     captured_requests = []
@@ -100,7 +107,7 @@ def test_ollama_stage_clients_send_think_false(monkeypatch, stage):
         )
 
     monkeypatch.setattr(
-        "src.synthetic_ner.models.ollama_client.requests.post",
+        "src.synthetic_ner.model_providers.ollama_client.requests.post",
         fake_post,
     )
 

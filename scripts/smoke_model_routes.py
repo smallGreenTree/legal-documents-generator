@@ -2,7 +2,7 @@
 """Smoke-test configured Ollama model routes.
 
 This is intentionally cheaper than a document generation run. It verifies that
-the configured models are present/reachable and that each selected stage can
+the configured model_providers are present/reachable and that each selected stage can
 return a short response with the same Ollama options used by the app.
 """
 
@@ -19,9 +19,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.synthetic_ner.config import load_app_config  # noqa: E402
+from src.synthetic_ner.configuration.loader import load_app_config  # noqa: E402
 
-DEFAULT_STAGES = ("writer", "critic")
+DEFAULT_STAGES = ("writer", "polisher", "critic")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,8 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         action="append",
-        choices=("planner", "writer", "critic"),
-        help="Stage to test. May be repeated. Defaults to writer and critic.",
+        choices=DEFAULT_STAGES,
+        help="Stage to test. May be repeated. Defaults to writer, polisher and critic.",
     )
     parser.add_argument(
         "--prompt",
@@ -116,7 +116,7 @@ def _smoke_ollama_stage(
     max_output_tokens: int,
 ) -> dict[str, Any]:
     options: dict[str, Any] = {
-        "temperature": 0.0 if stage in {"critic", "planner"} else 0.2,
+        "temperature": 0.0 if stage in {"polisher", "critic"} else 0.2,
         "num_predict": max_output_tokens,
     }
     if num_ctx is not None:

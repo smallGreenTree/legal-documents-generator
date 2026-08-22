@@ -4,44 +4,43 @@ from __future__ import annotations
 
 import argparse
 
+from src.synthetic_ner.prefect_flows.augmentation import generate_morphological_variations
 from src.synthetic_ner.prefect_flows.generation import generate_dataset
-from src.synthetic_ner.prefect_flows.quality import score_existing_document
-from src.synthetic_ner.tasks.document_quality.quality_report import DEFAULT_QUALITY_CONFIG_PATH
+from src.synthetic_ner.prefect_flows.groundtruth import generate_groundtruth_directory
 
-__all__ = ["generate_dataset", "score_existing_document"]
+__all__ = [
+    "generate_dataset",
+    "generate_groundtruth_directory",
+    "generate_morphological_variations",
+]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run synthetic NER generation through Prefect.")
     parser.add_argument(
-        "--score-doc-id",
-        nargs="?",
-        const="",
+        "--groundtruth-directory",
         default=None,
-        help=(
-            "Score an existing document id instead of running generation. "
-            "Pass without a value to pause and select the document in Prefect."
-        ),
+        help="Generate validated ground truth for every document package in this directory.",
     )
     parser.add_argument(
-        "--score-document-quality",
+        "--groundtruth-contract",
+        default="groundtruth_contract.yaml",
+        help="Ground-truth contract path relative to project root.",
+    )
+    parser.add_argument(
+        "--morphology",
         action="store_true",
-        help="Run the quality scoring flow and pause for document selection.",
+        help="Run the morphological augmentation flow.",
     )
     parser.add_argument(
-        "--no-document-selection-pause",
+        "--morphology-input",
+        default="",
+        help="A .txt file, document package, or parent package folder.",
+    )
+    parser.add_argument(
+        "--review-morphology",
         action="store_true",
-        help="Score the supplied --score-doc-id directly without the Prefect selection pause.",
-    )
-    parser.add_argument(
-        "--quality-config",
-        default=DEFAULT_QUALITY_CONFIG_PATH,
-        help="Quality scoring config path relative to project root.",
-    )
-    parser.add_argument(
-        "--memory-path",
-        default=None,
-        help="Memory markdown path. Defaults to memory/case_<doc_id>/CASE_MEMORY.md.",
+        help="Pause with the input-path field and transformation checkboxes.",
     )
     parser.add_argument(
         "--case-config",
@@ -56,7 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--documents", "--count", dest="documents", type=int, default=None)
     parser.add_argument("--doc-type", default=None)
     parser.add_argument("--fraud-type", default=None)
-    parser.add_argument("--from-schema", default=None)
     parser.add_argument("--project-root", default=None)
     parser.add_argument(
         "--review-scenario",
@@ -79,17 +77,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.score_doc_id is not None or args.score_document_quality:
-        score_existing_document(
-            doc_id=args.score_doc_id or None,
-            case_config=args.case_config,
-            quality_config=args.quality_config,
-            doc_type=args.doc_type,
-            fraud_type=args.fraud_type,
+    if args.morphology:
+        generate_morphological_variations(
+            input_path=args.morphology_input,
             project_root=args.project_root,
-            review_scenario=args.review_scenario,
-            review_document_selection=not args.no_document_selection_pause,
+            review=args.review_morphology,
             review_timeout_seconds=args.review_timeout_seconds,
+        )
+        return
+    if args.groundtruth_directory is not None:
+        generate_groundtruth_directory(
+            input_directory=args.groundtruth_directory,
+            project_root=args.project_root,
+            contract_path=args.groundtruth_contract,
         )
         return
     generate_dataset(
@@ -98,7 +98,6 @@ def main() -> None:
         documents=args.documents,
         doc_type=args.doc_type,
         fraud_type=args.fraud_type,
-        from_schema=args.from_schema,
         project_root=args.project_root,
         review_scenario=args.review_scenario,
         review_entities=args.review_entities,

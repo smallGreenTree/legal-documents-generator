@@ -1,0 +1,139 @@
+Making generated indictment text less repetitive
+Simple version
+19 August 2026
+
+
+WHAT THIS SYSTEM DOES
+---------------------
+
+It does three steps, for every kind of case (procurement, bribery,
+tax, insider trading, and so on):
+
+  1. Invent the people and companies (names, addresses, VAT numbers,
+     amounts).
+
+  2. Ask the model to write a legal document using only those
+     details. It is not allowed to make up extra people, invoices,
+     or events.
+
+  3. Mark every place those names appear. That marking is the gold
+     for NER.
+
+That rule in step 2 is on purpose. If the model invents an invoice
+number, gold will not know about it, and NER evaluation breaks.
+
+
+WHY THE TEXT SOUNDS BAD
+-----------------------
+
+Step 1 gives a list of names. It does not give a story.
+
+A real indictment needs a story: who did what, through which
+company, over which dates, what the charges are, and what kinds of
+evidence exist.
+
+The model is then told: write a long document, and do not invent.
+So it only has names and a short paragraph. It copies that
+paragraph into every chapter until the page is full.
+
+That is why persons, companies, history, charges, facts, evidence
+and assessment all sound the same. It is not that gold is wrong.
+It is that the writer was given almost nothing to write about, and
+was forced to write a lot.
+
+Filling in one case file by hand does not fix this. The next
+scenario has the same empty story.
+
+
+THE THREE CHANGES
+-----------------
+
+Think of it as: names -> story -> writing.
+
+Today you have names, then you jump straight to writing.
+
+
+1. Invent the story automatically, from the names, for every case
+
+   After people and companies are created, and before any chapter
+   is written, the software should also write down:
+
+   - the time period of the offence
+   - who runs which company
+   - who told whom to do what
+   - money moving from company A to company B (when there is a
+     second company)
+   - the charges
+   - the kinds of evidence (invoices, bank records, and so on),
+     not fake exhibit numbers
+
+   This is not a human editing one YAML. It is a shared step that
+   every scenario goes through. Procurement, bribery, tax: same
+   step, different names.
+
+   Until this exists, every case is "a list of names, please write
+   20 pages".
+
+
+2. Give each chapter only what it needs, and let it be short
+
+   A persons chapter should see names, dates of birth, addresses.
+   It should not see the whole fraud story. If it does, it will
+   retell the fraud.
+
+   A facts chapter should see the story (who did what, money,
+   dates). An evidence chapter should see the kinds of evidence.
+
+   Also: stop requiring a long word count. If the persons chapter
+   only has two people, a short identification paragraph is
+   correct. Forcing 450 words makes the model repeat itself.
+
+   So: each chapter gets a smaller pack of facts, and it may stop
+   when those facts are used.
+
+
+3. If a chapter copies itself, make it write again
+
+   The system can already notice "this sentence appeared twice".
+   Today it mostly writes that down in a report and keeps the
+   repeated text.
+
+   Turn that into: the chapter is not finished until the copies
+   are gone.
+
+   This does not invent a better plot. It only stops padding.
+   It only works well after 1 and 2, because then the model has
+   something else to say instead of repeating.
+
+
+WHAT "REALISTIC" MEANS HERE
+---------------------------
+
+It does not mean a full real CPS file with invented emails and
+warrant numbers. Those would be invisible to gold.
+
+It means:
+
+  - each chapter does a different job
+  - the story is used in the facts, not pasted into the persons
+    list
+  - the document is as long as the story, not as long as a word
+    target
+  - names appear in normal sentences, not in the same sentence
+    copied ten times
+
+A small case should produce a short document. A bigger case
+(more people, more companies, more money movements) should
+produce a longer one. Both should read like legal prose, not
+like the same paragraph seven times.
+
+
+IF THIS IS STILL UNCLEAR
+------------------------
+
+The whole note is one sentence:
+
+  The model is asked to write a long court document from a list
+  of names. Give it a story first, give each chapter only its
+  part of that story, and do not force it to keep writing after
+  the story is used up.

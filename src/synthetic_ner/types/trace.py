@@ -26,7 +26,6 @@ class NodeExecutionRecord:
     status: str
     latency_ms: int
     next_node: str | None
-    section_name: str | None
 
 
 @dataclass(frozen=True, slots=True)

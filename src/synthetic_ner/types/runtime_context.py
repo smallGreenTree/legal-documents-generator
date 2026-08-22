@@ -33,14 +33,12 @@ class RuntimeContext:
     doc_type: str
     fraud_type: str
     output_dir: Path
-    schema_dir: Path
     memory_dir: Path
     template_path: Path
     template_env: Environment
     template_name: str
     sections: dict
     labels: dict
-    section_word_targets: dict[str, int]
+    section_order: list[str]
     documents: int
     prose_overrides: dict[str, str]
-    schema_source_path: Path | None

@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+DOCUMENT_INPUTS_FILENAME = "document_inputs.json"
+
 
 @dataclass
 class DocumentInputs:

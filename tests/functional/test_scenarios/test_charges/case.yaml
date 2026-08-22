@@ -2,8 +2,8 @@ profile:
   doc_type: indictment
   fraud_type: financial_fraud
   documents: 1
-  section_words:
-    charges: 300
+  sections:
+    - charges
 
 case:
   metadata:

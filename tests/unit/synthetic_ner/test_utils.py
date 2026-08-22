@@ -1,4 +1,4 @@
-from src.synthetic_ner.utils import render_prompt_template
+from src.synthetic_ner.text.templates import render_prompt_template
 
 
 class PromptClient:

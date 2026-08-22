@@ -3,10 +3,18 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.synthetic_ner.config import load_app_config
-from src.synthetic_ner.constants import EN_LABELS
-from src.synthetic_ner.engine import build_section_labels, build_template_environment
+from src.synthetic_ner.configuration.loader import load_app_config
+from src.synthetic_ner.core.constants import EN_LABELS
+from src.synthetic_ner.document.engine import (
+    build_section_labels,
+    build_template_environment,
+    collect_section_output_problems,
+)
 from src.synthetic_ner.tasks.document_generation.orchestrator import run_document_graph
+from src.synthetic_ner.tasks.groundtruth import (
+    generate_groundtruth_for_document,
+    read_groundtruth_tsv,
+)
 from src.synthetic_ner.types.document_inputs import DocumentInputs
 from src.synthetic_ner.types.runtime_context import RuntimeContext
 
@@ -26,42 +34,193 @@ GENERATED_FACTS_TEXT = (
 
 
 def test_run_document_graph_sends_prompt_and_applies_validator_config(tmp_path, monkeypatch):
-    enabled = _run_graph(tmp_path / "enabled", monkeypatch, unknown_amounts=True)
-    disabled = _run_graph(tmp_path / "disabled", monkeypatch, unknown_amounts=False)
+    enabled = _run_graph(
+        tmp_path / "enabled",
+        monkeypatch,
+        unknown_amounts=True,
+        max_revisions=2,
+    )
+    disabled = _run_graph(
+        tmp_path / "disabled",
+        monkeypatch,
+        unknown_amounts=False,
+        max_revisions=2,
+    )
 
     writer_call = next(call for call in enabled.calls if call["stage"] == "writer")
     writer_calls = [call for call in enabled.calls if call["stage"] == "writer"]
+    polisher_calls = [call for call in enabled.calls if call["stage"] == "polisher"]
     critic_calls = [call for call in enabled.calls if call["stage"] == "critic"]
     assert "SECTION_CONTEXT:" in writer_call["user_prompt"]
     assert "SECTION_CONTRACT:" in writer_call["user_prompt"]
     assert "Allowed Amounts" in writer_call["user_prompt"]
+    assert "Target length:" not in writer_call["user_prompt"]
     assert "{% if" not in writer_call["user_prompt"]
     assert len(writer_calls) == 1
-    assert len(critic_calls) == 1
-    assert not any("_r1" in call["task_id"] for call in enabled.calls)
+    assert len(polisher_calls) == 2
+    assert len(critic_calls) == 3
+    assert all(call["client_stage"] == "writer" for call in writer_calls)
+    assert all(
+        call["client_stage"] == "polisher" for call in enabled.calls if call["stage"] == "polisher"
+    )
+    assert any("_r1" in call["task_id"] for call in enabled.calls)
+    assert any("_r2" in call["task_id"] for call in enabled.calls)
+    assert not any("_r3" in call["task_id"] for call in enabled.calls)
+    assert len([call for call in disabled.calls if call["stage"] == "writer"]) == 1
+    assert len([call for call in disabled.calls if call["stage"] == "polisher"]) == 0
+    assert len([call for call in disabled.calls if call["stage"] == "critic"]) == 1
+    assert "CURRENT_DRAFT:" in polisher_calls[0]["user_prompt"]
+    assert "REVISION_REQUIREMENTS:" in polisher_calls[0]["user_prompt"]
+    assert UNKNOWN_AMOUNT_ISSUE in polisher_calls[0]["user_prompt"]
+    assert "WRITER_JSON:" not in polisher_calls[0]["user_prompt"]
 
     assert UNKNOWN_AMOUNT_ISSUE in enabled.report_text
     assert UNKNOWN_AMOUNT_ISSUE not in disabled.report_text
+    assert "Status: unresolved" in enabled.report_text
+    assert "Status: approved" in disabled.report_text
     assert GENERATED_FACTS_TEXT in enabled.document_text
     assert GENERATED_FACTS_TEXT in disabled.document_text
+    assert not any(call["stage"] == "groundtruth" for call in enabled.calls)
+    assert {path.name for path in enabled.document_dir.iterdir()} == {
+        f"{DOC_ID}.txt",
+        "document_inputs.json",
+        "generation_report.md",
+    }
 
 
-def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
-    context = _build_context(tmp_path, unknown_amounts=unknown_amounts)
+def test_max_revisions_zero_disables_rewrites(tmp_path, monkeypatch):
+    generated = _run_graph(
+        tmp_path / "no-revisions",
+        monkeypatch,
+        unknown_amounts=True,
+        max_revisions=0,
+    )
+
+    writer_calls = [call for call in generated.calls if call["stage"] == "writer"]
+    polisher_calls = [call for call in generated.calls if call["stage"] == "polisher"]
+    critic_calls = [call for call in generated.calls if call["stage"] == "critic"]
+    assert len(writer_calls) == 1
+    assert len(polisher_calls) == 0
+    assert len(critic_calls) == 1
+    assert not any("_r1" in call["task_id"] for call in generated.calls)
+    assert UNKNOWN_AMOUNT_ISSUE in generated.report_text
+
+
+def test_polisher_revision_is_reviewed_and_stops_after_approval(tmp_path, monkeypatch):
+    corrected_text = GENERATED_FACTS_TEXT.replace("£99,999", "£559,822")
+    generated = _run_graph(
+        tmp_path / "fixed-in-one-revision",
+        monkeypatch,
+        unknown_amounts=True,
+        max_revisions=2,
+        polisher_text=corrected_text,
+    )
+
+    assert len([call for call in generated.calls if call["stage"] == "writer"]) == 1
+    assert len([call for call in generated.calls if call["stage"] == "polisher"]) == 1
+    assert len([call for call in generated.calls if call["stage"] == "critic"]) == 2
+    assert not any("_r2" in call["task_id"] for call in generated.calls)
+    assert "Status: approved" in generated.report_text
+    assert UNKNOWN_AMOUNT_ISSUE not in generated.report_text
+    assert corrected_text in generated.document_text
+
+
+def test_polisher_receives_explicit_critic_feedback(tmp_path, monkeypatch):
+    critic_issue = "Remove the repeated opening sentence."
+    generated = _run_graph(
+        tmp_path / "critic-directed-revision",
+        monkeypatch,
+        unknown_amounts=False,
+        max_revisions=2,
+        critic_issue_once=critic_issue,
+    )
+
+    polisher_calls = [call for call in generated.calls if call["stage"] == "polisher"]
+    assert len([call for call in generated.calls if call["stage"] == "writer"]) == 1
+    assert len(polisher_calls) == 1
+    assert len([call for call in generated.calls if call["stage"] == "critic"]) == 2
+    assert critic_issue in polisher_calls[0]["user_prompt"]
+    assert "Status: approved" in generated.report_text
+
+
+def test_repetition_validator_sends_repeated_draft_to_polisher(tmp_path, monkeypatch):
+    generated = _run_graph(
+        tmp_path / "repetition-revision",
+        monkeypatch,
+        unknown_amounts=False,
+        writer_text=f"{GENERATED_FACTS_TEXT} {GENERATED_FACTS_TEXT}",
+        polisher_text=GENERATED_FACTS_TEXT,
+    )
+
+    polisher_calls = [call for call in generated.calls if call["stage"] == "polisher"]
+    assert len(polisher_calls) == 1
+    assert (
+        "Section contains repeated long sentences/paragraphs." in polisher_calls[0]["user_prompt"]
+    )
+    assert "Status: approved" in generated.report_text
+
+
+def test_short_complete_section_is_not_rejected_for_length():
+    assert (
+        collect_section_output_problems(
+            ["facts"],
+            ["Alice Smith acted for ACME TRADING LTD."],
+        )
+        == []
+    )
+
+
+def test_generated_report_and_text_are_sufficient_for_groundtruth(tmp_path, monkeypatch):
+    generated = _run_graph(tmp_path / "generated", monkeypatch, unknown_amounts=True)
+
+    result = generate_groundtruth_for_document(
+        document_dir=generated.document_dir,
+        contract_path=PROJECT_ROOT / "groundtruth_contract.yaml",
+    )
+
+    assert result["status"] == "completed"
+    annotations = read_groundtruth_tsv(generated.document_dir / "groundtruth.tsv")
+    keys = {(row.entity_text, row.label) for row in annotations}
+    assert ("Ann-Kathrin Dietz", "PERSON") in keys
+    assert ("PAVAROTTI SERVICES LTD", "ORG") in keys
+    assert ("£99,999", "AMOUNT") not in keys
+
+
+def _run_graph(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    unknown_amounts: bool,
+    max_revisions: int = 2,
+    polisher_text: str = GENERATED_FACTS_TEXT,
+    critic_issue_once: str | None = None,
+    writer_text: str = GENERATED_FACTS_TEXT,
+):
+    context = _build_context(
+        tmp_path,
+        unknown_amounts=unknown_amounts,
+        max_revisions=max_revisions,
+    )
     calls = []
+    document = _document_inputs()
 
     def fake_build_model_client(*, stage, routing, tracer):
         del routing, tracer
-        return FakeModelClient(stage, calls)
+        return FakeModelClient(
+            stage,
+            calls,
+            polisher_text=polisher_text,
+            critic_issue_once=critic_issue_once,
+            writer_text=writer_text,
+        )
 
     monkeypatch.setattr(
-        "src.synthetic_ner.tasks.document_generation.orchestrator.build_model_client",
+        "src.synthetic_ner.tasks.document_generation.orchestration.components.build_model_client",
         fake_build_model_client,
     )
     run_document_graph(
         context=context,
-        document=_document_inputs(),
-        schema=_schema(),
+        document=document,
         doc_id=DOC_ID,
         workflow_run_id=f"test-{unknown_amounts}",
     )
@@ -71,10 +230,16 @@ def _run_graph(tmp_path: Path, monkeypatch, *, unknown_amounts: bool):
         calls=calls,
         report_text=report_text,
         document_text=document_text,
+        document_dir=context.output_dir / DOC_ID,
     )
 
 
-def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
+def _build_context(
+    tmp_path: Path,
+    *,
+    unknown_amounts: bool,
+    max_revisions: int,
+) -> RuntimeContext:
     tmp_path.mkdir(parents=True)
     app_config = load_app_config(
         PROJECT_ROOT / "config.yaml",
@@ -83,7 +248,7 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
     validators = {**app_config.workflow.validators, "unknown_amounts": unknown_amounts}
     workflow_cfg = replace(
         app_config.workflow,
-        max_revisions=2,
+        max_revisions=max_revisions,
         validators=validators,
     )
     mlflow_cfg = replace(app_config.mlflow, enabled=False)
@@ -93,10 +258,8 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         encoding="utf-8",
     )
     output_dir = tmp_path / "output"
-    schema_dir = tmp_path / "schemas"
     memory_dir = tmp_path / "memory"
     output_dir.mkdir()
-    schema_dir.mkdir()
     memory_dir.mkdir()
 
     return RuntimeContext(
@@ -114,17 +277,15 @@ def _build_context(tmp_path: Path, *, unknown_amounts: bool) -> RuntimeContext:
         doc_type="facts_test",
         fraud_type="financial_fraud",
         output_dir=output_dir,
-        schema_dir=schema_dir,
         memory_dir=memory_dir,
         template_path=template_path,
         template_env=build_template_environment(template_path),
         template_name=template_path.name,
         sections=build_section_labels("facts_test", ["facts"]),
         labels=EN_LABELS,
-        section_word_targets={"facts": 90},
+        section_order=["facts"],
         documents=1,
         prose_overrides={},
-        schema_source_path=None,
     )
 
 
@@ -171,33 +332,30 @@ def _document_inputs() -> DocumentInputs:
     )
 
 
-def _schema() -> dict:
-    return {
-        "doc_id": DOC_ID,
-        "edges": [
-            {
-                "label": "Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD",
-            }
-        ],
-    }
-
-
 class FakeModelClient:
-    def __init__(self, stage: str, calls: list[dict]):
+    def __init__(
+        self,
+        stage: str,
+        calls: list[dict],
+        *,
+        polisher_text: str,
+        critic_issue_once: str | None,
+        writer_text: str,
+    ):
         self.stage = stage
         self.calls = calls
+        self.polisher_text = polisher_text
+        self.critic_issue_once = critic_issue_once
+        self.writer_text = writer_text
+        self.invocations = 0
 
     def invoke(self, **kwargs):
-        self.calls.append(kwargs)
-        task_id = kwargs["task_id"]
-        if task_id == "planner_document":
-            text = "Use only the recorded relationship facts."
-        elif task_id.startswith("planner_"):
-            text = "Draft a facts section from the allowed relationship facts."
-        elif kwargs["stage"] == "writer":
+        self.invocations += 1
+        self.calls.append({**kwargs, "client_stage": self.stage})
+        if kwargs["stage"] == "writer":
             text = json.dumps(
                 {
-                    "content": GENERATED_FACTS_TEXT,
+                    "content": self.writer_text,
                     "facts_used": [
                         "Ann-Kathrin Dietz controlled PAVAROTTI SERVICES LTD",
                     ],
@@ -206,7 +364,27 @@ class FakeModelClient:
                 }
             )
         elif kwargs["stage"] == "polisher":
-            text = GENERATED_FACTS_TEXT
+            text = self.polisher_text
+        elif self.critic_issue_once is not None and self.invocations == 1:
+            text = json.dumps(
+                {
+                    "blocking": True,
+                    "edits": [
+                        {
+                            "target": "opening",
+                            "action": "revise",
+                            "reason": self.critic_issue_once,
+                            "replacement": "",
+                        }
+                    ],
+                    "risk_level": "medium",
+                    "rubrics": {
+                        "grounding": 3,
+                        "completeness": 3,
+                        "chronology": 3,
+                    },
+                }
+            )
         else:
             text = json.dumps(
                 {

@@ -1,9 +1,9 @@
 import json
 
-from src.synthetic_ner.tasks.document_generation.critic import SectionCritic
+from src.synthetic_ner.tasks.document_generation.stages.critic import SectionCritic
 
 
-def test_critic_edits_do_not_block_when_overall_rubric_meets_threshold():
+def test_concrete_critic_edits_block_even_when_overall_rubric_meets_threshold():
     critic = SectionCritic(
         client=None,
         prompts=None,
@@ -37,10 +37,10 @@ def test_critic_edits_do_not_block_when_overall_rubric_meets_threshold():
         )
     )
 
-    assert result.approved is True
-    assert result.blocking is False
-    assert result.issues == []
-    assert result.revision_instruction == "keep as is"
+    assert result.approved is False
+    assert result.blocking is True
+    assert result.issues == ["revise 'opening': Could be smoother."]
+    assert "Target: opening" in result.revision_instruction
 
 
 def test_critic_threshold_does_not_hide_critical_grounding_or_completeness():

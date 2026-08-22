@@ -2,11 +2,10 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.synthetic_ner.constants import NATIONALITY_ADJECTIVES
-from src.synthetic_ner.engine import build_groundtruth_rows
+from src.synthetic_ner.configuration.files import load_config
+from src.synthetic_ner.core.constants import NATIONALITY_ADJECTIVES
 from src.synthetic_ner.prefect_flows.utils import (
     EntityReviewInput,
-    QualityDocumentSelectionInput,
     ScenarioReviewInput,
     _apply_case_setup_to_config,
     _build_scenario,
@@ -27,9 +26,9 @@ from src.synthetic_ner.prefect_flows.utils import (
     _required_prefilled_input_model,
     _scenario_review_field_types,
     _used_doc_counters,
+    save_resolved_entities,
 )
 from src.synthetic_ner.types.document_inputs import DocumentInputs
-from src.synthetic_ner.utils import load_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -42,7 +41,6 @@ def test_prefect_stage_one_reads_scenarios_from_case_config():
         documents=None,
         doc_type=None,
         fraud_type="financial_fraud",
-        from_schema=None,
     )
 
     assert scenario["fraud_type"] == "procurement_fraud"
@@ -144,7 +142,6 @@ def test_generated_case_yaml_reserves_document_id(tmp_path):
     context = SimpleNamespace(
         project_root=tmp_path,
         output_dir=tmp_path / "output",
-        schema_dir=tmp_path / "schemas",
         memory_dir=tmp_path / "memory",
         doc_type="indictment",
         fraud_type="procurement_fraud",
@@ -161,7 +158,6 @@ def test_prefect_stage_one_selects_family_and_specific_scenario_before_rows():
         documents=None,
         doc_type=None,
         fraud_type=None,
-        from_schema=None,
     )
 
     initial = _case_setup_initial_data(scenario)
@@ -189,7 +185,6 @@ def test_prefect_stage_one_schema_marks_setup_fields_required():
         documents=None,
         doc_type=None,
         fraud_type=None,
-        from_schema=None,
     )
     input_model = _required_prefilled_input_model(
         ScenarioReviewInput,
@@ -237,7 +232,6 @@ def test_prefect_stage_one_b_person_setup_has_exact_selected_rows():
         documents=None,
         doc_type=None,
         fraud_type=None,
-        from_schema=None,
     )
     specs = _initial_person_specs_for_setup(scenario, 3)
     input_model = _person_setup_review_input_model(scenario, specs)
@@ -315,7 +309,6 @@ def test_prefect_stage_one_c_organisation_setup_has_exact_selected_rows():
         documents=None,
         doc_type=None,
         fraud_type=None,
-        from_schema=None,
     )
     specs = _initial_organisation_specs_for_setup(
         scenario,
@@ -381,22 +374,15 @@ def test_new_nationality_choices_have_faker_locales_and_labels():
     assert case_config["vat_prefixes"]["EG"] == "EG"
 
 
-def test_prefect_review_pause_forms_do_not_expose_action():
+def test_entity_review_pause_form_does_not_expose_action():
     entity_model = _required_prefilled_input_model(
         EntityReviewInput,
         description="test",
         document_json="{}",
         refresh_counts=True,
     )
-    quality_model = _required_prefilled_input_model(
-        QualityDocumentSelectionInput,
-        description="test",
-        doc_id="doc-1",
-        candidate_documents="doc-1",
-    )
 
     assert "action" not in entity_model.model_json_schema()["properties"]
-    assert "action" not in quality_model.model_json_schema()["properties"]
 
 
 def test_entity_review_payload_round_trips_amounts():
@@ -445,6 +431,39 @@ def test_entity_review_payload_round_trips_amounts():
     assert payload["amounts"] == {"total_loss": "£125,000"}
     assert reviewed.amounts == document.amounts
     assert reviewed.evidence_categories == document.evidence_categories
+
+
+def test_resolved_entities_are_saved_before_document_generation(tmp_path, monkeypatch):
+    document = DocumentInputs(
+        defendants=[{"name": "Alex Meyer"}],
+        collateral=[],
+        charged_orgs=[{"name": "ACME LTD", "vat": "GB123456789"}],
+        associated_orgs=[],
+        metadata={"case_number": "T202612345"},
+        amounts={"total_loss": "£125,000"},
+        counts_list=[{"offence": "Fraud", "particulars": "Loss of £125,000."}],
+        evidence_categories=["invoices"],
+        scenario_brief={"summary": "Test scenario"},
+    )
+    context = SimpleNamespace(
+        output_dir=tmp_path / "output",
+        fraud_type="procurement_fraud",
+        doc_type="indictment",
+    )
+    monkeypatch.setattr(
+        "src.synthetic_ner.prefect_flows.utils.get_run_logger",
+        lambda: SimpleNamespace(info=lambda *_args: None),
+    )
+
+    path = save_resolved_entities.fn(context, document, "doc1")
+
+    assert path == tmp_path / "output" / "doc1" / "document_inputs.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["defendants"] == [{"name": "Alex Meyer"}]
+    assert payload["charged_orgs"] == [{"name": "ACME LTD", "vat": "GB123456789"}]
+    assert payload["amounts"] == {"total_loss": "£125,000"}
+    assert payload["counts_list"] == [{"offence": "Fraud", "particulars": "Loss of £125,000."}]
+    assert payload["scenario_brief"] == {"summary": "Test scenario"}
 
 
 def test_entity_review_screen_includes_scenario_summary():
@@ -606,36 +625,3 @@ def test_case_setup_reads_prefect_person_rows():
             "country": "DE",
         }
     ]
-
-
-def test_address_surface_forms_limit_groundtruth_address_rows():
-    rows = build_groundtruth_rows(
-        "doc-1",
-        defendants=[
-            {
-                "name": "Olivia Price",
-                "initials": "O.P.",
-                "title_surname": "Dr Price",
-                "surface_forms_list": ["Olivia Price"],
-                "dob": "1 January 1980",
-                "address": "10 Legal Street, London EC1A 1AA",
-                "street": "10 Legal Street",
-                "city_postcode": "London EC1A 1AA",
-                "is_defendant": True,
-            }
-        ],
-        collateral=[],
-        charged_orgs=[],
-        associated_orgs=[],
-        metadata={
-            "court": "Test Synthetic Court",
-            "case_number": "CPS/2026/1234",
-            "cross_ref": "C/2026/5678",
-            "filing_date": "3 March 2026",
-            "offence_period": None,
-        },
-        counts_list=[],
-        address_surface_forms=1,
-    )
-
-    assert [row[1] for row in rows if row[2] == "ADDRESS"] == ["10 Legal Street, London EC1A 1AA"]
