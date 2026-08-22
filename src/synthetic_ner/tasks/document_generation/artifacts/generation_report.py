@@ -57,11 +57,6 @@ def _report_header(
         f"# Generation Report: {doc_id}",
         "",
         f"- Generator version: {version['version']}",
-        f"- Generator version reference: {version['git_tag']}",
-        f"- Generator version summary: {version['summary']}",
-        f"- Generator version features: {_format_features(version['features'])}",
-        f"- Generator version manifest hash: {version['manifest_hash']}",
-        f"- Generator report schema version: {version['report_schema_version']}",
         f"- Generator git commit: {version['git_commit']}",
         f"- Generator git branch: {version['git_branch']}",
         f"- Generator git dirty: {version['git_dirty']}",
@@ -232,10 +227,6 @@ def _format_optional_int(value: Any) -> str:
     if isinstance(value, bool):
         return "-"
     return str(value) if isinstance(value, int) else "-"
-
-
-def _format_features(features: list[str]) -> str:
-    return "; ".join(features) if features else "n/a"
 
 
 def _format_call_summary(call: dict[str, Any] | None, field_name: str) -> str:
